@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      - go.mod
+      - go.sum
+      - '**/*.go'
+      - '.github/workflows/ci.yml'
+
+permissions:
+  contents: read
+
+env:
+  CHART_PATH: charts/private-llm-operator
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Cache Go build and mod
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm dependency update
+        run: |
+          helm dependency update "$CHART_PATH"
+
+      - name: Helm lint
+        run: |
+          helm lint "$CHART_PATH"
+
+      - name: Go linters (golangci-lint)
+        run: |
+          make lint
+
+      - name: Unit tests
+        env:
+          GOMAXPROCS: 2
+        run: |
+          make test
+
+
+

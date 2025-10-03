@@ -1,0 +1,31 @@
+apiVersion: syncagent.kcp.io/v1alpha1
+kind: PublishedResource
+metadata:
+  name: publish-llm-llminstances
+spec:
+  resource:
+    kind: LLMInstance
+    apiGroup: llm.example.com
+    version: v1alpha1
+  naming:
+    namespace: "$remoteClusterName"
+    name: "$remoteName"
+---
+apiVersion: syncagent.kcp.io/v1alpha1
+kind: PublishedResource
+metadata:
+  name: publish-llm-tokenrequests
+spec:
+  resource:
+    kind: TokenRequest
+    apiGroup: llm.example.com
+    version: v1alpha1
+  naming:
+    namespace: "$remoteClusterName"
+    name: "$remoteName"
+  related:
+    - origin: service
+      kind: Secret
+      object:
+        template:
+          template: '{{ .Object.status.secretName }}'

@@ -1,0 +1,63 @@
+apiVersion: delivery.ocm.software/v1alpha1
+kind: Repository
+metadata:
+  name: bootstrap-repository
+  namespace: ocm-system
+spec:
+  repositorySpec:
+    baseUrl: ghcr.io/${GH_OWNER}/ocm
+    type: OCIRegistry
+  interval: 1m
+  ocmConfig:
+    - kind: Secret
+      name: ghcr-credentials
+---
+apiVersion: delivery.ocm.software/v1alpha1
+kind: Component
+metadata:
+  name: bootstrap-component
+  namespace: ocm-system
+spec:
+  component: llm.example.com/llm-demo
+  repositoryRef:
+    name: bootstrap-repository
+  semver: "${VERSION}"
+  interval: 1m
+  ocmConfig:
+    - kind: Repository
+      apiVersion: delivery.ocm.software/v1alpha1
+      name: bootstrap-repository
+      namespace: ocm-system
+---
+apiVersion: delivery.ocm.software/v1alpha1
+kind: Resource
+metadata:
+  name: bootstrap-rgd
+  namespace: ocm-system
+spec:
+  componentRef:
+    name: bootstrap-component
+  resource:
+    byReference:
+      resource:
+        name: kro-resource-graph-definition
+  interval: 1m
+  ocmConfig:
+    - kind: Repository
+      apiVersion: delivery.ocm.software/v1alpha1
+      name: bootstrap-repository
+      namespace: ocm-system
+---
+apiVersion: delivery.ocm.software/v1alpha1
+kind: Deployer
+metadata:
+  name: bootstrap-deployer
+  namespace: ocm-system
+spec:
+  resourceRef:
+    name: bootstrap-rgd
+    namespace: ocm-system
+  ocmConfig:
+    - kind: Secret
+      name: ghcr-credentials
+      namespace: ocm-system
