@@ -1,0 +1,104 @@
+package auth
+
+import (
+    "context"
+    "net/http"
+    "net/http/httptest"
+    "testing"
+
+    corev1 "k8s.io/api/core/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/apimachinery/pkg/runtime"
+    clientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+    "k8s.io/client-go/kubernetes/scheme"
+)
+
+func TestAuthHandler_Verify(t *testing.T) {
+    ctx := context.Background()
+
+    // Prepare scheme and fake client with a pre-created secret for slug "demo"
+    sch := runtime.NewScheme()
+    if err := scheme.AddToScheme(sch); err != nil {
+        t.Fatalf("add k8s scheme: %v", err)
+    }
+
+    const (
+        slug  = "demo"
+        token = "secret-token"
+    )
+
+    goodSecret := &corev1.Secret{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      "any-name",
+            Namespace: "default",
+            Labels: map[string]string{
+                "llm.example.com/slug": slug,
+            },
+        },
+        Data: map[string][]byte{
+            "OPENAI_API_KEY": []byte(token),
+        },
+    }
+
+    k8sClient := clientfake.NewClientBuilder().WithScheme(sch).WithObjects(goodSecret).Build()
+    srv := (&Server{K8sClient: k8sClient}).Handler(ctx)
+
+    tests := []struct {
+        name           string
+        querySlug      string
+        forwardedURI   string
+        authHeader     string
+        wantStatus     int
+        wantWWWAuthHas string // substring expected in WWW-Authenticate header
+    }{
+        {name: "missing slug", wantStatus: http.StatusBadRequest},
+        {name: "missing bearer", querySlug: slug, wantStatus: http.StatusUnauthorized, wantWWWAuthHas: "Bearer"},
+        {name: "empty bearer", querySlug: slug, authHeader: "Bearer ", wantStatus: http.StatusUnauthorized, wantWWWAuthHas: "Bearer"},
+        {name: "wrong token", querySlug: slug, authHeader: "Bearer wrong", wantStatus: http.StatusUnauthorized, wantWWWAuthHas: "invalid_token"},
+        {name: "ok with slug query", querySlug: slug, authHeader: "Bearer " + token, wantStatus: http.StatusOK},
+        {name: "ok with forwarded uri", forwardedURI: "/llm/" + slug + "/anything", authHeader: "Bearer " + token, wantStatus: http.StatusOK},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            req := httptest.NewRequest(http.MethodGet, "/auth/verify", nil)
+            if tt.querySlug != "" {
+                q := req.URL.Query()
+                q.Set("slug", tt.querySlug)
+                req.URL.RawQuery = q.Encode()
+            }
+            if tt.forwardedURI != "" {
+                req.Header.Set("X-Forwarded-Uri", tt.forwardedURI)
+            }
+            if tt.authHeader != "" {
+                req.Header.Set("Authorization", tt.authHeader)
+            }
+
+            rr := httptest.NewRecorder()
+            srv.ServeHTTP(rr, req)
+
+            if rr.Code != tt.wantStatus {
+                t.Fatalf("status = %d, want %d, body=%q", rr.Code, tt.wantStatus, rr.Body.String())
+            }
+            if tt.wantWWWAuthHas != "" {
+                got := rr.Header().Get("WWW-Authenticate")
+                if got == "" || !contains(got, tt.wantWWWAuthHas) {
+                    t.Fatalf("WWW-Authenticate = %q, want to contain %q", got, tt.wantWWWAuthHas)
+                }
+            }
+        })
+    }
+}
+
+func contains(s, sub string) bool { return len(sub) == 0 || (len(s) >= len(sub) && (indexOf(s, sub) >= 0)) }
+
+func indexOf(s, sub string) int {
+    // small helper to avoid importing strings just for Contains in this test file
+    for i := 0; i+len(sub) <= len(s); i++ {
+        if s[i:i+len(sub)] == sub {
+            return i
+        }
+    }
+    return -1
+}
+

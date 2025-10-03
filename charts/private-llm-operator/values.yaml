@@ -1,0 +1,43 @@
+PUBLIC_HOST: "localhost"
+
+auth:
+  # Optional hard override. If empty, operator constructs URL from pod namespace
+  externalURL: ""
+
+image:
+  repository: ghcr.io/ifdotpy/private-llm
+  tag: "0.4.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Optional extra environment variables for the manager container.
+# Example to enable OpenTelemetry tracing via OTLP/HTTP:
+# extraEnv:
+#   - name: OTEL_EXPORTER_OTLP_ENDPOINT
+#     value: "http://otel-collector.opentelemetry:4318"
+#   - name: OTEL_SERVICE_NAME
+#     value: "private-llm-operator"
+extraEnv: []
+
+# Traefik ingress controller subchart
+traefik:
+  # Toggle installing Traefik via this chart
+  enabled: true
+
+  # Create the Traefik IngressClass named "traefik"
+  ingressClass:
+    enabled: true
+    isDefaultClass: false
+    name: traefik
+
+  # Service exposure. For kind/local, switch to NodePort and set nodePorts
+  service:
+    type: ClusterIP
+
+  # NodePort values only apply when service.type=NodePort
+  ports:
+    web:
+      nodePort: 30080
+    websecure:
+      nodePort: 30443

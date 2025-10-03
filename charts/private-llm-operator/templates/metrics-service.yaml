@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: private-llm
+    control-plane: controller-manager
+  name: private-llm-controller-manager-metrics-service
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: https
+  - name: auth
+    port: 8090
+    protocol: TCP
+    targetPort: auth
+  selector:
+    control-plane: controller-manager
+status:
+  loadBalancer: {}

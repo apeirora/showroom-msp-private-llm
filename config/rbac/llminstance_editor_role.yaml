@@ -1,0 +1,27 @@
+# permissions for end users to edit llminstances.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: private-llm
+    app.kubernetes.io/managed-by: kustomize
+  name: llminstance-editor-role
+rules:
+- apiGroups:
+  - llm.example.com
+  resources:
+  - llminstances
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - llm.example.com
+  resources:
+  - llminstances/status
+  verbs:
+  - get
