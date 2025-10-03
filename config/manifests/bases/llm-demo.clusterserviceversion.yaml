@@ -1,0 +1,44 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: private-llm.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: LLMInstance is the Schema for the llminstances API
+      displayName: LLMInstance
+      kind: LLMInstance
+      name: llminstances.llm.example.com
+      version: v1alpha1
+  description: private llm
+  displayName: private-llm
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - llm
+  links:
+  - name: Private LLM
+    url: https://private-llm.domain
+  maturity: alpha
+  provider:
+    name: ifdotpy
+  version: 0.0.0

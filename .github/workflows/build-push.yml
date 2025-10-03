@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '*.*.*'
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  CHART_PATH: charts/private-llm-operator
+
+jobs:
+  publish:
+    name: Build and Publish Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Derive version from tag
+        id: vars
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare metadata
+        id: meta
+        run: |
+          repo="${GITHUB_REPOSITORY,,}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "image=ghcr.io/${repo}" >> "$GITHUB_OUTPUT"
+          echo "chart_registry=oci://ghcr.io/${owner}/private-llm" >> "$GITHUB_OUTPUT"
+          echo "ocm_repository=oci://ghcr.io/${owner}/ocm" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker image
+        env:
+          IMG: ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          make docker-build IMG="$IMG" VERSION="$VERSION"
+
+      - name: Push Docker image (immutable tag)
+        env:
+          IMG: ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
+        run: |
+          make docker-push IMG="$IMG"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Helm dependency update
+        run: |
+          helm dependency update "${{ env.CHART_PATH }}"
+      
+      - name: Helm login
+        env:
+          HELM_REGISTRY: ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login "$HELM_REGISTRY" --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Push Helm chart
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          chart_dir="${{ env.CHART_PATH }}"
+          chart_name=$(basename "$chart_dir")
+          helm package "$chart_dir" --destination . --version "$VERSION" --app-version "$VERSION"
+          helm push "./${chart_name}-${VERSION}.tgz" ${{ steps.meta.outputs.chart_registry }}
+
+      - name: Install OCM CLI
+        run: |
+          go install github.com/open-component-model/ocm/cmds/ocm@latest
+
+      - name: Build and Push OCM component
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+          OCM_REPOSITORY: ${{ steps.meta.outputs.ocm_repository }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          ocm add componentversions --create --file dist/ctf .ocm/component-constructor.yaml \
+            VERSION="${VERSION}" GITHUB_REPOSITORY_OWNER="${owner}" IMAGE_TAG="${VERSION}" CHART_TAG="${VERSION}"
+          ocm transfer commontransportarchive dist/ctf "$OCM_REPOSITORY" --copy-resources --overwrite

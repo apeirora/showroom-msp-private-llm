@@ -1,0 +1,10 @@
+apiVersion: llm.example.com/v1alpha1
+kind: LLMInstance
+metadata:
+  labels:
+    app.kubernetes.io/name: private-llm
+    app.kubernetes.io/managed-by: kustomize
+  name: llminstance-sample
+spec:
+  model: tinyllama
+  replicas: 1

@@ -1,0 +1,23 @@
+# permissions for end users to view llminstances.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: private-llm
+    app.kubernetes.io/managed-by: kustomize
+  name: llminstance-viewer-role
+rules:
+- apiGroups:
+  - llm.example.com
+  resources:
+  - llminstances
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - llm.example.com
+  resources:
+  - llminstances/status
+  verbs:
+  - get
