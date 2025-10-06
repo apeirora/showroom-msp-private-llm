@@ -37,8 +37,8 @@ jobs:
         run: |
           repo="${GITHUB_REPOSITORY,,}"
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "image=ghcr.io/${repo}" >> "$GITHUB_OUTPUT"
-          echo "chart_registry=oci://ghcr.io/${owner}/private-llm" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${owner}/private-llm-controller" >> "$GITHUB_OUTPUT"
+          echo "chart_registry=oci://ghcr.io/${owner}/charts" >> "$GITHUB_OUTPUT"
           echo "ocm_repository=oci://ghcr.io/${owner}/ocm" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
@@ -60,6 +60,7 @@ jobs:
           IMG: ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
         run: |
           make docker-push IMG="$IMG"
+
 
       - name: Install Helm
         uses: azure/setup-helm@v4
@@ -85,13 +86,14 @@ jobs:
 
       - name: Install OCM CLI
         run: |
-          go install github.com/open-component-model/ocm/cmds/ocm@latest
+          curl -sSfL https://ocm.software/install.sh | sudo bash
 
       - name: Build and Push OCM component
         env:
           VERSION: ${{ steps.vars.outputs.version }}
           OCM_REPOSITORY: ${{ steps.meta.outputs.ocm_repository }}
         run: |
+          mkdir -p dist/ctf
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           ocm add componentversions --create --file dist/ctf .ocm/component-constructor.yaml \
             VERSION="${VERSION}" GITHUB_REPOSITORY_OWNER="${owner}" IMAGE_TAG="${VERSION}" CHART_TAG="${VERSION}"

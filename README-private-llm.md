@@ -48,7 +48,7 @@ If you install the operator from an OCI registry, first ensure the chart was pac
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/private-llm:tag
+make docker-build docker-push IMG=<some-registry>/private-llm-controller:tag
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified.
@@ -60,14 +60,14 @@ Make sure you have the proper permission to the registry if the above commands d
 - Using the Makefile (buildx, pushes when used with your registry):
 
 ```sh
-make docker-buildx PLATFORMS=linux/amd64,linux/arm64 IMG=<some-registry>/private-llm:tag
+make docker-buildx PLATFORMS=linux/amd64,linux/arm64 IMG=<some-registry>/private-llm-controller:tag
 ```
 
 - Using regular docker-build (local build, then push):
 
 ```sh
-DOCKER_DEFAULT_PLATFORM=linux/amd64 make docker-build IMG=<some-registry>/private-llm:tag
-make docker-push IMG=<some-registry>/private-llm:tag
+DOCKER_DEFAULT_PLATFORM=linux/amd64 make docker-build IMG=<some-registry>/private-llm-controller:tag
+make docker-push IMG=<some-registry>/private-llm-controller:tag
 ```
 
 - Optional: raw docker buildx (loads into local docker):
@@ -85,7 +85,7 @@ make install
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
 ```sh
-make deploy IMG=<some-registry>/private-llm:tag
+make deploy IMG=<some-registry>/private-llm-controller:tag
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
@@ -243,11 +243,11 @@ Prereqs:
 ```sh
 export GH_OWNER=<github-username>
 export SHA=$(git rev-parse --short HEAD)
-export IMG=ghcr.io/$GH_OWNER/private-llm:$SHA
+export IMG=ghcr.io/$GH_OWNER/private-llm-controller:$SHA
 
-docker build -t "$IMG" -t ghcr.io/$GH_OWNER/private-llm:latest .
+docker build -t "$IMG" -t ghcr.io/$GH_OWNER/private-llm-controller:latest .
 docker push "$IMG"
-docker push ghcr.io/$GH_OWNER/private-llm:latest
+docker push ghcr.io/$GH_OWNER/private-llm-controller:latest
 ```
 
 2) Package and push Helm chart (OCI) to GHCR
@@ -257,7 +257,7 @@ helm dependency update
 export CHART_VER=0.0.0-$SHA
 helm package . --version "$CHART_VER" --app-version "0.4.0"
 echo "$GITHUB_TOKEN" | helm registry login ghcr.io -u "$GH_OWNER" --password-stdin
-helm push ./private-llm-operator-$CHART_VER.tgz oci://ghcr.io/$GH_OWNER/private-llm
+helm push ./private-llm-operator-$CHART_VER.tgz oci://ghcr.io/$GH_OWNER/charts
 cd -
 ```
 

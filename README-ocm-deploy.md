@@ -15,11 +15,10 @@ The canonical OCM repository for this project is `oci://ghcr.io/<GH_OWNER>/ocm`,
 
 For a Pure Helm workflow or API usage details, refer to `README.md` and `README-api.md`.
 
-CI releases
-- On release tags (`v*`), `.github/workflows/build-push.yml` will:
-  - build and push the controller image to `ghcr.io/<GH_OWNER>/private-llm:<version>`
-  - package and push the Helm chart to `oci://ghcr.io/<GH_OWNER>/private-llm`
-  - build and publish the OCM component to `oci://ghcr.io/<GH_OWNER>/ocm`
+**CI releases**
+- build and push controller image → `ghcr.io/<GH_OWNER>/private-llm-controller:<version>`
+- package and push Helm chart → `oci://ghcr.io/<GH_OWNER>/charts`
+- publish OCM component → `oci://ghcr.io/<GH_OWNER>/ocm`
 
 Use the manual steps below for local testing or ad-hoc publishing.
 
@@ -35,13 +34,13 @@ kind delete cluster --name kro-ocm || true
 kind create cluster --name kro-ocm
 ```
 
-1) Build and push the operator image
+1) Build and push the controller image
 ```bash
 export GH_OWNER=ifdotpy
 export GITHUB_TOKEN=<ghcr-token>
 export SHA=$(git rev-parse --short HEAD)
 export VERSION=0.0.0-$SHA
-export IMG=ghcr.io/$GH_OWNER/private-llm:$SHA
+export IMG=ghcr.io/$GH_OWNER/private-llm-controller:$SHA
 
 docker build -t "$IMG" .
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GH_OWNER" --password-stdin
@@ -53,7 +52,7 @@ docker push "$IMG"
 cd charts/private-llm-operator
 helm package . --version "$VERSION" --app-version "0.4.0"
 echo "$GITHUB_TOKEN" | helm registry login ghcr.io -u "$GH_OWNER" --password-stdin
-helm push ./private-llm-operator-$VERSION.tgz oci://ghcr.io/$GH_OWNER/private-llm
+helm push ./private-llm-operator-$VERSION.tgz oci://ghcr.io/$GH_OWNER/charts
 cd -
 ```
 
