@@ -9,14 +9,14 @@ resources:
     version: "${VERSION}"
     access:
       type: ociArtifact
-      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/private-llm/private-llm-operator:${CHART_TAG}
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts/private-llm-operator:${CHART_TAG}
 
   - name: private-llm-image
     type: ociImage
     version: "${VERSION}"
     access:
       type: ociArtifact
-      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/private-llm:${IMAGE_TAG}
+      imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/private-llm-controller:${IMAGE_TAG}
 
   - name: kro-resource-graph-definition
     type: blob
