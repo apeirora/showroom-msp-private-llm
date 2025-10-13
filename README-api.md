@@ -21,7 +21,7 @@ The endpoint ends without a trailing slash, e.g. `http://private-llm.msp/llm/abc
 Create a `TokenRequest` referencing the instance:
 
 ```yaml
-apiVersion: llm.example.com/v1alpha1
+apiVersion: llm.privatellms.msp/v1alpha1
 kind: TokenRequest
 metadata:
   name: demo-token

@@ -8,7 +8,7 @@ metadata:
   name: llminstance-editor-role
 rules:
 - apiGroups:
-  - llm.example.com
+  - llm.privatellms.msp
   resources:
   - llminstances
   verbs:
@@ -20,7 +20,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - llm.example.com
+  - llm.privatellms.msp
   resources:
   - llminstances/status
   verbs:

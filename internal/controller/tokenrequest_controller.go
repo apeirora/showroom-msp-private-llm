@@ -36,11 +36,11 @@ import (
 	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
 )
 
-//+kubebuilder:rbac:groups=llm.example.com,resources=tokenrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=llm.example.com,resources=tokenrequests/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=llm.example.com,resources=tokenrequests/finalizers,verbs=update
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=tokenrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=tokenrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=tokenrequests/finalizers,verbs=update
 // needs to read llminstances to validate reference
-//+kubebuilder:rbac:groups=llm.example.com,resources=llminstances,verbs=get;list;watch
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=llminstances,verbs=get;list;watch
 // create and manage secrets containing tokens
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
@@ -57,14 +57,14 @@ func (r *TokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	const finalizerName = "llm.example.com/tokenrequest-finalizer"
+	const finalizerName = "llm.privatellms.msp/tokenrequest-finalizer"
 	// Handle deletion: ensure associated Secret(s) are removed, then drop finalizer
 	if !tr.DeletionTimestamp.IsZero() {
 		if ctrlutil.ContainsFinalizer(&tr, finalizerName) {
 			var secretList corev1.SecretList
 			if err := r.List(ctx, &secretList,
 				client.InNamespace(req.Namespace),
-				client.MatchingLabels{"llm.example.com/tokenrequest": tr.Name},
+				client.MatchingLabels{"llm.privatellms.msp/tokenrequest": tr.Name},
 			); err == nil {
 				for i := range secretList.Items {
 					sec := secretList.Items[i]
@@ -121,17 +121,17 @@ func (r *TokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					Namespace: req.Namespace,
 					Labels: func() map[string]string {
 						m := map[string]string{
-							"app.kubernetes.io/name":       "llm-token",
-							"llm.example.com/instance":     inst.Name,
-							"llm.example.com/tokenrequest": tr.Name,
+							"app.kubernetes.io/name":           "llm-token",
+							"llm.privatellms.msp/instance":     inst.Name,
+							"llm.privatellms.msp/tokenrequest": tr.Name,
 						}
 						if slug != "" {
-							m["llm.example.com/slug"] = slug
+							m["llm.privatellms.msp/slug"] = slug
 						}
 						return m
 					}(),
 					Annotations: map[string]string{
-						"llm.example.com/description": strings.TrimSpace(tr.Spec.Description),
+						"llm.privatellms.msp/description": strings.TrimSpace(tr.Spec.Description),
 					},
 				},
 				Type: corev1.SecretTypeOpaque,
@@ -157,8 +157,8 @@ func (r *TokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if sec.Labels == nil {
 			sec.Labels = map[string]string{}
 		}
-		if sec.Labels["llm.example.com/slug"] != slug {
-			sec.Labels["llm.example.com/slug"] = slug
+		if sec.Labels["llm.privatellms.msp/slug"] != slug {
+			sec.Labels["llm.privatellms.msp/slug"] = slug
 			updated = true
 		}
 		if updated {
