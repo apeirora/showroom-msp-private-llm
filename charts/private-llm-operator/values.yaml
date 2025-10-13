@@ -1,4 +1,9 @@
 PUBLIC_HOST: "localhost"
+PUBLIC_SCHEME: "http"
+
+tls:
+  # If set, controller will set spec.tls on the Ingress for PUBLIC_HOST
+  secretName: ""
 
 ocm:
   enabled: true
@@ -34,9 +39,12 @@ traefik:
     isDefaultClass: false
     name: traefik
 
-  # Service exposure. For kind/local, switch to NodePort and set nodePorts
+  # Service exposure. For cloud/LB, use LoadBalancer; for kind/local, use NodePort and set nodePorts
   service:
-    type: ClusterIP
+    type: LoadBalancer
+ingress:
+  # Additional annotations to add to managed Ingresses. Operator will merge and keep them in sync.
+  extraAnnotations: {}
 
   # NodePort values only apply when service.type=NodePort
   ports:
