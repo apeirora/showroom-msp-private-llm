@@ -1,6 +1,6 @@
 # Resource Guide
 
-The operator installs two custom resources in the `llm.example.com` API group.
+The operator installs two custom resources in the `llm.privatellms.msp` API group.
 
 ## LLMInstance
 - **What it does:** requests a private llama.cpp endpoint. The operator turns it into a Deployment, Service, and Ingress.
@@ -13,7 +13,7 @@ The operator installs two custom resources in the `llm.example.com` API group.
 
 Minimal example:
 ```yaml
-apiVersion: llm.example.com/v1alpha1
+apiVersion: llm.privatellms.msp/v1alpha1
 kind: LLMInstance
 metadata:
   name: llminstance-sample
@@ -34,7 +34,7 @@ Scale by patching `spec.replicas`. Deleting the resource removes the server and 
 
 Minimal example:
 ```yaml
-apiVersion: llm.example.com/v1alpha1
+apiVersion: llm.privatellms.msp/v1alpha1
 kind: TokenRequest
 metadata:
   name: sample-client

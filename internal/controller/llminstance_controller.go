@@ -53,11 +53,11 @@ type LLMInstanceReconciler struct {
 	AuthServiceURL string
 }
 
-const slugAnnotationKey = "llm.example.com/slug"
+const slugAnnotationKey = "llm.privatellms.msp/slug"
 
-//+kubebuilder:rbac:groups=llm.example.com,resources=llminstances,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=llm.example.com,resources=llminstances/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=llm.example.com,resources=llminstances/finalizers,verbs=update
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=llminstances,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=llminstances/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=llminstances/finalizers,verbs=update
 // core resources
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
@@ -188,8 +188,8 @@ func (r *LLMInstanceReconciler) ensureSlug(ctx context.Context, inst *llmv1alpha
 
 func llamaLabels(instanceName string) map[string]string {
 	return map[string]string{
-		"app.kubernetes.io/name":   "llama-cpp-server",
-		"llm.example.com/instance": instanceName,
+		"app.kubernetes.io/name":       "llama-cpp-server",
+		"llm.privatellms.msp/instance": instanceName,
 	}
 }
 

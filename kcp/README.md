@@ -61,7 +61,7 @@ kubectl ws create customer-1 --enter
 
 # Renaming terminal to Customer's
 
-kubectl kcp bind apiexport root:provider:llm.example.com --accept-permission-claim secrets.core,namespaces.core
+kubectl kcp bind apiexport root:provider:llm.privatellms.msp --accept-permission-claim secrets.core,namespaces.core
 ```
 
 ### 5. Run the syncagent in a separate terminal.
@@ -71,7 +71,7 @@ cd kcp
   --kubeconfig kubeconfig.yaml \
   --kcp-kubeconfig=.kcp/admin-provider.kubeconfig \
   --namespace default \
-  --apiexport-ref llm.example.com
+  --apiexport-ref llm.privatellms.msp
 ```
 
 ### 6. In the terminal with `customer-1`, apply the CR for the LLM.

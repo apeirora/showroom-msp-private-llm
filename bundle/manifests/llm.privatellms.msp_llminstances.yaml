@@ -4,30 +4,30 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
   creationTimestamp: null
-  name: tokenrequests.llm.example.com
+  name: llminstances.llm.privatellms.msp
 spec:
-  group: llm.example.com
+  group: llm.privatellms.msp
   names:
-    kind: TokenRequest
-    listKind: TokenRequestList
-    plural: tokenrequests
-    singular: tokenrequest
+    kind: LLMInstance
+    listKind: LLMInstanceList
+    plural: llminstances
+    singular: llminstance
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.instanceName
-      name: Instance
-      type: string
-    - jsonPath: .status.secretName
-      name: Secret
+    - jsonPath: .spec.model
+      name: Model
       type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
+    - jsonPath: .status.endpoint
+      name: Endpoint
+      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: TokenRequest is the Schema for the tokenrequests API
+        description: LLMInstance is the Schema for the llminstances API
         properties:
           apiVersion:
             description: |-
@@ -47,27 +47,36 @@ spec:
           metadata:
             type: object
           spec:
-            description: TokenRequestSpec defines the desired state of TokenRequest
+            description: LLMInstanceSpec defines the desired state of LLMInstance
             properties:
-              description:
-                description: Description is an optional human-friendly description
-                  for this token.
+              model:
+                description: Model is the desired model identifier (e.g., "TinyLlama/TinyLlama-1.1B-Chat-v1.0").
                 type: string
-              instanceName:
-                description: InstanceName references an LLMInstance in the same namespace.
-                minLength: 1
-                type: string
-            required:
-            - instanceName
+              replicas:
+                description: |-
+                  Replicas indicates how many server pods to run.
+                  Defaults to 1 if omitted or set to 0.
+                format: int32
+                minimum: 0
+                type: integer
             type: object
           status:
-            description: TokenRequestStatus defines the observed state of TokenRequest.
+            description: LLMInstanceStatus defines the observed state of LLMInstance
             properties:
               conditions:
                 description: Conditions represent the latest available observations
                   of the resource's state.
                 items:
-                  description: "Condition contains details for one aspect of the current state of this API Resource.\n---\nThis struct is intended for direct use as an array at the field path .status.conditions.  For example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the observations of a foo's current state.\n\t    // Known .status.conditions.type are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    // +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\" patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t    \   // other fields\n\t}"
+                  description: "Condition contains details for one aspect of the current
+                    state of this API Resource.\n---\nThis struct is intended for
+                    direct use as an array at the field path .status.conditions.  For
+                    example,\n\n\n\ttype FooStatus struct{\n\t    // Represents the
+                    observations of a foo's current state.\n\t    // Known .status.conditions.type
+                    are: \"Available\", \"Progressing\", and \"Degraded\"\n\t    //
+                    +patchMergeKey=type\n\t    // +patchStrategy=merge\n\t    // +listType=map\n\t
+                    \   // +listMapKey=type\n\t    Conditions []metav1.Condition `json:\"conditions,omitempty\"
+                    patchStrategy:\"merge\" patchMergeKey:\"type\" protobuf:\"bytes,1,rep,name=conditions\"`\n\n\n\t
+                    \   // other fields\n\t}"
                   properties:
                     lastTransitionTime:
                       description: |-
@@ -98,7 +107,7 @@ spec:
                         This field may not be empty.
                       maxLength: 1024
                       minLength: 1
-                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$ 
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
                       type: string
                     status:
                       description: status of the condition, one of True, False, Unknown.
@@ -125,15 +134,17 @@ spec:
                   - type
                   type: object
                 type: array
+              endpoint:
+                description: Endpoint is the effective inference endpoint being used.
+                type: string
               observedGeneration:
-                description: ObservedGeneration reflects the generation observed by the controller.
+                description: ObservedGeneration reflects the generation observed by
+                  the controller.
                 format: int64
                 type: integer
               phase:
-                description: Phase is a high-level status summary (e.g., "Ready").
-                type: string
-              secretName:
-                description: SecretName is the name of the Secret containing the generated token.
+                description: Phase is a high-level summary of the instance lifecycle
+                  (e.g., "Ready").
                 type: string
             type: object
         type: object
@@ -141,4 +152,9 @@ spec:
     storage: true
     subresources:
       status: {}
-
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

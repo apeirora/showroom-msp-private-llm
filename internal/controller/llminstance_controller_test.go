@@ -104,7 +104,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 
 		var svc corev1.Service
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: namespace}, &svc)).To(Succeed())
-		Expect(svc.Spec.Selector["llm.example.com/instance"]).To(Equal(name))
+		Expect(svc.Spec.Selector["llm.privatellms.msp/instance"]).To(Equal(name))
 
 		var ing networkingv1.Ingress
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: namespace}, &ing)).To(Succeed())

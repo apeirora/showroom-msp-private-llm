@@ -18,7 +18,7 @@ metadata:
   name: bootstrap-component
   namespace: ocm-system
 spec:
-  component: llm.example.com/private-llm
+  component: llm.privatellms.msp/private-llm
   repositoryRef:
     name: bootstrap-repository
   semver: "${VERSION}"

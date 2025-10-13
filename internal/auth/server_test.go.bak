@@ -32,7 +32,7 @@ func TestAuthHandler_Verify(t *testing.T) {
             Name:      "any-name",
             Namespace: "default",
             Labels: map[string]string{
-                "llm.example.com/slug": slug,
+                "llm.privatellms.msp/slug": slug,
             },
         },
         Data: map[string][]byte{
