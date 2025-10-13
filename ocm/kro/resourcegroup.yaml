@@ -9,8 +9,15 @@ spec:
     spec:
       targetNamespace: string | default="default"
       publicHost: string | default="localhost"
+      publicScheme: string | default="http"
       imagePullSecretName: string | default="ghcr-credentials"
       imagePullPolicy: string | default="IfNotPresent"
+      traefikEnabled: boolean | default=true
+      traefikServiceType: string | default="LoadBalancer"
+      traefikNodePortWeb: int | default=30080
+      traefikNodePortWebsecure: int | default=30443
+      tlsSecretName: string | default=""
+      ingressExtraAnnotations: map[string]string | default={}
   resources:
     - id: ns
       template:
@@ -108,9 +115,23 @@ spec:
             namespace: ${ns.metadata.name}
           values:
             PUBLIC_HOST: ${schema.spec.publicHost}
+            PUBLIC_SCHEME: ${schema.spec.publicScheme}
+            tls:
+              secretName: ${schema.spec.tlsSecretName}
             image:
               repository: ${resourceImage.status.additional.?registry}/${resourceImage.status.additional.?repository}
               tag: ${resourceImage.status.additional.?tag}
               pullPolicy: ${schema.spec.imagePullPolicy}
             imagePullSecrets:
               - name: ${schema.spec.imagePullSecretName}
+            traefik:
+              enabled: ${schema.spec.traefikEnabled}
+              service:
+                type: ${schema.spec.traefikServiceType}
+              ports:
+                web:
+                  nodePort: ${schema.spec.traefikNodePortWeb}
+                websecure:
+                  nodePort: ${schema.spec.traefikNodePortWebsecure}
+            ingress:
+              extraAnnotations: ${schema.spec.ingressExtraAnnotations}

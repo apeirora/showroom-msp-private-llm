@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
 	"os"
 	"time"
@@ -76,6 +77,29 @@ func init() {
 
 	utilruntime.Must(llmv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
+}
+
+// parseJSONMap parses a JSON object string into map[string]string. Returns nil on error or non-object.
+func parseJSONMap(s string) map[string]string {
+	var raw map[string]interface{}
+	if err := json.Unmarshal([]byte(s), &raw); err != nil {
+		return nil
+	}
+	out := make(map[string]string, len(raw))
+	for k, v := range raw {
+		switch t := v.(type) {
+		case string:
+			out[k] = t
+		default:
+			// marshal non-strings back to JSON to keep information
+			b, err := json.Marshal(v)
+			if err != nil {
+				continue
+			}
+			out[k] = string(b)
+		}
+	}
+	return out
 }
 
 // labelingClient wraps a controller-runtime client to inject Kubernetes recommended
@@ -145,6 +169,9 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	var authBind string
 	var authExternalURL string
+	var publicSchemeEnv string
+	var ingressExtraAnnotationsJSON string
+	var tlsSecretName string
 	flag.StringVar(&authBind, "auth-bind-address", ":8090", "Address for internal auth server")
 	flag.StringVar(
 		&authExternalURL,
@@ -152,6 +179,20 @@ func main() {
 		"",
 		"External URL used by Traefik to reach auth server (default derives from POD_NAMESPACE)",
 	)
+	// PUBLIC_SCHEME controls the URL scheme published for endpoints (e.g., http or https)
+	flag.StringVar(
+		&publicSchemeEnv,
+		"public-scheme",
+		"",
+		"Public URL scheme to publish in status.endpoint (overrides PUBLIC_SCHEME env)",
+	)
+	flag.StringVar(
+		&ingressExtraAnnotationsJSON,
+		"ingress-extra-annotations",
+		"",
+		"JSON map of extra Ingress annotations to merge",
+	)
+	flag.StringVar(&tlsSecretName, "tls-secret-name", "", "Secret name for Ingress TLS (optional)")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -259,7 +300,38 @@ func main() {
 			if ns == "" {
 				ns = "default"
 			}
-			return "http://private-llm-controller-manager." + ns + ".svc.cluster.local:8090"
+			// Service exposing port 8090 is named private-llm-controller-manager-metrics-service
+			return "http://private-llm-controller-manager-metrics-service." + ns + ".svc.cluster.local:8090"
+		}(),
+		PublicScheme: func() string {
+			if publicSchemeEnv != "" {
+				return publicSchemeEnv
+			}
+			if v := os.Getenv("PUBLIC_SCHEME"); v != "" {
+				return v
+			}
+			return "http"
+		}(),
+		ExtraIngressAnnotations: func() map[string]string {
+			// Highest precedence: flag JSON
+			if ingressExtraAnnotationsJSON != "" {
+				if m := parseJSONMap(ingressExtraAnnotationsJSON); len(m) > 0 {
+					return m
+				}
+			}
+			// Fallback to env var JSON
+			if v := os.Getenv("INGRESS_EXTRA_ANNOTATIONS"); v != "" {
+				if m := parseJSONMap(v); len(m) > 0 {
+					return m
+				}
+			}
+			return nil
+		}(),
+		TLSSecretName: func() string {
+			if tlsSecretName != "" {
+				return tlsSecretName
+			}
+			return os.Getenv("TLS_SECRET_NAME")
 		}(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LLMInstance")

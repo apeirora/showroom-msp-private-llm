@@ -51,6 +51,12 @@ type LLMInstanceReconciler struct {
 	Scheme         *runtime.Scheme
 	PublicHost     string
 	AuthServiceURL string
+	// PublicScheme controls the URL scheme published in status.endpoint (e.g., "http" or "https").
+	PublicScheme string
+	// ExtraIngressAnnotations are merged into managed Ingress annotations.
+	ExtraIngressAnnotations map[string]string
+	// TLSSecretName, when non-empty, configures spec.tls with this secret for PublicHost.
+	TLSSecretName string
 }
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
@@ -528,75 +534,36 @@ func (r *LLMInstanceReconciler) reconcileIngress(ctx context.Context, inst *llmv
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		className := "traefik"
-		pathType := networkingv1.PathTypePrefix
-		ing = networkingv1.Ingress{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      ingressName,
-				Namespace: inst.Namespace,
-				Labels:    copyStringMap(labels),
-				Annotations: map[string]string{
-					"traefik.ingress.kubernetes.io/router.entrypoints": "web",
-					"traefik.ingress.kubernetes.io/router.middlewares": desiredMiddlewareAnnotation(inst.Namespace, svcName),
-				},
-			},
-			Spec: networkingv1.IngressSpec{
-				IngressClassName: &className,
-				Rules: []networkingv1.IngressRule{{
-					Host: r.PublicHost,
-					IngressRuleValue: networkingv1.IngressRuleValue{
-						HTTP: &networkingv1.HTTPIngressRuleValue{
-							Paths: []networkingv1.HTTPIngressPath{{
-								Path:     pathPrefix,
-								PathType: &pathType,
-								Backend: networkingv1.IngressBackend{
-									Service: &networkingv1.IngressServiceBackend{
-										Name: svcName,
-										Port: networkingv1.ServiceBackendPort{Number: 8000},
-									},
-								},
-							}},
-						},
-					},
-				}},
-			},
-		}
-		if err := ctrl.SetControllerReference(inst, &ing, r.Scheme); err != nil {
+
+		newIngress := r.buildDesiredIngress(inst, labels, svcName, pathPrefix)
+		if err := ctrl.SetControllerReference(inst, newIngress, r.Scheme); err != nil {
 			return err
 		}
-		if err := r.Create(ctx, &ing); err != nil {
+		if err := r.Create(ctx, newIngress); err != nil {
 			return err
 		}
 		logger.Info("created Ingress for llama.cpp", "name", ingressName)
 		return nil
 	}
 
-	updated := false
-	desiredAnnotation := desiredMiddlewareAnnotation(inst.Namespace, svcName)
-	if ing.Annotations == nil {
-		ing.Annotations = map[string]string{}
-	}
-	if ing.Annotations["traefik.ingress.kubernetes.io/router.middlewares"] != desiredAnnotation {
-		ing.Annotations["traefik.ingress.kubernetes.io/router.middlewares"] = desiredAnnotation
+	isHTTPS := strings.EqualFold(r.PublicScheme, "https")
+	desiredEntry := r.desiredIngressEntryPoints(isHTTPS)
+	desiredMiddleware := desiredMiddlewareAnnotation(inst.Namespace, svcName)
+
+	updated := r.ensureIngressAnnotations(&ing, desiredMiddleware, desiredEntry, isHTTPS)
+	if r.applyExtraIngressAnnotations(&ing, true) {
 		updated = true
 	}
-	className := "traefik"
-	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != className {
-		ing.Spec.IngressClassName = &className
+	if r.ensureIngressClass(&ing) {
 		updated = true
 	}
-	if len(ing.Spec.Rules) > 0 && ing.Spec.Rules[0].HTTP != nil && len(ing.Spec.Rules[0].HTTP.Paths) > 0 {
-		rule := &ing.Spec.Rules[0]
-		if rule.Host != r.PublicHost {
-			rule.Host = r.PublicHost
-			updated = true
-		}
-		path := &rule.HTTP.Paths[0]
-		if path.Path != pathPrefix {
-			path.Path = pathPrefix
-			updated = true
-		}
+	if r.ensureIngressHTTPRule(&ing, pathPrefix, svcName) {
+		updated = true
 	}
+	if r.ensureIngressTLS(&ing, isHTTPS) {
+		updated = true
+	}
+
 	if !updated {
 		return nil
 	}
@@ -605,6 +572,186 @@ func (r *LLMInstanceReconciler) reconcileIngress(ctx context.Context, inst *llmv
 	}
 	logger.Info("updated Ingress to desired configuration", "ingress", ingressName)
 	return nil
+}
+
+func (r *LLMInstanceReconciler) buildDesiredIngress(inst *llmv1alpha1.LLMInstance, labels map[string]string, svcName, pathPrefix string) *networkingv1.Ingress {
+	className := "traefik"
+	pathType := networkingv1.PathTypePrefix
+	isHTTPS := strings.EqualFold(r.PublicScheme, "https")
+	desiredEntry := r.desiredIngressEntryPoints(isHTTPS)
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svcName,
+			Namespace: inst.Namespace,
+			Labels:    copyStringMap(labels),
+			Annotations: map[string]string{
+				"traefik.ingress.kubernetes.io/router.entrypoints": desiredEntry,
+				"traefik.ingress.kubernetes.io/router.middlewares": desiredMiddlewareAnnotation(inst.Namespace, svcName),
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &className,
+			Rules: []networkingv1.IngressRule{{
+				Host: r.PublicHost,
+				IngressRuleValue: networkingv1.IngressRuleValue{
+					HTTP: &networkingv1.HTTPIngressRuleValue{
+						Paths: []networkingv1.HTTPIngressPath{{
+							Path:     pathPrefix,
+							PathType: &pathType,
+							Backend: networkingv1.IngressBackend{
+								Service: &networkingv1.IngressServiceBackend{
+									Name: svcName,
+									Port: networkingv1.ServiceBackendPort{Number: 8000},
+								},
+							},
+						}},
+					},
+				},
+			}},
+			TLS: func() []networkingv1.IngressTLS {
+				if !isHTTPS {
+					return nil
+				}
+				desiredTLS := strings.TrimSpace(r.TLSSecretName)
+				if desiredTLS == "" {
+					return nil
+				}
+				return []networkingv1.IngressTLS{{
+					Hosts:      []string{r.PublicHost},
+					SecretName: desiredTLS,
+				}}
+			}(),
+		},
+	}
+	r.applyExtraIngressAnnotations(ingress, false)
+	return ingress
+}
+
+func (r *LLMInstanceReconciler) desiredIngressEntryPoints(isHTTPS bool) string {
+	if isHTTPS {
+		return "websecure,web"
+	}
+	return "web"
+}
+
+func (r *LLMInstanceReconciler) ensureIngressAnnotations(ing *networkingv1.Ingress, desiredMiddleware, desiredEntry string, isHTTPS bool) bool {
+	updated := false
+	if ing.Annotations == nil {
+		ing.Annotations = map[string]string{}
+	}
+	if ing.Annotations["traefik.ingress.kubernetes.io/router.middlewares"] != desiredMiddleware {
+		ing.Annotations["traefik.ingress.kubernetes.io/router.middlewares"] = desiredMiddleware
+		updated = true
+	}
+	if ing.Annotations["traefik.ingress.kubernetes.io/router.entrypoints"] != desiredEntry {
+		ing.Annotations["traefik.ingress.kubernetes.io/router.entrypoints"] = desiredEntry
+		updated = true
+	}
+	if isHTTPS {
+		if ing.Annotations["traefik.ingress.kubernetes.io/router.tls"] != "true" {
+			ing.Annotations["traefik.ingress.kubernetes.io/router.tls"] = "true"
+			updated = true
+		}
+	} else if _, exists := ing.Annotations["traefik.ingress.kubernetes.io/router.tls"]; exists {
+		delete(ing.Annotations, "traefik.ingress.kubernetes.io/router.tls")
+		updated = true
+	}
+	return updated
+}
+
+func (r *LLMInstanceReconciler) applyExtraIngressAnnotations(ing *networkingv1.Ingress, override bool) bool {
+	if len(r.ExtraIngressAnnotations) == 0 {
+		return false
+	}
+	if ing.Annotations == nil {
+		ing.Annotations = map[string]string{}
+	}
+	updated := false
+	for k, v := range r.ExtraIngressAnnotations {
+		current, exists := ing.Annotations[k]
+		if !exists || override {
+			ing.Annotations[k] = v
+			updated = true
+			continue
+		}
+		if current != v {
+			ing.Annotations[k] = v
+			updated = true
+		}
+	}
+	return updated
+}
+
+func (r *LLMInstanceReconciler) ensureIngressClass(ing *networkingv1.Ingress) bool {
+	className := "traefik"
+	if ing.Spec.IngressClassName == nil || *ing.Spec.IngressClassName != className {
+		ing.Spec.IngressClassName = &className
+		return true
+	}
+	return false
+}
+
+func (r *LLMInstanceReconciler) ensureIngressHTTPRule(ing *networkingv1.Ingress, pathPrefix, svcName string) bool {
+	updated := false
+	pathType := networkingv1.PathTypePrefix
+	if len(ing.Spec.Rules) == 0 {
+		ing.Spec.Rules = []networkingv1.IngressRule{{}}
+		updated = true
+	}
+	rule := &ing.Spec.Rules[0]
+	if rule.Host != r.PublicHost {
+		rule.Host = r.PublicHost
+		updated = true
+	}
+	if rule.HTTP == nil {
+		rule.HTTP = &networkingv1.HTTPIngressRuleValue{}
+		updated = true
+	}
+	if len(rule.HTTP.Paths) == 0 {
+		rule.HTTP.Paths = []networkingv1.HTTPIngressPath{{}}
+		updated = true
+	}
+	path := &rule.HTTP.Paths[0]
+	if path.PathType == nil {
+		path.PathType = &pathType
+		updated = true
+	}
+	if *path.PathType != pathType {
+		path.PathType = &pathType
+		updated = true
+	}
+	if path.Path != pathPrefix {
+		path.Path = pathPrefix
+		updated = true
+	}
+	if path.Backend.Service == nil {
+		path.Backend.Service = &networkingv1.IngressServiceBackend{}
+		updated = true
+	}
+	if path.Backend.Service.Name != svcName {
+		path.Backend.Service.Name = svcName
+		updated = true
+	}
+	if path.Backend.Service.Port.Number != 8000 {
+		path.Backend.Service.Port = networkingv1.ServiceBackendPort{Number: 8000}
+		updated = true
+	}
+	return updated
+}
+
+func (r *LLMInstanceReconciler) ensureIngressTLS(ing *networkingv1.Ingress, isHTTPS bool) bool {
+	desiredTLS := strings.TrimSpace(r.TLSSecretName)
+	if !isHTTPS || desiredTLS == "" {
+		return false
+	}
+	if len(ing.Spec.TLS) == 0 || ing.Spec.TLS[0].SecretName != desiredTLS || len(ing.Spec.TLS[0].Hosts) == 0 || ing.Spec.TLS[0].Hosts[0] != r.PublicHost {
+		ing.Spec.TLS = []networkingv1.IngressTLS{{
+			Hosts:      []string{r.PublicHost},
+			SecretName: desiredTLS,
+		}}
+		return true
+	}
+	return false
 }
 
 func desiredMiddlewareAnnotation(namespace, svcName string) string {
@@ -630,7 +777,11 @@ func (r *LLMInstanceReconciler) updateInstanceStatus(ctx context.Context, inst *
 
 	meta.SetStatusCondition(&inst.Status.Conditions, readyCond)
 	inst.Status.Phase = "Ready"
-	inst.Status.Endpoint = fmt.Sprintf("http://%s/llm/%s/%s", r.PublicHost, slug, inst.Name)
+	scheme := r.PublicScheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	inst.Status.Endpoint = fmt.Sprintf("%s://%s/llm/%s/%s", scheme, r.PublicHost, slug, inst.Name)
 	inst.Status.ObservedGeneration = inst.Generation
 	return r.Status().Update(ctx, inst)
 }
