@@ -1,0 +1,17 @@
+apiVersion: kro.run/v1alpha1
+kind: PrivateLlmOperatorRelease
+metadata:
+  name: bootstrap
+spec:
+  targetNamespace: private-llm-system
+  publicHost: private-llm.ingress.cc-msps.cc-sandbox.shoot.gardener.cc-one.showroom.apeirora.eu
+  publicScheme: https
+  imagePullSecretName: ghcr-credentials
+  traefikEnabled: false
+  tlsSecretName: ""
+  ingressExtraAnnotations:
+    dns.gardener.cloud/class: "garden"
+    dns.gardener.cloud/dnsnames: "private-llm.ingress.cc-msps.cc-sandbox.shoot.gardener.cc-one.showroom.apeirora.eu"
+    cert.gardener.cloud/purpose: "managed"
+
+
