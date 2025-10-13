@@ -61,6 +61,12 @@ spec:
           env:
             - name: PUBLIC_HOST
               value: {{ .Values.PUBLIC_HOST | quote }}
+            - name: PUBLIC_SCHEME
+              value: {{ .Values.PUBLIC_SCHEME | default "http" | quote }}
+            - name: TLS_SECRET_NAME
+              value: {{ .Values.tls.secretName | default "" | quote }}
+            - name: INGRESS_EXTRA_ANNOTATIONS
+              value: {{ .Values.ingress.extraAnnotations | toJson | quote }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:

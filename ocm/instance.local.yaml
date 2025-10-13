@@ -1,0 +1,16 @@
+apiVersion: kro.run/v1alpha1
+kind: PrivateLlmOperatorRelease
+metadata:
+  name: bootstrap
+spec:
+  targetNamespace: private-llm-system
+  publicHost: localhost
+  publicScheme: http
+  imagePullSecretName: ghcr-credentials
+  traefikEnabled: true
+  traefikServiceType: NodePort
+  traefikNodePortWeb: 30080
+  traefikNodePortWebsecure: 30443
+  tlsSecretName: ""
+
+
