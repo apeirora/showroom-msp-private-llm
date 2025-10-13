@@ -78,7 +78,7 @@ var _ = Describe("TokenRequest controller", func() {
 		Expect(result.Requeue).To(BeTrue())
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, tr)).To(Succeed())
-		Expect(tr.Finalizers).To(ContainElement("llm.example.com/tokenrequest-finalizer"))
+		Expect(tr.Finalizers).To(ContainElement("llm.privatellms.msp/tokenrequest-finalizer"))
 
 		result, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
@@ -87,9 +87,9 @@ var _ = Describe("TokenRequest controller", func() {
 		secretKey := types.NamespacedName{Name: tokenName + "-token", Namespace: namespace}
 		var secret corev1.Secret
 		Expect(k8sClient.Get(ctx, secretKey, &secret)).To(Succeed())
-		Expect(secret.Labels).To(HaveKeyWithValue("llm.example.com/tokenrequest", tokenName))
-		Expect(secret.Labels).To(HaveKeyWithValue("llm.example.com/instance", instanceName))
-		Expect(secret.Labels).To(HaveKeyWithValue("llm.example.com/slug", slug))
+		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/tokenrequest", tokenName))
+		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/instance", instanceName))
+		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/slug", slug))
 		Expect(secret.Data).To(HaveKey("OPENAI_API_KEY"))
 		Expect(secret.Data["OPENAI_API_KEY"]).NotTo(BeEmpty())
 

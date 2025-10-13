@@ -4,30 +4,30 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
   creationTimestamp: null
-  name: llminstances.llm.example.com
+  name: tokenrequests.llm.privatellms.msp
 spec:
-  group: llm.example.com
+  group: llm.privatellms.msp
   names:
-    kind: LLMInstance
-    listKind: LLMInstanceList
-    plural: llminstances
-    singular: llminstance
+    kind: TokenRequest
+    listKind: TokenRequestList
+    plural: tokenrequests
+    singular: tokenrequest
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.model
-      name: Model
+    - jsonPath: .spec.instanceName
+      name: Instance
+      type: string
+    - jsonPath: .status.secretName
+      name: Secret
       type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
-    - jsonPath: .status.endpoint
-      name: Endpoint
-      type: string
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: LLMInstance is the Schema for the llminstances API
+        description: TokenRequest is the Schema for the tokenrequests API
         properties:
           apiVersion:
             description: |-
@@ -47,21 +47,21 @@ spec:
           metadata:
             type: object
           spec:
-            description: LLMInstanceSpec defines the desired state of LLMInstance
+            description: TokenRequestSpec defines the desired state of TokenRequest
             properties:
-              model:
-                description: Model is the desired model identifier (e.g., "TinyLlama/TinyLlama-1.1B-Chat-v1.0").
+              description:
+                description: Description is an optional human-friendly description
+                  for this token.
                 type: string
-              replicas:
-                description: |-
-                  Replicas indicates how many server pods to run.
-                  Defaults to 1 if omitted or set to 0.
-                format: int32
-                minimum: 0
-                type: integer
+              instanceName:
+                description: InstanceName references an LLMInstance in the same namespace.
+                minLength: 1
+                type: string
+            required:
+            - instanceName
             type: object
           status:
-            description: LLMInstanceStatus defines the observed state of LLMInstance
+            description: TokenRequestStatus defines the observed state of TokenRequest.
             properties:
               conditions:
                 description: Conditions represent the latest available observations
@@ -134,17 +134,17 @@ spec:
                   - type
                   type: object
                 type: array
-              endpoint:
-                description: Endpoint is the effective inference endpoint being used.
-                type: string
               observedGeneration:
                 description: ObservedGeneration reflects the generation observed by
                   the controller.
                 format: int64
                 type: integer
               phase:
-                description: Phase is a high-level summary of the instance lifecycle
-                  (e.g., "Ready").
+                description: Phase is a high-level status summary (e.g., "Ready").
+                type: string
+              secretName:
+                description: SecretName is the name of the Secret containing the generated
+                  token.
                 type: string
             type: object
         type: object

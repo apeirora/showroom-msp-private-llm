@@ -5,7 +5,7 @@ metadata:
 spec:
   resource:
     kind: LLMInstance
-    apiGroup: llm.example.com
+    apiGroup: llm.privatellms.msp
     version: v1alpha1
   naming:
     namespace: "$remoteClusterName"
@@ -18,7 +18,7 @@ metadata:
 spec:
   resource:
     kind: TokenRequest
-    apiGroup: llm.example.com
+    apiGroup: llm.privatellms.msp
     version: v1alpha1
   naming:
     namespace: "$remoteClusterName"

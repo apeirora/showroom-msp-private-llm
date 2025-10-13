@@ -11,7 +11,7 @@ At a high level you will:
 5. Apply the bootstrap bundle that wires Flux to install the chart.
 6. Create an instance resource to roll out the operator.
 
-The canonical OCM repository for this project is `oci://ghcr.io/<GH_OWNER>/ocm`, with the component path `llm.example.com/private-llm`. Replace `<GH_OWNER>` with your GitHub user or organization when following the steps.
+The canonical OCM repository for this project is `oci://ghcr.io/<GH_OWNER>/ocm`, with the component path `llm.privatellms.msp/private-llm`. Replace `<GH_OWNER>` with your GitHub user or organization when following the steps.
 
 For a Pure Helm workflow or API usage details, refer to `README.md` and `README-api.md`.
 

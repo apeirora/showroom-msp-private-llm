@@ -3,7 +3,8 @@ kind: Service
 metadata:
   creationTimestamp: null
   labels:
-    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: private-llm
     control-plane: controller-manager
   name: private-llm-controller-manager-metrics-service
 spec:
@@ -12,10 +13,6 @@ spec:
     port: 8443
     protocol: TCP
     targetPort: https
-  - name: auth
-    port: 8090
-    protocol: TCP
-    targetPort: auth
   selector:
     control-plane: controller-manager
 status:
