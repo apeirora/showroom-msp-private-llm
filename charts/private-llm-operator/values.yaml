@@ -1,5 +1,8 @@
 PUBLIC_HOST: "localhost"
 
+ocm:
+  enabled: true
+
 auth:
   # Optional hard override. If empty, operator constructs URL from pod namespace
   externalURL: ""

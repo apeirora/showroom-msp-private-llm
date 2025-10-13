@@ -71,7 +71,7 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 		var secrets corev1.SecretList
 		// Search cluster-wide by opaque slug label
 		selector := labels.SelectorFromSet(map[string]string{
-			"llm.example.com/slug": slug,
+			"llm.privatellms.msp/slug": slug,
 		})
 		if err := s.K8sClient.List(ctx, &secrets, &client.ListOptions{LabelSelector: selector}); err != nil {
 			logger.Error(err, "failed to list secrets by slug")

@@ -1,4 +1,4 @@
-apiVersion: llm.example.com/v1alpha1
+apiVersion: llm.privatellms.msp/v1alpha1
 kind: LLMInstance
 metadata:
   labels:

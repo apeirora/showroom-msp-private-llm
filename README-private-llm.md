@@ -107,7 +107,7 @@ This will create:
 Inspect status:
 
 ```sh
-kubectl get llminstances.llm.example.com -o wide
+kubectl get llminstances.llm.privatellms.msp -o wide
 kubectl get llminstance llminstance-sample -o yaml | sed -n '1,150p'
 ```
 
@@ -127,7 +127,7 @@ Scaling is supported via `spec.replicas`. The `spec.model` field is currently ig
 Example:
 
 ```yaml
-apiVersion: llm.example.com/v1alpha1
+apiVersion: llm.privatellms.msp/v1alpha1
 kind: LLMInstance
 metadata:
   name: llminstance-sample
@@ -276,7 +276,7 @@ ocm transfer commontransportarchive dist/ctf "$OCM_REPOSITORY" --overwrite
 
 4) Verify
 ```sh
-ocm get components ghcr.io/$GH_OWNER/ocm//llm.example.com/private-llm:$VERSION
+ocm get components ghcr.io/$GH_OWNER/ocm//llm.privatellms.msp/private-llm:$VERSION
 ```
 
 ## Deploy with OCM Bootstrap (RGD)

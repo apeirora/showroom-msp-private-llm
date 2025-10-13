@@ -2,7 +2,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: manager-role
+  name: private-llm-controller-manager
 rules:
 - apiGroups:
   - ""
@@ -60,7 +60,31 @@ rules:
   - update
   - watch
 - apiGroups:
-  - llm.example.com
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - llm.privatellms.msp
   resources:
   - llminstances
   verbs:
@@ -72,13 +96,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - llm.example.com
+  - llm.privatellms.msp
   resources:
   - llminstances/finalizers
   verbs:
   - update
 - apiGroups:
-  - llm.example.com
+  - llm.privatellms.msp
   resources:
   - llminstances/status
   verbs:
@@ -86,7 +110,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - llm.example.com
+  - llm.privatellms.msp
   resources:
   - tokenrequests
   verbs:
@@ -98,13 +122,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - llm.example.com
+  - llm.privatellms.msp
   resources:
   - tokenrequests/finalizers
   verbs:
   - update
 - apiGroups:
-  - llm.example.com
+  - llm.privatellms.msp
   resources:
   - tokenrequests/status
   verbs:
