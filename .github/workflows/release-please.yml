@@ -1,0 +1,48 @@
+name: Release Please
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4.3.0
+        with:
+          skip-github-pull-request: true
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Ensure a tag exists for this commit (fallback patch)
+        if: steps.release.outputs.release_created != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute and push next patch tag
+        if: steps.release.outputs.release_created != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch --tags --force
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo v0.0.0)
+          ver=${last_tag#v}
+          IFS=. read -r major minor patch <<EOF
+          ${ver}
+          EOF
+          major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
+          next=v${major}.${minor}.$((patch+1))
+          echo "Last tag: ${last_tag}; next: ${next}"
+          git tag -a "${next}" -m "chore(release): ${next}"
+          git push origin "${next}"
+
+
