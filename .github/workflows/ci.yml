@@ -15,6 +15,8 @@ on:
 
 permissions:
   contents: read
+  checks: write
+  pull-requests: write
 
 env:
   CHART_PATH: charts/private-llm-operator
@@ -30,16 +32,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-
-      - name: Cache Go build and mod
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Install Helm
         uses: azure/setup-helm@v4
@@ -57,10 +50,88 @@ jobs:
           make lint
 
       - name: Unit tests
+        shell: bash
         env:
           GOMAXPROCS: 2
         run: |
-          make test
+          set -o pipefail
+          make test | tee test.out
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: cover.out
+
+      - name: Coverage summary in job
+        shell: bash
+        run: |
+          total=$(go tool cover -func=cover.out | awk '/total:/ {print $3}')
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Total: ${total}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate coverage reports (txt, html, compact md)
+        shell: bash
+        run: |
+          go tool cover -func=cover.out > coverage.txt
+          go tool cover -html=cover.out -o coverage.html
+          TOTAL=$(go tool cover -func=cover.out | awk '/total:/ {print $3}')
+          TOTAL_NUM=$(echo "$TOTAL" | tr -d '%')
+          TOTAL_INT=${TOTAL_NUM%.*}
+          FILLED=$(awk -v p="$TOTAL_NUM" 'BEGIN{printf "%d", (p/10)+0.5}')
+          BAR=""
+          for i in $(seq 1 10); do
+            if [ "$i" -le "$FILLED" ]; then BAR="${BAR}█"; else BAR="${BAR}░"; fi
+          done
+          if [ "${TOTAL_INT:-0}" -ge 80 ]; then STATUS="✅"; elif [ "${TOTAL_INT:-0}" -ge 60 ]; then STATUS="⚠️"; else STATUS="❌"; fi
+          echo "### Code Coverage ${STATUS}" > coverage.md
+          echo "" >> coverage.md
+          echo "- Total: ${TOTAL}  ${BAR}" >> coverage.md
+          echo "" >> coverage.md
+          echo "#### Packages (>0%)" >> coverage.md
+          echo "" >> coverage.md
+          echo "| Package | Coverage |" >> coverage.md
+          echo "|---|---|" >> coverage.md
+          grep -E '^ok\s+.+\s+[0-9\.]+s\s+coverage: ' test.out | grep -v 'coverage: 0.0% ' | \
+            awk '{cov=$NF; pkg=$2; print "| " pkg " | " cov " |"}' | head -n 12 >> coverage.md
+          echo "" >> coverage.md
+          echo "<details><summary>All packages</summary>" >> coverage.md
+          echo "" >> coverage.md
+          echo "| Package | Coverage |" >> coverage.md
+          echo "|---|---|" >> coverage.md
+          grep -E '^ok\s+.+\s+[0-9\.]+s\s+coverage: ' test.out | \
+            awk '{cov=$NF; pkg=$2; print "| " pkg " | " cov " |"}' >> coverage.md
+          echo "</details>" >> coverage.md
+
+      - name: Append coverage report to job summary
+        shell: bash
+        run: |
+          echo "## Test & Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          cat coverage.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage.html
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: coverage.md
+
+      - name: Enforce coverage threshold (optional)
+        shell: bash
+        run: |
+          if [ -n "${COVERAGE_MIN}" ]; then
+            pct=$(go tool cover -func=cover.out | awk '/total:/ {sub(/%/,"",$3); print $3}')
+            awk -v p="$pct" -v m="$COVERAGE_MIN" 'BEGIN{ if (p+0 < m+0) { printf("Coverage %.2f%% < %.2f%%\n", p, m); exit 1 } }'
+          else
+            echo "COVERAGE_MIN not set; skipping coverage gate"
+          fi
 
 
 
