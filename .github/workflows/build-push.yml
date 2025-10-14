@@ -106,6 +106,30 @@ jobs:
           helm package "$chart_dir" --destination . --version "$VERSION" --app-version "$VERSION"
           helm push "./${chart_name}-${VERSION}.tgz" ${{ steps.meta.outputs.chart_registry }}
 
+      - name: Write build metadata
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          chart_dir="${{ env.CHART_PATH }}"
+          chart_name=$(basename "$chart_dir")
+          cat > build-metadata.json <<EOF
+          {
+            "commit": {
+              "sha": "${GITHUB_SHA}"
+            },
+            "image": {
+              "name": "${{ steps.meta.outputs.image }}",
+              "tag": "${VERSION}",
+              "latest": true
+            },
+            "chart": {
+              "name": "${chart_name}",
+              "version": "${VERSION}",
+              "registry": "${{ steps.meta.outputs.chart_registry }}"
+            }
+          }
+          EOF
+
       - name: Generate checksums
         env:
           VERSION: ${{ steps.vars.outputs.version }}
@@ -123,6 +147,7 @@ jobs:
             ./*.tgz
             SHA256SUMS.txt
             image-digest.txt
+            build-metadata.json
           fail_on_unmatched_files: true
 
       - name: Install OCM CLI
