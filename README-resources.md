@@ -53,4 +53,3 @@ kubectl get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d
 2. Wait for `status.endpoint` to show the URL.
 3. Create a `TokenRequest` and retrieve its token.
 4. Call the API with `Authorization: Bearer <token>` (see `README-api.md`).
-

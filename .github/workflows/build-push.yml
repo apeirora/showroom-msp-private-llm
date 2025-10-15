@@ -7,7 +7,7 @@ on:
       - '*.*.*'
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 env:
@@ -61,6 +61,28 @@ jobs:
         run: |
           make docker-push IMG="$IMG"
 
+      - name: Push Docker image (latest)
+        env:
+          IMAGE_BASE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          docker tag "$IMAGE_BASE:$VERSION" "$IMAGE_BASE:latest"
+          docker push "$IMAGE_BASE:latest"
+
+      - name: Capture image digest
+        id: dig
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
+        run: |
+          set -e
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" || true)
+          if [ -z "$DIGEST" ]; then
+            echo "Repo digest not available; attempting registry lookup skipped"
+            DIGEST="unknown"
+          fi
+          echo "$DIGEST" | tee image-digest.txt
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+
 
       - name: Install Helm
         uses: azure/setup-helm@v4
@@ -83,6 +105,50 @@ jobs:
           chart_name=$(basename "$chart_dir")
           helm package "$chart_dir" --destination . --version "$VERSION" --app-version "$VERSION"
           helm push "./${chart_name}-${VERSION}.tgz" ${{ steps.meta.outputs.chart_registry }}
+
+      - name: Write build metadata
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          chart_dir="${{ env.CHART_PATH }}"
+          chart_name=$(basename "$chart_dir")
+          cat > build-metadata.json <<EOF
+          {
+            "commit": {
+              "sha": "${GITHUB_SHA}"
+            },
+            "image": {
+              "name": "${{ steps.meta.outputs.image }}",
+              "tag": "${VERSION}",
+              "latest": true
+            },
+            "chart": {
+              "name": "${chart_name}",
+              "version": "${VERSION}",
+              "registry": "${{ steps.meta.outputs.chart_registry }}"
+            }
+          }
+          EOF
+
+      - name: Generate checksums
+        env:
+          VERSION: ${{ steps.vars.outputs.version }}
+        run: |
+          chart_dir="${{ env.CHART_PATH }}"
+          chart_name=$(basename "$chart_dir")
+          echo "Generating SHA256 sums"
+          sha256sum "./${chart_name}-${VERSION}.tgz" > SHA256SUMS.txt
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            ./*.tgz
+            SHA256SUMS.txt
+            image-digest.txt
+            build-metadata.json
+          fail_on_unmatched_files: true
 
       - name: Install OCM CLI
         run: |
