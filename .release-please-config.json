@@ -1,5 +1,5 @@
 {
-  "release-type": "simple",
+  "release-type": "go",
   "include-v-in-tag": true,
   "bump-minor-pre-major": true,
   "bootstrap-sha": "ae61249378e5798cd8f953fed366f25bca5fc46b",
