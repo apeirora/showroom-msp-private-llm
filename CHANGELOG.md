@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.0...v1.0.1) (2025-10-16)
+
+
+### Bug Fixes
+
+* proper ocm name ([6a7b3d5](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/6a7b3d5c093330424a1a589335e95376643c3115))
+
 ## [1.0.0](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v0.0.1...v1.0.0) (2025-10-16)
 
 
