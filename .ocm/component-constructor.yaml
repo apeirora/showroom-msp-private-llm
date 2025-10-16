@@ -1,4 +1,4 @@
-name: llm.example.com/private-llm
+name: llm.privatellms.msp/private-llm
 version: ${VERSION}
 provider:
   name: ${GITHUB_REPOSITORY_OWNER}
