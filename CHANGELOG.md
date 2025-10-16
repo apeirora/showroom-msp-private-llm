@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.1...v1.0.2) (2025-10-16)
+
+
+### Bug Fixes
+
+* slug generation ([76bdf04](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/76bdf04450de1f720810d6c1bc7301ad4bdd9c22))
+
 ## [1.0.1](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.0...v1.0.1) (2025-10-16)
 
 
