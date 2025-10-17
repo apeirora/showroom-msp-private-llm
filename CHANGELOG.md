@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.2...v1.0.3) (2025-10-17)
+
+
+### Bug Fixes
+
+* integer in rgd for llm ([07418e4](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/07418e40734e70d493bc1dae338010ebf6d3a678))
+* slug generation ([d0fff87](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/d0fff87a2503955fe7344a409a33d2249614b289))
+
 ## [1.0.2](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.1...v1.0.2) (2025-10-16)
 
 
