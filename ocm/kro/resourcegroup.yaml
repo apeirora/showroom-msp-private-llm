@@ -14,8 +14,8 @@ spec:
       imagePullPolicy: string | default="IfNotPresent"
       traefikEnabled: boolean | default=true
       traefikServiceType: string | default="LoadBalancer"
-      traefikNodePortWeb: int | default=30080
-      traefikNodePortWebsecure: int | default=30443
+      traefikNodePortWeb: integer | default=30080
+      traefikNodePortWebsecure: integer | default=30443
       tlsSecretName: string | default=""
       ingressExtraAnnotations: map[string]string | default={}
   resources:
