@@ -818,18 +818,33 @@ func (r *LLMInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// generateSlug creates a short, URL-safe opaque slug from cryptographically
-// random bytes. The resulting string is unpadded base64url and truncated to
-// a reasonable length for readability.
+// generateSlug creates a short, label-safe, URL-safe slug from cryptographically
+// random bytes. It uses unpadded base64url, truncated, and ensures the first and
+// last characters are alphanumeric to satisfy Kubernetes label value rules.
 func generateSlug(numBytes int) (string, error) {
 	b := make([]byte, numBytes)
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	s := strings.TrimRight(base64.URLEncoding.EncodeToString(b), "=")
+	s := base64.RawURLEncoding.EncodeToString(b)
 	// Cap to max 16 chars to keep URLs compact
 	if len(s) > 16 {
 		s = s[:16]
 	}
+	// Ensure it starts and ends with an alphanumeric character (Kubernetes label requirement)
+	if len(s) > 0 {
+		sb := []byte(s)
+		if !isAlphaNumeric(sb[0]) {
+			sb[0] = 'a'
+		}
+		if !isAlphaNumeric(sb[len(sb)-1]) {
+			sb[len(sb)-1] = 'z'
+		}
+		s = string(sb)
+	}
 	return s, nil
+}
+
+func isAlphaNumeric(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
 }
