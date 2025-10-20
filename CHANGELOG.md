@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.3...v1.0.4) (2025-10-20)
+
+
+### Bug Fixes
+
+* remove rgd from ocm ([d83d27d](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/d83d27d7d6af98a292f4b576c537c5a6fb719d1b))
+
 ## [1.0.3](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.2...v1.0.3) (2025-10-17)
 
 
