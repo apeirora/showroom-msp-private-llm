@@ -1,7 +1,7 @@
 apiVersion: kro.run/v1alpha1
 kind: PrivateLlmOperatorRelease
 metadata:
-  name: bootstrap
+  name: private-llm-operator-instance
 spec:
   targetNamespace: private-llm-system
   publicHost: localhost

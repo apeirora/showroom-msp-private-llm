@@ -1,0 +1,16 @@
+apiVersion: delivery.ocm.software/v1alpha1
+kind: Component
+metadata:
+  name: {{ .Values.component.name }}
+  namespace: {{ .Values.component.namespace }}
+spec:
+  component: {{ .Values.component.componentName }}
+  repositoryRef:
+    name: {{ .Values.component.repositoryRefName }}
+  semver: "{{ .Values.component.semver }}"
+  interval: {{ .Values.component.interval }}
+  ocmConfig:
+    - kind: Repository
+      apiVersion: delivery.ocm.software/v1alpha1
+      name: {{ .Values.component.repositoryRefName }}
+      namespace: {{ .Values.component.repositoryRefNamespace }}

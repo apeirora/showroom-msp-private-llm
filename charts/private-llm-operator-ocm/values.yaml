@@ -1,0 +1,21 @@
+component:
+  name: private-llm-operator
+  namespace: ocm-system # fix: cannot be changed
+  componentName: llm.privatellms.msp/private-llm
+  repositoryRefName: apeirora-repository
+  repositoryRefNamespace: ocm-system
+  semver: "v1.0.3"
+  interval: 1m
+
+operator:
+  targetNamespace: private-llm-operator
+  publicHost: localhost
+  publicScheme: http
+  imagePullSecretName: ghcr-credentials
+  imagePullPolicy: IfNotPresent
+  traefikEnabled: true
+  traefikServiceType: LoadBalancer
+  traefikNodePortWeb: 30080
+  traefikNodePortWebsecure: 30443
+  tlsSecretName: ""
+  ingressExtraAnnotations: {}
