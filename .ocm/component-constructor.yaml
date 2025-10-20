@@ -18,10 +18,3 @@ resources:
       type: ociArtifact
       imageReference: ghcr.io/${GITHUB_REPOSITORY_OWNER}/private-llm-controller:${IMAGE_TAG}
 
-  - name: kro-resource-graph-definition
-    type: blob
-    version: "${VERSION}"
-    input:
-      type: file
-      path: ../ocm/kro/resourcegroup.yaml
-

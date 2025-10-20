@@ -1,6 +1,6 @@
 apiVersion: v2
 name: private-llm-operator
-description: Simple Helm chart for private-llm operator
+description: Helm chart for private-llm operator
 type: application
 version: 0.1.0
 appVersion: "0.4.0"
