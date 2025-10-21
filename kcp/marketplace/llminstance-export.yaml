@@ -1,5 +1,0 @@
-apiVersion: apis.kcp.io/v1alpha1
-kind: APIExport
-metadata:
-  name: llm.privatellms.msp
-spec: {}
