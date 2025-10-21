@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.4...v1.0.5) (2025-10-21)
+
+
+### Bug Fixes
+
+* trigger release ([f070b0a](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/f070b0a001d11ab4e97744471834c4cade2bb11b))
+
 ## [1.0.4](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.3...v1.0.4) (2025-10-20)
 
 
