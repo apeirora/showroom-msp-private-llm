@@ -1,0 +1,7 @@
+apiVersion: v2
+name: private-llm-operator
+description: Helm chart for Private LLM Operator OCM release manifests
+type: application
+version: 0.0.0
+appVersion: "0.0.0"
+
