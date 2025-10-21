@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
 
@@ -13,20 +13,28 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      - name: Generate GitHub App installation token
+        id: app-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.GH_APP_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
       - id: release
         uses: googleapis/release-please-action@v4.3.0
         with:
-          token: ${{ secrets.RP_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           skip-github-pull-request: false
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - name: tag major and minor versions
         if: ${{ steps.release.outputs.release_created }}
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git remote add gh-token "https://${{ secrets.GITHUB_TOKEN }}@github.com/googleapis/release-please-action.git"
           git tag -d v${{ steps.release.outputs.major }} || true
           git tag -d v${{ steps.release.outputs.major }}.${{ steps.release.outputs.minor }} || true
           git push origin :v${{ steps.release.outputs.major }} || true
