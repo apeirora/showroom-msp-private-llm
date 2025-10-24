@@ -50,7 +50,11 @@ spec:
             description: LLMInstanceSpec defines the desired state of LLMInstance
             properties:
               model:
+                default: tinyllama
                 description: Model is the desired model identifier (e.g., "TinyLlama/TinyLlama-1.1B-Chat-v1.0").
+                enum:
+                - tinyllama
+                - phi2
                 type: string
               replicas:
                 description: |-
