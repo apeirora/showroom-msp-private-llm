@@ -9,7 +9,7 @@ The operator installs two custom resources in the `llm.privatellms.msp` API grou
   - `spec.replicas` (optional) – number of pods, defaults to 1.
 - **What you read back:**
   - `status.phase` – `Pending`, `Ready`, etc.
-  - `status.endpoint` – public URL (`http://<host>/llm/<slug>/<name>`).
+  - `status.endpoint` – public URL (`http://<host>/llm/<slug>`).
 
 Minimal example:
 ```yaml
