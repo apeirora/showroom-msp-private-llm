@@ -18,11 +18,11 @@ echo "Endpoint: $ENDPOINT"
 The endpoint ends without a trailing slash, e.g. `http://private-llm.msp/llm/abc123xyz`.
 
 ## 2. Issue an access token
-Create a `TokenRequest` referencing the instance:
+Create an `APITokenRequest` referencing the instance:
 
 ```yaml
 apiVersion: llm.privatellms.msp/v1alpha1
-kind: TokenRequest
+kind: APITokenRequest
 metadata:
   name: demo-token
   namespace: ${NAMESPACE}
@@ -32,9 +32,9 @@ spec:
 ```
 
 ```sh
-kubectl apply -f tokenrequest-demo.yaml
-kubectl wait tokenrequest/demo-token -n "$NAMESPACE" --for=jsonpath='{.status.phase}'=Ready --timeout=30s
-TOKEN_SECRET=$(kubectl get tokenrequest demo-token -n "$NAMESPACE" -o jsonpath='{.status.secretName}')
+kubectl apply -f apitokenrequest-demo.yaml
+kubectl wait apitokenrequest/demo-token -n "$NAMESPACE" --for=jsonpath='{.status.phase}'=Ready --timeout=30s
+TOKEN_SECRET=$(kubectl get apitokenrequest demo-token -n "$NAMESPACE" -o jsonpath='{.status.secretName}')
 BEARER_TOKEN=$(kubectl get secret "$TOKEN_SECRET" -n "$NAMESPACE" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d)
 echo "Bearer token stored in Secret: $TOKEN_SECRET"
 ```
@@ -66,7 +66,7 @@ For OpenAI-compatible clients, send the same bearer token to `$ENDPOINT/v1/chat/
 
 ## 4. Clean up (optional)
 ```sh
-kubectl delete tokenrequest demo-token -n "$NAMESPACE"
+kubectl delete apitokenrequest demo-token -n "$NAMESPACE"
 kubectl delete secret "$TOKEN_SECRET" -n "$NAMESPACE"
 ```
 

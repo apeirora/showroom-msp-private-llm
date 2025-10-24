@@ -6,6 +6,18 @@ metadata:
       [
         {
           "apiVersion": "llm.privatellms.msp/v1alpha1",
+          "kind": "APITokenRequest",
+          "metadata": {
+            "name": "example-apitokenrequest",
+            "namespace": "default"
+          },
+          "spec": {
+            "description": "Token for example instance",
+            "instanceName": "llminstance-sample"
+          }
+        },
+        {
+          "apiVersion": "llm.privatellms.msp/v1alpha1",
           "kind": "LLMInstance",
           "metadata": {
             "labels": {
@@ -21,7 +33,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-10-13T09:37:12Z"
+    createdAt: "2025-10-24T15:17:02Z"
     operators.operatorframework.io/builder: operator-sdk-unknown
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: private-llm.v0.0.1
@@ -30,13 +42,13 @@ spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
+    - kind: APITokenRequest
+      name: apitokenrequests.llm.privatellms.msp
+      version: v1alpha1
     - description: LLMInstance is the Schema for the llminstances API
       displayName: LLMInstance
       kind: LLMInstance
       name: llminstances.llm.privatellms.msp
-      version: v1alpha1
-    - kind: TokenRequest
-      name: tokenrequests.llm.privatellms.msp
       version: v1alpha1
   description: private llm
   displayName: private-llm
@@ -129,6 +141,32 @@ spec:
         - apiGroups:
           - llm.privatellms.msp
           resources:
+          - apitokenrequests
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - llm.privatellms.msp
+          resources:
+          - apitokenrequests/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - llm.privatellms.msp
+          resources:
+          - apitokenrequests/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - llm.privatellms.msp
+          resources:
           - llminstances
           verbs:
           - create
@@ -148,32 +186,6 @@ spec:
           - llm.privatellms.msp
           resources:
           - llminstances/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - llm.privatellms.msp
-          resources:
-          - tokenrequests
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - llm.privatellms.msp
-          resources:
-          - tokenrequests/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - llm.privatellms.msp
-          resources:
-          - tokenrequests/status
           verbs:
           - get
           - patch

@@ -20,8 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// TokenRequestSpec defines the desired state of TokenRequest
-type TokenRequestSpec struct {
+// APITokenRequestSpec defines the desired state of APITokenRequest
+type APITokenRequestSpec struct {
 	// InstanceName references an LLMInstance in the same namespace.
 	// +kubebuilder:validation:MinLength=1
 	InstanceName string `json:"instanceName"`
@@ -31,8 +31,8 @@ type TokenRequestSpec struct {
 	Description string `json:"description,omitempty"`
 }
 
-// TokenRequestStatus defines the observed state of TokenRequest.
-type TokenRequestStatus struct {
+// APITokenRequestStatus defines the observed state of APITokenRequest.
+type APITokenRequestStatus struct {
 	// Phase is a high-level status summary (e.g., "Ready").
 	// +optional
 	Phase string `json:"phase,omitempty"`
@@ -56,24 +56,24 @@ type TokenRequestStatus struct {
 //+kubebuilder:printcolumn:name="Secret",type=string,JSONPath=`.status.secretName`
 //+kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 
-// TokenRequest is the Schema for the tokenrequests API
-type TokenRequest struct {
+// APITokenRequest is the Schema for the apitokenrequests API
+type APITokenRequest struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   TokenRequestSpec   `json:"spec,omitempty"`
-	Status TokenRequestStatus `json:"status,omitempty"`
+	Spec   APITokenRequestSpec   `json:"spec,omitempty"`
+	Status APITokenRequestStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// TokenRequestList contains a list of TokenRequest
-type TokenRequestList struct {
+// APITokenRequestList contains a list of APITokenRequest
+type APITokenRequestList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []TokenRequest `json:"items"`
+	Items           []APITokenRequest `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&TokenRequest{}, &TokenRequestList{})
+	SchemeBuilder.Register(&APITokenRequest{}, &APITokenRequestList{})
 }
