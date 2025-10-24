@@ -110,11 +110,11 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: namespace}, &ing)).To(Succeed())
 		Expect(ing.Spec.Rules).NotTo(BeEmpty())
 		Expect(ing.Spec.Rules[0].Host).To(Equal("public.example.test"))
-		Expect(ing.Spec.Rules[0].HTTP.Paths[0].Path).To(Equal(fmt.Sprintf("/llm/%s/%s", slug, name)))
+		Expect(ing.Spec.Rules[0].HTTP.Paths[0].Path).To(Equal(fmt.Sprintf("/llm/%s", slug)))
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
 		Expect(inst.Status.Phase).To(Equal("Ready"))
-		Expect(inst.Status.Endpoint).To(Equal(fmt.Sprintf("http://public.example.test/llm/%s/%s", slug, name)))
+		Expect(inst.Status.Endpoint).To(Equal(fmt.Sprintf("http://public.example.test/llm/%s", slug)))
 		ready := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
 		Expect(ready).NotTo(BeNil())
 		Expect(ready.Status).To(Equal(metav1.ConditionTrue))

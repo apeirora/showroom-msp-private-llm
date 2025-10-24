@@ -122,7 +122,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	pathPrefix := fmt.Sprintf("/llm/%s/%s", slug, inst.Name)
+	pathPrefix := fmt.Sprintf("/llm/%s", slug)
 
 	if err := r.reconcileStripMiddleware(ctx, inst, labels, svcName, pathPrefix); err != nil {
 		return ctrl.Result{}, err
@@ -781,7 +781,7 @@ func (r *LLMInstanceReconciler) updateInstanceStatus(ctx context.Context, inst *
 	if scheme == "" {
 		scheme = "http"
 	}
-	inst.Status.Endpoint = fmt.Sprintf("%s://%s/llm/%s/%s", scheme, r.PublicHost, slug, inst.Name)
+	inst.Status.Endpoint = fmt.Sprintf("%s://%s/llm/%s", scheme, r.PublicHost, slug)
 	inst.Status.ObservedGeneration = inst.Generation
 	return r.Status().Update(ctx, inst)
 }
