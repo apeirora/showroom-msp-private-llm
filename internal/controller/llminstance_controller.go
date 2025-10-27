@@ -37,6 +37,7 @@ import (
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.opentelemetry.io/otel"
@@ -98,8 +99,42 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
+	// Handle deletion: best-effort cleanup and remove finalizer without blocking
+	const finalizerName = "llm.privatellms.msp/llminstance-finalizer"
 	if !inst.DeletionTimestamp.IsZero() {
+		if ctrlutil.ContainsFinalizer(inst, finalizerName) {
+			// Attempt to remove owned resources via ownerRefs GC; nothing to do explicitly
+			// Remove finalizer with small retry window to avoid blocking deletion
+			for i := 0; i < 3; i++ {
+				ctrlutil.RemoveFinalizer(inst, finalizerName)
+				if err := r.Update(ctx, inst); err != nil {
+					if apierrors.IsNotFound(err) {
+						break
+					}
+					if apierrors.IsConflict(err) {
+						fresh, ok, gerr := r.getInstance(ctx, req.NamespacedName)
+						if gerr != nil || !ok {
+							break
+						}
+						inst = fresh
+						continue
+					}
+					return ctrl.Result{}, err
+				}
+				break
+			}
+		}
 		return ctrl.Result{}, nil
+	}
+
+	// Ensure finalizer is present (best-effort)
+	if !ctrlutil.ContainsFinalizer(inst, finalizerName) {
+		ctrlutil.AddFinalizer(inst, finalizerName)
+		if err := r.Update(ctx, inst); err != nil {
+			// Don't block reconcile; retry shortly
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	slug, requeue, err := r.ensureSlug(ctx, inst)
