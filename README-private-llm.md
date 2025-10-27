@@ -5,7 +5,7 @@ An example Kubernetes operator (Operator SDK, Go) that provisions a llama.cpp se
 - creates a Deployment using `ghcr.io/ggml-org/llama.cpp:server`
 - uses an `initContainer` to download the TinyLlama model into an `emptyDir` mounted at `/models`
 - exposes the Pod via a ClusterIP Service on port 8000
-- creates an Ingress with host set from `PUBLIC_HOST` and a unique path prefix `/llm/<slug>/<instance-name>`
+- creates an Ingress with host set from `PUBLIC_HOST` and a unique path prefix `/llm/<slug>`
 - updates the CR status to Ready with the public URL `http://$PUBLIC_HOST/<instance-name>`
 
 ## Description
@@ -102,7 +102,7 @@ This will create:
 
 - a `LLMInstance` named `llminstance-sample`
 - a llama.cpp Deployment and Service
-- an Ingress at `http://$PUBLIC_HOST/llm/<slug>/<name>` (e.g., `http://localhost/abc123xyz/llminstance-sample`)
+- an Ingress at `http://$PUBLIC_HOST/llm/<slug>` (e.g., `http://localhost/abc123xyz`)
 
 Inspect status:
 
@@ -148,7 +148,7 @@ Ingress:
 
 - class: `traefik`
 - host: `$PUBLIC_HOST`
-- path: `/llm/<slug>/<instance-name>`
+- path: `/llm/<slug>`
 
 Configuring the public host:
 
