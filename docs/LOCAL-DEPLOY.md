@@ -109,26 +109,18 @@ YAML
 ENDPOINT=$(kubectl -n default get llminstance llminstance-sample -o jsonpath='{.status.endpoint}')
 kubectl -n default apply -f - <<'YAML'
 apiVersion: llm.example.com/v1alpha1
-kind: TokenRequest
+kind: APITokenRequest
 metadata:
   name: demo-token
   namespace: default
 spec:
   instanceName: llminstance-sample
 YAML
-kubectl -n default wait tokenrequest/demo-token --for=jsonpath='{.status.phase}'=Ready --timeout=60s
-SECRET=$(kubectl -n default get tokenrequest demo-token -o jsonpath='{.status.secretName}')
+kubectl -n default wait apitokenrequest/demo-token --for=jsonpath='{.status.phase}'=Ready --timeout=60s
+SECRET=$(kubectl -n default get apitokenrequest demo-token -o jsonpath='{.status.secretName}')
 BEARER_TOKEN=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -D)
 
 # With NodePort on kind and HTTP scheme, append :30080 to the published host
 HTTP_ENDPOINT="http://${ENDPOINT#http://}:30080"
 curl -sSik "$HTTP_ENDPOINT/health" -H "Authorization: Bearer $BEARER_TOKEN"
 ```
-
-### 6) Cleanup
-```bash
-kubectl delete -f ocm/instance.local.yaml || true
-kind delete cluster --name private-llm || true
-```
-
-

@@ -80,6 +80,32 @@
 - apiGroups:
     - llm.privatellms.msp
   resources:
+    - apitokenrequests
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
+- apiGroups:
+    - llm.privatellms.msp
+  resources:
+    - apitokenrequests/finalizers
+  verbs:
+    - update
+- apiGroups:
+    - llm.privatellms.msp
+  resources:
+    - apitokenrequests/status
+  verbs:
+    - get
+    - patch
+    - update
+- apiGroups:
+    - llm.privatellms.msp
+  resources:
     - llminstances
   verbs:
     - create
@@ -99,32 +125,6 @@
     - llm.privatellms.msp
   resources:
     - llminstances/status
-  verbs:
-    - get
-    - patch
-    - update
-- apiGroups:
-    - llm.privatellms.msp
-  resources:
-    - tokenrequests
-  verbs:
-    - create
-    - delete
-    - get
-    - list
-    - patch
-    - update
-    - watch
-- apiGroups:
-    - llm.privatellms.msp
-  resources:
-    - tokenrequests/finalizers
-  verbs:
-    - update
-- apiGroups:
-    - llm.privatellms.msp
-  resources:
-    - tokenrequests/status
   verbs:
     - get
     - patch

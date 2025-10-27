@@ -36,36 +36,33 @@ import (
 	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
 )
 
-//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=tokenrequests,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=tokenrequests/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=tokenrequests/finalizers,verbs=update
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests/finalizers,verbs=update
 // needs to read llminstances to validate reference
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=llminstances,verbs=get;list;watch
 // create and manage secrets containing tokens
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-type TokenRequestReconciler struct {
+type APITokenRequestReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-func (r *TokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	var tr llmv1alpha1.TokenRequest
+	var tr llmv1alpha1.APITokenRequest
 	if err := r.Get(ctx, req.NamespacedName, &tr); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	const finalizerName = "llm.privatellms.msp/tokenrequest-finalizer"
+	const finalizerName = "llm.privatellms.msp/apitokenrequest-finalizer"
 	// Handle deletion: ensure associated Secret(s) are removed, then drop finalizer
 	if !tr.DeletionTimestamp.IsZero() {
 		if ctrlutil.ContainsFinalizer(&tr, finalizerName) {
 			var secretList corev1.SecretList
-			if err := r.List(ctx, &secretList,
-				client.InNamespace(req.Namespace),
-				client.MatchingLabels{"llm.privatellms.msp/tokenrequest": tr.Name},
-			); err == nil {
+			if err := r.List(ctx, &secretList, client.InNamespace(req.Namespace)); err == nil {
 				for i := range secretList.Items {
 					sec := secretList.Items[i]
 					if err := r.Delete(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {
@@ -146,8 +143,10 @@ func (r *TokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request
 					Namespace: req.Namespace,
 					Labels: func() map[string]string {
 						m := map[string]string{
-							"app.kubernetes.io/name":           "llm-token",
-							"llm.privatellms.msp/instance":     inst.Name,
+							"app.kubernetes.io/name":              "llm-token",
+							"llm.privatellms.msp/instance":        inst.Name,
+							"llm.privatellms.msp/apitokenrequest": tr.Name,
+							// keep legacy label during transition
 							"llm.privatellms.msp/tokenrequest": tr.Name,
 						}
 						if slug != "" {
@@ -206,14 +205,14 @@ func (r *TokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	return ctrl.Result{}, nil
 }
 
-func (r *TokenRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *APITokenRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&llmv1alpha1.TokenRequest{}).
+		For(&llmv1alpha1.APITokenRequest{}).
 		Owns(&corev1.Secret{}).
 		Complete(r)
 }
 
-func setTRStatusCondition(tr *llmv1alpha1.TokenRequest, cond metav1.Condition) {
+func setTRStatusCondition(tr *llmv1alpha1.APITokenRequest, cond metav1.Condition) {
 	// replace existing same type condition
 	if tr.Status.Conditions == nil {
 		tr.Status.Conditions = make([]metav1.Condition, 0, 1)
