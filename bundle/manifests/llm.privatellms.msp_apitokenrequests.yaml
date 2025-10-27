@@ -1,17 +1,17 @@
----
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: tokenrequests.llm.privatellms.msp
+  creationTimestamp: null
+  name: apitokenrequests.llm.privatellms.msp
 spec:
   group: llm.privatellms.msp
   names:
-    kind: TokenRequest
-    listKind: TokenRequestList
-    plural: tokenrequests
-    singular: tokenrequest
+    kind: APITokenRequest
+    listKind: APITokenRequestList
+    plural: apitokenrequests
+    singular: apitokenrequest
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
@@ -27,7 +27,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: TokenRequest is the Schema for the tokenrequests API
+        description: APITokenRequest is the Schema for the apitokenrequests API
         properties:
           apiVersion:
             description: |-
@@ -47,7 +47,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: TokenRequestSpec defines the desired state of TokenRequest
+            description: APITokenRequestSpec defines the desired state of APITokenRequest
             properties:
               description:
                 description: Description is an optional human-friendly description
@@ -61,7 +61,7 @@ spec:
             - instanceName
             type: object
           status:
-            description: TokenRequestStatus defines the observed state of TokenRequest.
+            description: APITokenRequestStatus defines the observed state of APITokenRequest.
             properties:
               conditions:
                 description: Conditions represent the latest available observations
@@ -152,3 +152,9 @@ spec:
     storage: true
     subresources:
       status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null

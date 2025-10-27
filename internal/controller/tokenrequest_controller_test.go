@@ -19,11 +19,11 @@ import (
 	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
 )
 
-var _ = Describe("TokenRequest controller", func() {
+var _ = Describe("APITokenRequest controller", func() {
 	var (
 		ctx        context.Context
 		namespace  string
-		reconciler *TokenRequestReconciler
+		reconciler *APITokenRequestReconciler
 	)
 
 	BeforeEach(func() {
@@ -33,7 +33,7 @@ var _ = Describe("TokenRequest controller", func() {
 		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 
-		reconciler = &TokenRequestReconciler{Client: k8sClient, Scheme: scheme.Scheme}
+		reconciler = &APITokenRequestReconciler{Client: k8sClient, Scheme: scheme.Scheme}
 
 		DeferCleanup(func() {
 			err := k8sClient.Delete(ctx, ns)
@@ -59,12 +59,12 @@ var _ = Describe("TokenRequest controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
 
-		tr := &llmv1alpha1.TokenRequest{
+		tr := &llmv1alpha1.APITokenRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      tokenName,
 				Namespace: namespace,
 			},
-			Spec: llmv1alpha1.TokenRequestSpec{
+			Spec: llmv1alpha1.APITokenRequestSpec{
 				InstanceName: instanceName,
 				Description:  "demo",
 			},
@@ -78,7 +78,7 @@ var _ = Describe("TokenRequest controller", func() {
 		Expect(result.Requeue).To(BeTrue())
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, tr)).To(Succeed())
-		Expect(tr.Finalizers).To(ContainElement("llm.privatellms.msp/tokenrequest-finalizer"))
+		Expect(tr.Finalizers).To(ContainElement("llm.privatellms.msp/apitokenrequest-finalizer"))
 
 		result, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
@@ -87,7 +87,7 @@ var _ = Describe("TokenRequest controller", func() {
 		secretKey := types.NamespacedName{Name: tokenName + "-token", Namespace: namespace}
 		var secret corev1.Secret
 		Expect(k8sClient.Get(ctx, secretKey, &secret)).To(Succeed())
-		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/tokenrequest", tokenName))
+		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/apitokenrequest", tokenName))
 		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/instance", instanceName))
 		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/slug", slug))
 		Expect(secret.Data).To(HaveKey("OPENAI_API_KEY"))
@@ -106,12 +106,12 @@ var _ = Describe("TokenRequest controller", func() {
 	It("should report not ready while waiting for referenced instance", func() {
 		tokenName := "token-" + utilrand.String(5)
 
-		tr := &llmv1alpha1.TokenRequest{
+		tr := &llmv1alpha1.APITokenRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      tokenName,
 				Namespace: namespace,
 			},
-			Spec: llmv1alpha1.TokenRequestSpec{InstanceName: "missing-instance"},
+			Spec: llmv1alpha1.APITokenRequestSpec{InstanceName: "missing-instance"},
 		}
 		Expect(k8sClient.Create(ctx, tr)).To(Succeed())
 
@@ -155,12 +155,12 @@ var _ = Describe("TokenRequest controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
 
-		tr := &llmv1alpha1.TokenRequest{
+		tr := &llmv1alpha1.APITokenRequest{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      tokenName,
 				Namespace: namespace,
 			},
-			Spec: llmv1alpha1.TokenRequestSpec{InstanceName: instanceName},
+			Spec: llmv1alpha1.APITokenRequestSpec{InstanceName: instanceName},
 		}
 		Expect(k8sClient.Create(ctx, tr)).To(Succeed())
 
@@ -186,7 +186,7 @@ var _ = Describe("TokenRequest controller", func() {
 		}).Should(BeTrue())
 
 		Eventually(func() bool {
-			err := k8sClient.Get(ctx, req.NamespacedName, &llmv1alpha1.TokenRequest{})
+			err := k8sClient.Get(ctx, req.NamespacedName, &llmv1alpha1.APITokenRequest{})
 			return apierrors.IsNotFound(err)
 		}).Should(BeTrue())
 	})

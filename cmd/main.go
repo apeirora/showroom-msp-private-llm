@@ -338,11 +338,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.TokenRequestReconciler{
+	if err = (&controller.APITokenRequestReconciler{
 		Client: labeledClient,
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "TokenRequest")
+		setupLog.Error(err, "unable to create controller", "controller", "APITokenRequest")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

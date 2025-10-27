@@ -23,7 +23,7 @@ spec:
 
 Scale by patching `spec.replicas`. Deleting the resource removes the server and routing objects.
 
-## TokenRequest
+## APITokenRequest
 - **What it does:** mints a bearer token for an existing `LLMInstance`.
 - **Key fields:**
   - `spec.instanceName` – target instance in the same namespace.
@@ -35,7 +35,7 @@ Scale by patching `spec.replicas`. Deleting the resource removes the server and 
 Minimal example:
 ```yaml
 apiVersion: llm.privatellms.msp/v1alpha1
-kind: TokenRequest
+kind: APITokenRequest
 metadata:
   name: sample-client
 spec:
@@ -44,12 +44,12 @@ spec:
 
 To fetch the token:
 ```sh
-SECRET=$(kubectl get tokenrequest sample-client -o jsonpath='{.status.secretName}')
+SECRET=$(kubectl get apitokenrequest sample-client -o jsonpath='{.status.secretName}')
 kubectl get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d
 ```
 
 ## Typical Flow
 1. Create an `LLMInstance`.
 2. Wait for `status.endpoint` to show the URL.
-3. Create a `TokenRequest` and retrieve its token.
+3. Create an `APITokenRequest` and retrieve its token.
 4. Call the API with `Authorization: Bearer <token>` (see `README-api.md`).

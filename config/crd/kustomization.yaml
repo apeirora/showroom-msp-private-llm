@@ -3,7 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/llm.privatellms.msp_llminstances.yaml
-- bases/llm.privatellms.msp_tokenrequests.yaml
+- bases/llm.privatellms.msp_apitokenrequests.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches:
