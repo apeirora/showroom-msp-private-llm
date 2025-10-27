@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.0.0](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.5...v2.0.0) (2025-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename TokenRequest to APITokenRequest and update related documentation and resources ([#30](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/30))
+
+### Features
+
+* add model validation and default value for LLMInstance CRD ([#27](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/27)) ([541e8f1](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/541e8f13df75959b8409def9674ce62985622222))
+* make finalizer non-blocking ([#29](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/29)) ([709c1f7](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/709c1f78032d21e45411bc1c3777cb7a2aba8c97))
+* set TokenRequest's status.phase and improve finalizer handling ([#28](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/28)) ([d71290e](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/d71290e6137d5ed04117885b09adc842a9b45048))
+
+
+### Bug Fixes
+
+* update LLM instance path and endpoint to be shorter ([#26](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/26)) ([37f413a](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/37f413a4c1234f731b538384d4b31e2d804dcbef))
+
+
+### Code Refactoring
+
+* rename TokenRequest to APITokenRequest and update related documentation and resources ([#30](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/30)) ([8044d53](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/8044d535119a319f3f2d11cfd0da9b1e5cad9087))
+
 ## [1.0.5](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.4...v1.0.5) (2025-10-21)
 
 
