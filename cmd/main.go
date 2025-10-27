@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"os"
 	"time"
 
@@ -29,18 +28,13 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -351,80 +345,6 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "TokenRequest")
 		os.Exit(1)
 	}
-
-	// Backfill status.phase for existing TokenRequests on startup
-	_ = mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {
-		setupLog.Info("backfilling TokenRequest status.phase for existing resources")
-		var trList llmv1alpha1.TokenRequestList
-		if err := labeledClient.List(ctx, &trList); err != nil {
-			setupLog.Error(err, "failed to list TokenRequests for backfill")
-			return nil
-		}
-		for i := range trList.Items {
-			tr := &trList.Items[i]
-			var desiredPhase string
-			secretName := fmt.Sprintf("%s-token", tr.Name)
-			readyCond := metav1.Condition{Type: "Ready", LastTransitionTime: metav1.Now()}
-
-			// Determine instance existence
-			var inst llmv1alpha1.LLMInstance
-			if err := labeledClient.Get(ctx, types.NamespacedName{Namespace: tr.Namespace, Name: tr.Spec.InstanceName}, &inst); err != nil {
-				if apierrors.IsNotFound(err) {
-					desiredPhase = "Pending"
-					readyCond.Status = metav1.ConditionFalse
-					readyCond.Reason = "InstanceNotFound"
-					readyCond.Message = "Referenced LLMInstance not found"
-				} else {
-					continue
-				}
-			} else {
-				// Instance exists; check for Secret
-				var sec corev1.Secret
-				if err := labeledClient.Get(ctx, types.NamespacedName{Namespace: tr.Namespace, Name: secretName}, &sec); err != nil {
-					if apierrors.IsNotFound(err) {
-						desiredPhase = "Pending"
-						readyCond.Status = metav1.ConditionFalse
-						readyCond.Reason = "ProvisioningPending"
-						readyCond.Message = "Waiting for token Secret to be created"
-					} else {
-						continue
-					}
-				} else {
-					desiredPhase = "Ready"
-					readyCond.Status = metav1.ConditionTrue
-					readyCond.Reason = "Provisioned"
-					readyCond.Message = "Token generated"
-				}
-			}
-
-			// Merge Ready condition
-			conds := tr.Status.Conditions
-			filtered := make([]metav1.Condition, 0, len(conds))
-			for _, c := range conds {
-				if c.Type == readyCond.Type {
-					continue
-				}
-				filtered = append(filtered, c)
-			}
-			filtered = append(filtered, readyCond)
-
-			// Apply only if something changes
-			needUpdate := tr.Status.Phase != desiredPhase || (desiredPhase == "Ready" && tr.Status.SecretName != secretName) || !conditionsEqual(tr.Status.Conditions, filtered)
-			if !needUpdate {
-				continue
-			}
-			tr.Status.Conditions = filtered
-			tr.Status.Phase = desiredPhase
-			if desiredPhase == "Ready" {
-				tr.Status.SecretName = secretName
-			}
-			tr.Status.ObservedGeneration = tr.Generation
-			if err := labeledClient.Status().Update(ctx, tr); err != nil {
-				setupLog.Error(err, "failed to update TokenRequest status during backfill", "name", tr.Name, "namespace", tr.Namespace)
-			}
-		}
-		return nil
-	}))
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -441,32 +361,6 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-func conditionsEqual(a, b []metav1.Condition) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	// Compare by Type, Status, Reason, Message
-	type key struct{ Type, Status, Reason, Message string }
-	toMap := func(list []metav1.Condition) map[key]struct{} {
-		m := make(map[key]struct{}, len(list))
-		for _, c := range list {
-			k := key{Type: c.Type, Status: string(c.Status), Reason: c.Reason, Message: c.Message}
-			m[k] = struct{}{}
-		}
-		return m
-	}
-	ma, mb := toMap(a), toMap(b)
-	if len(ma) != len(mb) {
-		return false
-	}
-	for k := range ma {
-		if _, ok := mb[k]; !ok {
-			return false
-		}
-	}
-	return true
 }
 
 func initOpenTelemetry(ctx context.Context) (func(context.Context) error, error) {
