@@ -54,7 +54,7 @@ spec:
                 description: Model is the desired model identifier (e.g., "TinyLlama/TinyLlama-1.1B-Chat-v1.0").
                 enum:
                 - tinyllama
-                - phi2
+                - phi-2
                 type: string
               replicas:
                 description: |-

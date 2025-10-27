@@ -26,7 +26,7 @@ import (
 // LLMInstanceSpec defines the desired state of LLMInstance
 type LLMInstanceSpec struct {
 	// Model is the desired model identifier (e.g., "TinyLlama/TinyLlama-1.1B-Chat-v1.0").
-	// +kubebuilder:validation:Enum=tinyllama;phi2
+	// +kubebuilder:validation:Enum=tinyllama;phi-2
 	// +kubebuilder:default=tinyllama
 	Model string `json:"model,omitempty"`
 
