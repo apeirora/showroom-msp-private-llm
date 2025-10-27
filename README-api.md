@@ -1,7 +1,7 @@
 # API Guide
 
 ## Overview
-The private-llm operator provisions a [llama.cpp](https://github.com/ggerganov/llama.cpp) HTTP server for every `LLMInstance`. Each instance is published through Traefik with a unique slugged path such as `https://<public-host>/llm/<slug>/<instance-name>`. This guide shows how to discover the endpoint, issue a token, and call the API.
+The private-llm operator provisions a [llama.cpp](https://github.com/ggerganov/llama.cpp) HTTP server for every `LLMInstance`. Each instance is published through Traefik with a unique slugged path such as `https://<public-host>/llm/<slug>`. This guide shows how to discover the endpoint, issue a token, and call the API.
 
 ## Prerequisites
 - A deployed `LLMInstance` (see `README-resources.md` if you need one).
@@ -15,7 +15,7 @@ ENDPOINT=$(kubectl get llminstance "$INSTANCE" -n "$NAMESPACE" -o jsonpath='{.st
 echo "Endpoint: $ENDPOINT"
 ```
 
-The endpoint ends without a trailing slash, e.g. `http://private-llm.msp/llm/abc123xyz/llminstance-sample`.
+The endpoint ends without a trailing slash, e.g. `http://private-llm.msp/llm/abc123xyz`.
 
 ## 2. Issue an access token
 Create a `TokenRequest` referencing the instance:
