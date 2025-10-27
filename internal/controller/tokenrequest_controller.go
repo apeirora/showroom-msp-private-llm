@@ -68,8 +68,12 @@ func (r *TokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			); err == nil {
 				for i := range secretList.Items {
 					sec := secretList.Items[i]
-					_ = r.Delete(ctx, &sec)
+					if err := r.Delete(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {
+						logger.Error(err, "failed to delete associated secret during finalizer cleanup (non-blocking)", "secret", sec.Name)
+					}
 				}
+			} else {
+				logger.Error(err, "failed to list associated secrets during finalizer cleanup (non-blocking)")
 			}
 			// Remove finalizer with conflict retries to avoid blocking deletion
 			for i := 0; i < 3; i++ {
