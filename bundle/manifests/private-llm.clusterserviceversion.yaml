@@ -33,7 +33,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2025-10-24T15:17:02Z"
+    createdAt: "2025-10-24T09:48:06Z"
     operators.operatorframework.io/builder: operator-sdk-unknown
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: private-llm.v0.0.1

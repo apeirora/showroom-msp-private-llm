@@ -80,8 +80,13 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
 
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
-		// first reconcile should create slug and requeue
+		// first reconcile should add finalizer and requeue
 		res, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Requeue).To(BeTrue())
+
+		// second reconcile should create slug and requeue
+		res, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Requeue).To(BeTrue())
 
@@ -90,7 +95,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		slug := inst.Annotations[slugAnnotationKey]
 		Expect(slug).NotTo(BeEmpty())
 
-		// second reconcile should provision resources
+		// third reconcile should provision resources
 		res, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Requeue).To(BeFalse())

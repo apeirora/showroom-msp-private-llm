@@ -65,24 +65,44 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err := r.List(ctx, &secretList, client.InNamespace(req.Namespace)); err == nil {
 				for i := range secretList.Items {
 					sec := secretList.Items[i]
-					if sec.Labels["llm.privatellms.msp/apitokenrequest"] == tr.Name || sec.Labels["llm.privatellms.msp/tokenrequest"] == tr.Name {
-						_ = r.Delete(ctx, &sec)
+					if err := r.Delete(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {
+						logger.Error(err, "failed to delete associated secret during finalizer cleanup (non-blocking)", "secret", sec.Name)
 					}
 				}
+			} else {
+				logger.Error(err, "failed to list associated secrets during finalizer cleanup (non-blocking)")
 			}
-			ctrlutil.RemoveFinalizer(&tr, finalizerName)
-			if err := r.Update(ctx, &tr); err != nil {
-				return ctrl.Result{}, err
+			// Remove finalizer with conflict retries to avoid blocking deletion
+			for i := 0; i < 3; i++ {
+				ctrlutil.RemoveFinalizer(&tr, finalizerName)
+				if err := r.Update(ctx, &tr); err != nil {
+					if apierrors.IsNotFound(err) {
+						break
+					}
+					if apierrors.IsConflict(err) {
+						// reload latest and retry
+						var fresh llmv1alpha1.TokenRequest
+						if gerr := r.Get(ctx, req.NamespacedName, &fresh); gerr != nil {
+							break
+						}
+						tr = fresh
+						continue
+					}
+					// for other errors, return and let controller requeue
+					return ctrl.Result{}, err
+				}
+				break
 			}
 		}
 		return ctrl.Result{}, nil
 	}
 
-	// Ensure finalizer is present
+	// Ensure finalizer is present (best-effort, avoid blocking reconcile on errors)
 	if !ctrlutil.ContainsFinalizer(&tr, finalizerName) {
 		ctrlutil.AddFinalizer(&tr, finalizerName)
 		if err := r.Update(ctx, &tr); err != nil {
-			return ctrl.Result{}, err
+			logger.Error(err, "failed to add finalizer, will retry on next reconcile")
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 		return ctrl.Result{Requeue: true}, nil
 	}
@@ -93,6 +113,9 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if apierrors.IsNotFound(err) {
 			cond := metav1.Condition{Type: "Ready", Status: metav1.ConditionFalse, Reason: "InstanceNotFound", Message: "Referenced LLMInstance not found", LastTransitionTime: metav1.Now()}
 			setTRStatusCondition(&tr, cond)
+			// Mark as Pending until the instance appears
+			tr.Status.Phase = "Pending"
+			tr.Status.ObservedGeneration = tr.Generation
 			_ = r.Status().Update(ctx, &tr)
 		}
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, client.IgnoreNotFound(err)
@@ -173,6 +196,7 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	cond := metav1.Condition{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Provisioned", Message: "Token generated", LastTransitionTime: metav1.Now()}
 	setTRStatusCondition(&tr, cond)
 	tr.Status.SecretName = secretName
+	tr.Status.Phase = "Ready"
 	tr.Status.ObservedGeneration = tr.Generation
 	if err := r.Status().Update(ctx, &tr); err != nil {
 		return ctrl.Result{}, err
