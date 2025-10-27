@@ -212,7 +212,7 @@ func (m modelSelection) path() string {
 func resolveModel(requested string) modelSelection {
 	trimmed := strings.TrimSpace(requested)
 	switch strings.ToLower(trimmed) {
-	case "phi-2", "phi2":
+	case "phi-2":
 		name := trimmed
 		if name == "" {
 			name = "phi-2"
