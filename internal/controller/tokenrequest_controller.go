@@ -81,7 +81,7 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 					}
 					if apierrors.IsConflict(err) {
 						// reload latest and retry
-						var fresh llmv1alpha1.TokenRequest
+						var fresh llmv1alpha1.APITokenRequest
 						if gerr := r.Get(ctx, req.NamespacedName, &fresh); gerr != nil {
 							break
 						}
@@ -146,8 +146,6 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 							"app.kubernetes.io/name":              "llm-token",
 							"llm.privatellms.msp/instance":        inst.Name,
 							"llm.privatellms.msp/apitokenrequest": tr.Name,
-							// keep legacy label during transition
-							"llm.privatellms.msp/tokenrequest": tr.Name,
 						}
 						if slug != "" {
 							m["llm.privatellms.msp/slug"] = slug
