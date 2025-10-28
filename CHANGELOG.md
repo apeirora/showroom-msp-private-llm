@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.0.0...v2.0.1) (2025-10-27)
+
+
+### Bug Fixes
+
+* update variable name from TokenRequest to APITokenRequest ([#32](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/32)) ([e048849](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/e0488494e3cc01a8b39e86d90a3d19a8cc88d42c))
+
 ## [2.0.0](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v1.0.5...v2.0.0) (2025-10-27)
 
 
