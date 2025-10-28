@@ -1,0 +1,50 @@
+{{- if and .Values.portalIntegration.enabled .Values.portalIntegration.syncAgent.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: api-syncagent:privatellm
+  labels:
+    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal-integration
+rules:
+  - apiGroups:
+      - llm.privatellms.msp
+    resources:
+      - llminstances
+      - apitokenrequests
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: api-syncagent:privatellm
+  labels:
+    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal-integration
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: api-syncagent:privatellm
+subjects:
+  - kind: ServiceAccount
+    name: kcp-syncagent
+    namespace: {{ .Values.portalIntegration.syncAgent.namespace | default "api-syncagent" }}
+{{- end }}
+
+

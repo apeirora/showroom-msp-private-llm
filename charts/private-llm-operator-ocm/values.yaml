@@ -4,7 +4,7 @@ component:
   componentName: llm.privatellms.msp/private-llm
   repositoryRefName: apeirora-repository
   repositoryRefNamespace: ocm-system
-  semver: "v1.0.3"
+  semver: "v2.0.1"
   interval: 1m
 
 operator:

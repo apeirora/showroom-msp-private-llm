@@ -1,0 +1,11 @@
+{{- if and .Values.portalIntegration.enabled .Values.portalIntegration.syncAgent.enabled }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.portalIntegration.syncAgent.namespace | default "api-syncagent" }}
+  labels:
+    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal-integration
+{{- end }}
+
+

@@ -1,0 +1,10 @@
+apiVersion: apis.kcp.io/v1alpha1
+kind: APIExport
+metadata:
+  annotations:
+  name: llm.privatellms.msp
+  labels:
+    ui.platform-mesh.io/content-for: llm.privatellms.msp
+spec: {}
+
+
