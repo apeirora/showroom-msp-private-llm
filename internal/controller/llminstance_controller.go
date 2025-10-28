@@ -790,7 +790,7 @@ func (r *LLMInstanceReconciler) ensureIngressTLS(ing *networkingv1.Ingress, isHT
 }
 
 func desiredMiddlewareAnnotation(namespace, svcName string) string {
-	return fmt.Sprintf("%s-%s@kubernetescrd,%s-%s@kubernetescrd", namespace, authMiddlewareName(svcName), namespace, stripMiddlewareName(svcName))
+	return fmt.Sprintf("%s@kubernetescrd,%s@kubernetescrd", authMiddlewareName(svcName), stripMiddlewareName(svcName))
 }
 
 func stripMiddlewareName(svcName string) string {
