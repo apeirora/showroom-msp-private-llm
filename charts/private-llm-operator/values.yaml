@@ -52,3 +52,28 @@ ingress:
       nodePort: 30080
     websecure:
       nodePort: 30443
+
+portalIntegration:
+  enabled: false
+  # Path under the same PUBLIC_HOST to expose the static JSON
+  contentPath: "/pm-content.json"
+  image:
+    repository: nginx
+    tag: "1.25"
+    pullPolicy: IfNotPresent
+  resources: {}
+  ingress:
+    annotations: {}
+  kubeconfig:
+    # Name of Secret containing kubeconfig data
+    secretName: ""
+    # Key inside Secret that holds the kubeconfig file
+    key: kubeconfig
+  kubectl:
+    image:
+      repository: bitnami/kubectl
+      tag: "1.29.7"
+      pullPolicy: IfNotPresent
+  syncAgent:
+    enabled: false
+    namespace: api-syncagent

@@ -150,6 +150,59 @@ Ingress:
 - host: `$PUBLIC_HOST`
 - path: `/llm/<slug>`
 
+## Optional: Portal Integration (serve pm-content.json and apply ContentConfiguration)
+
+Enable a lightweight nginx service that serves a static `pm-content.json` under the same public domain as the operator, and a Helm hook Job that applies a `ContentConfiguration`, `APIExport`, and `ProviderMetadata` to the remote cluster.
+
+1) Prepare a kubeconfig Secret in the operator namespace:
+
+```sh
+NAMESPACE=private-llm-system
+KUBECONFIG_SECRET=my-kubeconfig
+kubectl -n "$NAMESPACE" create secret generic "$KUBECONFIG_SECRET" \
+  --from-file=kubeconfig="$HOME/.kube/config"
+```
+
+2) Install/upgrade with portalIntegration enabled:
+
+```sh
+helm upgrade --install private-llm charts/private-llm-operator \
+  --namespace "$NAMESPACE" --create-namespace \
+  --dependency-update \
+  --set PUBLIC_HOST=your.host \
+  --set PUBLIC_SCHEME=https \
+  --set tls.secretName=your-tls-secret \
+  --set portalIntegration.enabled=true \
+  --set portalIntegration.kubeconfig.secretName="$KUBECONFIG_SECRET" \
+  --set portalIntegration.kubeconfig.key=kubeconfig \
+  --set portalIntegration.contentPath=/pm-content.json
+```
+
+3) Verify the static content is reachable:
+
+```sh
+curl -sSik "https://your.host/pm-content.json" | head -n 20
+```
+
+On kind/NodePort (HTTP), use `http://your.host:30080/pm-content.json`.
+
+### Optional: Sync Agent resources
+To integrate with a KCP Sync Agent, you can install supportive RBAC and PublishedResource definitions into a separate namespace (default `api-syncagent`). Enable it with:
+
+```sh
+helm upgrade --install private-llm charts/private-llm-operator \
+  --namespace "$NAMESPACE" --create-namespace \
+  --set portalIntegration.enabled=true \
+  --set portalIntegration.syncAgent.enabled=true \
+  --set portalIntegration.syncAgent.namespace=api-syncagent
+```
+
+This will:
+- Create the namespace (if it does not exist)
+- Create ClusterRole/Binding `api-syncagent:privatellm` for `kcp-syncagent` SA in that namespace
+- Create two PublishedResource objects in that namespace for `LLMInstance` and `APITokenRequest`
+- Apply `APIExport`, `ProviderMetadata`, and `ContentConfiguration` to the remote cluster using your kubeconfig Secret
+
 Configuring the public host:
 
 - Set the env var when installing (via install.yaml), under the manager container:

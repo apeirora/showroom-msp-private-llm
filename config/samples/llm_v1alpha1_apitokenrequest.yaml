@@ -2,7 +2,6 @@ apiVersion: llm.privatellms.msp/v1alpha1
 kind: APITokenRequest
 metadata:
   name: example-apitokenrequest
-  namespace: default
 spec:
   instanceName: llminstance-sample
   description: Token for example instance

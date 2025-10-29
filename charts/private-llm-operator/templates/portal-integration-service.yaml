@@ -1,0 +1,21 @@
+{{- if .Values.portalIntegration.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-portal-integration
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal-integration
+spec:
+  selector:
+    app.kubernetes.io/name: portal-integration
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+{{- end }}
+
+

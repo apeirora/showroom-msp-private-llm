@@ -1,0 +1,15 @@
+{{- if .Values.portalIntegration.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-portal-integration-apiexport
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal-integration
+data:
+  apiexport.yaml: |-
+{{ (.Files.Get "files/apiexport.yaml") | indent 4 }}
+{{- end }}
+
+
