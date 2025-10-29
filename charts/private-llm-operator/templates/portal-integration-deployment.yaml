@@ -1,0 +1,53 @@
+{{- if .Values.portalIntegration.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-portal-integration
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal-integration
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: portal-integration
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "private-llm-operator.labels" . | nindent 8 }}
+        app.kubernetes.io/component: portal-integration
+        app.kubernetes.io/name: portal-integration
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- range .Values.imagePullSecrets }}
+        - name: {{ .name }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: nginx
+          image: {{ .Values.portalIntegration.image.repository }}:{{ .Values.portalIntegration.image.tag }}
+          imagePullPolicy: {{ .Values.portalIntegration.image.pullPolicy }}
+          ports:
+            - containerPort: 80
+              name: http
+              protocol: TCP
+          volumeMounts:
+            - name: portal-config
+              mountPath: /usr/share/nginx/html/pm-content.json
+              subPath: pm-content.json
+          resources:
+            {{- toYaml .Values.portalIntegration.resources | nindent 12 }}
+      volumes:
+        - name: portal-config
+          configMap:
+            name: {{ .Release.Name }}-portal-integration-config
+            items:
+              - key: pm-content.json
+                path: pm-content.json
+{{- end }}
+
+
