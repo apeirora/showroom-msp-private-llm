@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.0](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.0.1...v2.1.0) (2025-10-29)
+
+
+### Features
+
+* add portal integration for serving static content and applying configurations ([#35](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/35)) ([b9416be](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/b9416be1e9e3aa9007f1c05b0f33537541e8d63e))
+
 ## [2.0.1](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.0.0...v2.0.1) (2025-10-27)
 
 
