@@ -67,12 +67,14 @@ portalIntegration:
   kubeconfig:
     # Name of Secret containing kubeconfig data
     secretName: ""
+    # Namespace where the kubeconfig Secret lives. If empty, defaults to release namespace.
+    secretNamespace: ""
     # Key inside Secret that holds the kubeconfig file
     key: kubeconfig
   kubectl:
     image:
       repository: bitnami/kubectl
-      tag: "1.29.7"
+      tag: "latest"
       pullPolicy: IfNotPresent
   syncAgent:
     enabled: false

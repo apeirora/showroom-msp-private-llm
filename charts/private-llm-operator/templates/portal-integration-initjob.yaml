@@ -1,9 +1,10 @@
 {{- if .Values.portalIntegration.enabled }}
+{{- $remoteNs := .Values.portalIntegration.kubeconfig.secretNamespace | default .Release.Namespace }}
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ .Release.Name }}-portal-integration-init
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ $remoteNs }}
   labels:
     {{- include "private-llm-operator.labels" . | nindent 4 }}
     app.kubernetes.io/component: portal-integration

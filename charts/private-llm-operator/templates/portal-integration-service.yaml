@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/component: portal-integration
 spec:
   selector:
-    app.kubernetes.io/name: portal-integration
+    app.kubernetes.io/component: portal-integration
     app.kubernetes.io/instance: {{ .Release.Name }}
   ports:
     - name: http
