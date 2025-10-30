@@ -4,3 +4,4 @@ metadata:
   name: {{ .Values.component.name }}
 spec:
   {}
+
