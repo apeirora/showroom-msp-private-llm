@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.2.0...v2.2.1) (2025-10-30)
+
+
+### Bug Fixes
+
+* deployment configs for ocm do not upgrade operator ([#40](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/40)) ([a55e626](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/a55e6266b75092009ecc0c384510b5e16fb2b705))
+
 ## [2.2.0](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.1.0...v2.2.0) (2025-10-30)
 
 
