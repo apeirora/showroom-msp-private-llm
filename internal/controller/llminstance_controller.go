@@ -247,6 +247,36 @@ func (m modelSelection) path() string {
 func resolveModel(requested string) modelSelection {
 	trimmed := strings.TrimSpace(requested)
 	switch strings.ToLower(trimmed) {
+	case "gemma-3-1b-it", "gemma-3-1b-it-q4_k_m", "gemma-3-1b-it-q4_k_m.gguf":
+		name := trimmed
+		if name == "" {
+			name = "gemma-3-1b-it"
+		}
+		return modelSelection{
+			name: name,
+			file: "gemma-3-1b-it-Q4_K_M.gguf",
+			url:  "https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf?download=true",
+		}
+	case "gemma-3-4b-it", "gemma-3-4b-it-q4_k_m", "gemma-3-4b-it-q4_k_m.gguf":
+		name := trimmed
+		if name == "" {
+			name = "gemma-3-4b-it"
+		}
+		return modelSelection{
+			name: name,
+			file: "gemma-3-4b-it-Q4_K_M.gguf",
+			url:  "https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf?download=true",
+		}
+	case "gemma-3-12b-it", "gemma-3-12b-it-q4_k_m", "gemma-3-12b-it-q4_k_m.gguf":
+		name := trimmed
+		if name == "" {
+			name = "gemma-3-12b-it"
+		}
+		return modelSelection{
+			name: name,
+			file: "gemma-3-12b-it-Q4_K_M.gguf",
+			url:  "https://huggingface.co/ggml-org/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf?download=true",
+		}
 	case "phi-2":
 		name := trimmed
 		if name == "" {
