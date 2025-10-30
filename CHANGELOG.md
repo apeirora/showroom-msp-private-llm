@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.0](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.1.0...v2.2.0) (2025-10-30)
+
+
+### Features
+
+* added gemma models to the operator ([#36](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/36)) ([9adde76](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/9adde76cbd3a2ff0eb775b21a88f69d214d4be9f))
+
+
+### Bug Fixes
+
+* portal integration after testing ([#38](https://github.com/apeirora/showroom-msp-private-llm-operator/issues/38)) ([c579fe2](https://github.com/apeirora/showroom-msp-private-llm-operator/commit/c579fe2b328d32faf3e8f63f3d56c84c747bf04a))
+
 ## [2.1.0](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.0.1...v2.1.0) (2025-10-29)
 
 
