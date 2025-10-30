@@ -3,7 +3,8 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-portal-integration-contentconfiguration
-  namespace: {{ .Release.Namespace }}
+  {{- $remoteNs := .Values.portalIntegration.kubeconfig.secretNamespace | default .Release.Namespace }}
+  namespace: {{ $remoteNs }}
   labels:
     {{- include "private-llm-operator.labels" . | nindent 4 }}
     app.kubernetes.io/component: portal-integration
