@@ -1,0 +1,6 @@
+dependencies:
+- name: traefik
+  repository: https://traefik.github.io/charts
+  version: 25.0.0
+digest: sha256:75d57caffbe75b39998ad49d5374ca9302f59d61f41ced06bd3e9378cde49686
+generated: "2025-10-29T16:59:41.707783+01:00"

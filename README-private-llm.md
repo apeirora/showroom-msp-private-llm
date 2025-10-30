@@ -174,9 +174,12 @@ helm upgrade --install private-llm charts/private-llm-operator \
   --set tls.secretName=your-tls-secret \
   --set portalIntegration.enabled=true \
   --set portalIntegration.kubeconfig.secretName="$KUBECONFIG_SECRET" \
+  --set portalIntegration.kubeconfig.secretNamespace="$NAMESPACE" \
   --set portalIntegration.kubeconfig.key=kubeconfig \
   --set portalIntegration.contentPath=/pm-content.json
 ```
+
+If the kubeconfig Secret lives in another namespace (for example `api-syncagent`), replace `"$NAMESPACE"` in `portalIntegration.kubeconfig.secretNamespace` with that namespace.
 
 3) Verify the static content is reachable:
 
@@ -194,14 +197,15 @@ helm upgrade --install private-llm charts/private-llm-operator \
   --namespace "$NAMESPACE" --create-namespace \
   --set portalIntegration.enabled=true \
   --set portalIntegration.syncAgent.enabled=true \
-  --set portalIntegration.syncAgent.namespace=api-syncagent
+  --set portalIntegration.syncAgent.namespace=api-syncagent \
+  --set portalIntegration.kubeconfig.secretNamespace=api-syncagent
 ```
 
 This will:
 - Create the namespace (if it does not exist)
 - Create ClusterRole/Binding `api-syncagent:privatellm` for `kcp-syncagent` SA in that namespace
 - Create two PublishedResource objects in that namespace for `LLMInstance` and `APITokenRequest`
-- Apply `APIExport`, `ProviderMetadata`, and `ContentConfiguration` to the remote cluster using your kubeconfig Secret
+- Apply `APIExport`, `ProviderMetadata`, and `ContentConfiguration` to the remote cluster using your kubeconfig Secret (the supporting ConfigMaps/Job are emitted into `portalIntegration.kubeconfig.secretNamespace`)
 
 Configuring the public host:
 

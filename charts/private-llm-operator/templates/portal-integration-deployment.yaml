@@ -11,15 +11,13 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: portal-integration
+      app.kubernetes.io/component: portal-integration
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
         {{- include "private-llm-operator.labels" . | nindent 8 }}
         app.kubernetes.io/component: portal-integration
-        app.kubernetes.io/name: portal-integration
-        app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
       {{- if .Values.imagePullSecrets }}
       imagePullSecrets:
