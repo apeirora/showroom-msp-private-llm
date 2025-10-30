@@ -29,6 +29,7 @@ spec:
             byReference:
               resource:
                 name: oci-helm-chart-private-llm-operator
+                version: {{ trimPrefix "v" .Values.component.semver | quote }}
           additionalStatusFields:
             registry: resource.access.imageReference.toOCI().registry
             repository: resource.access.imageReference.toOCI().repository
@@ -55,6 +56,7 @@ spec:
             byReference:
               resource:
                 name: private-llm-image
+                version: {{ trimPrefix "v" .Values.component.semver | quote }}
           additionalStatusFields:
             registry: resource.access.imageReference.toOCI().registry
             repository: resource.access.imageReference.toOCI().repository
@@ -128,3 +130,4 @@ spec:
               {{- else }}
               extraAnnotations: {}
               {{- end }}
+
