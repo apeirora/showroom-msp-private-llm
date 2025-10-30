@@ -111,12 +111,12 @@ kubectl get llminstances.llm.privatellms.msp -o wide
 kubectl get llminstance llminstance-sample -o yaml | sed -n '1,150p'
 ```
 
-Scaling is supported via `spec.replicas`. The `spec.model` field is currently ignored; the operator downloads TinyLlama by default via the init container.
+Scaling is supported via `spec.replicas`. The `spec.model` field selects which checkpoint the init container downloads before `llama.cpp` starts (default `tinyllama`).
 
 ### LLMInstance CR
 
 - spec:
-  - model: optional string (currently ignored; reserved for future model selection)
+  - model: optional string, defaults to `tinyllama`. Supported values: `tinyllama`, `phi-2`, `gemma-3-1b-it`, `gemma-3-4b-it`, `gemma-3-12b-it`
   - replicas: optional int32, defaults to 1
 - status:
   - phase: string (e.g., "Ready")
@@ -137,12 +137,22 @@ spec:
   model: tinyllama
 ```
 
+### Supported model downloads
+
+For each instance the operator downloads one of the following GGUF checkpoints into `/models` before starting `llama.cpp`:
+
+- `tinyllama` → [TinyLlama 1.1B Chat Q4_K_M](https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf)
+- `phi-2` → [Phi-2 Q4_0](https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_0.gguf)
+- `gemma-3-1b-it` → [Gemma 3 1B IT Q4_K_M](https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf)
+- `gemma-3-4b-it` → [Gemma 3 4B IT Q4_K_M](https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf)
+- `gemma-3-12b-it` → [Gemma 3 12B IT Q4_K_M](https://huggingface.co/ggml-org/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf)
+
 The Deployment uses:
 
 - image: `ghcr.io/ggml-org/llama.cpp:server`
-- command: `/app/llama-server -m /models/tinyllama.gguf --port 8000 --host 0.0.0.0`
+- command: `/app/llama-server -m /models/<model>.gguf --port 8000 --host 0.0.0.0`
 - volume: `emptyDir` mounted at `/models`
-- initContainer: `curlimages/curl` to download TinyLlama into `/models`
+- initContainer: `curlimages/curl` to download the selected checkpoint into `/models`
 
 Ingress:
 
