@@ -7,6 +7,7 @@ spec:
   component: {{ .Values.component.componentName }}
   repositoryRef:
     name: {{ .Values.component.repositoryRefName }}
+  downgradePolicy: Allow
   semver: "{{ .Values.component.semver }}"
   interval: {{ .Values.component.interval }}
   ocmConfig:

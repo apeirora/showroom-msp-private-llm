@@ -67,6 +67,7 @@
                                             "label": "Endpoint",
                                             "property": "status.endpoint",
                                             "labelDisplay": true,
+                                            "displayAsPlainText": true,
                                             "group": {
                                                 "name": "status",
                                                 "label": "Status",

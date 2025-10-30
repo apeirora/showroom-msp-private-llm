@@ -57,13 +57,19 @@ kubectl -n private-llm-operator create secret docker-registry ghcr-credentials \
   --docker-server=ghcr.io --docker-username="apeirora" --docker-password="$GITHUB_TOKEN" --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-### 4) Render and apply manifests with Helm
+### 4) Render and apply manifests
 ```bash
 helm template private-llm charts/private-llm-operator-ocm/ \
   -f charts/private-llm-operator-ocm/values.yaml \
   -f ./values.yaml \
   | kubectl apply -f -
 ```
+
+Changing `component.semver` in `values.yaml` updates both the OCM `Component`
+and the resource graph so KRO sees a new generation and reconciles
+automatically. Runtime chart/image tags still come from the OCM component
+(`resourceChart.status.additional.tag`, `resourceImage.status.additional.tag`),
+so everything deployed remains exactly what was published via OCM.
 
 ### 5) Create an LLMInstance and call the API
 ```bash
