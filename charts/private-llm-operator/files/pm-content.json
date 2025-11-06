@@ -315,7 +315,7 @@
                 {
                     "pathSegment": "llm_privatellms_msp_secrets",
                     "navigationContext": "llm_privatellms_msp_secrets",
-                    "label": "Tokens",
+                    "label": "Secrets",
                     "icon": "locked",
                     "category": {
                         "label": "Private LLM",
@@ -348,13 +348,12 @@
                                             "property": "metadata.name"
                                         },
                                         {
-                                            "label": "Namespace",
-                                            "property": "metadata.namespace"
-                                        },
-                                        {
-                                            "label": "Type",
-                                            "property": "type",
-                                            "labelDisplay": true
+                                            "label": "Token",
+                                            "property": "data",
+                                            "propertyField": {
+                                              "key": "OPENAI_API_KEY",
+                                              "transform": ["decode"]
+                                            }
                                         }
                                     ]
                                 }
