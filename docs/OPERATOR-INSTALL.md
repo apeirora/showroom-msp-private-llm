@@ -98,3 +98,38 @@ SECRET=$(kubectl -n default get apitokenrequest demo-token -o jsonpath='{.status
 BEARER_TOKEN=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -D)
 curl -sSik "${ENDPOINT}/health" -H "Authorization: Bearer $BEARER_TOKEN"
 ```
+
+### 6) (Optional) Deploy without OCM
+If you want to deploy the operator before the OCM controller supports your published component (or if you simply prefer to manage the release yourself), you can install the same chart directly with Helm. This bypasses OCM/KRO entirely, so you are responsible for keeping image and chart tags in sync.
+
+```bash
+# 1. Prepare namespace and pull secret
+kubectl create namespace private-llm-operator --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n private-llm-operator create secret docker-registry ghcr-credentials \
+  --docker-server=ghcr.io --docker-username="<GH_USERNAME>" --docker-password="$GITHUB_TOKEN" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# 2. (Optional) If you enable portal integration, make sure the remote namespace has
+#    the same pull secret (and annotate it if Helm must adopt a pre-existing namespace).
+
+# 3. Render/apply the chart with your desired version overrides.
+helm upgrade --install private-llm-operator charts/private-llm-operator \
+  --namespace private-llm-operator --create-namespace \
+  --set PUBLIC_HOST=<YOUR_HOSTNAME> \
+  --set PUBLIC_SCHEME=https \
+  --set tls.secretName=private-llm \
+  --set image.repository=ghcr.io/<GH_OWNER>/private-llm-controller \
+  --set image.tag=<CONTROLLER_TAG> \
+  --set 'imagePullSecrets[0].name=ghcr-credentials' \
+  --set traefik.enabled=false \
+  --set portalIntegration.enabled=<true|false> \
+  --set portalIntegration.kubeconfig.secretName=<REMOTE_KUBECONFIG_SECRET> \
+  --set portalIntegration.kubeconfig.secretNamespace=<REMOTE_NAMESPACE>
+
+# 4. Verify the controller is running with the expected image tag.
+kubectl -n private-llm-operator get pods
+```
+
+Helm release notes:
+- If you pre-created namespaces or ConfigMaps for the portal integration hook, annotate them with `meta.helm.sh/release-name=private-llm-operator` and `meta.helm.sh/release-namespace=private-llm-operator` so Helm can adopt them.
+- To roll forward to a new image, run `helm upgrade` with the updated `image.tag`.
