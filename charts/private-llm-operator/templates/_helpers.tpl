@@ -5,5 +5,3 @@ app.kubernetes.io/managed-by: Helm
 app.kubernetes.io/part-of: private-llm
 app.kubernetes.io/version: {{ .Chart.AppVersion }}
 {{- end }}
-
-

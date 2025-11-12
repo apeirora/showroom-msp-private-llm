@@ -43,6 +43,9 @@ traefik:
   service:
     type: LoadBalancer
 ingress:
+  # When set, applied as ingressClassName on managed Ingress objects.
+  # Leave empty to rely on the cluster default controller.
+  className: ""
   # Additional annotations to add to managed Ingresses. Operator will merge and keep them in sync.
   extraAnnotations: {}
 

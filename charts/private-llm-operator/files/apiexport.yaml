@@ -5,6 +5,16 @@ metadata:
   name: llm.privatellms.msp
   labels:
     ui.platform-mesh.io/content-for: llm.privatellms.msp
-spec: {}
+spec:
+  permissionClaims:
+    - group: ""
+      resource: namespaces
+      all: true
+    - group: ""
+      resource: events
+      all: true
+    - group: ""
+      resource: secrets
+      all: true
 
 
