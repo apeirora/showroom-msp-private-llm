@@ -13,8 +13,14 @@ metadata:
 {{ toYaml $annotations | indent 4 }}
     {{- end }}
 spec:
-  {{- if .Values.traefik.ingressClass.name }}
-  ingressClassName: {{ .Values.traefik.ingressClass.name }}
+  {{- $ingressClassName := "" }}
+  {{- if .Values.ingress.className }}
+    {{- $ingressClassName = .Values.ingress.className }}
+  {{- else if and .Values.traefik.enabled .Values.traefik.ingressClass.name }}
+    {{- $ingressClassName = .Values.traefik.ingressClass.name }}
+  {{- end }}
+  {{- if $ingressClassName }}
+  ingressClassName: {{ $ingressClassName }}
   {{- end }}
   rules:
     - host: {{ .Values.PUBLIC_HOST | quote }}
