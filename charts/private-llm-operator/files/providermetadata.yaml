@@ -3,9 +3,9 @@ kind: ProviderMetadata
 metadata:
   name: llm.privatellms.msp
 spec:
-  displayName: LLM Provider
+  displayName: MODEL Corp
   description: |
-    Managed private LLMs and inference endpoints for your applications.
+    MODEL Corp offers AI service to bring a human-like experience to your products.
   contacts:
   - displayName: Alex IT Architect
     email: alex.it.architect@privatellms.msp
