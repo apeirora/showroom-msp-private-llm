@@ -10,7 +10,7 @@
                     "label": "Instances",
                     "icon": "paint-bucket",
                     "category": {
-                        "label": "Private LLM",
+                        "label": "MODEL Corp",
                         "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
                         "collapsible": true,
                         "order": 5
@@ -205,7 +205,7 @@
                     "label": "Token Requests",
                     "icon": "key",
                     "category": {
-                        "label": "Private LLM",
+                        "label": "MODEL Corp",
                         "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
                         "collapsible": true,
                         "order": 5
@@ -318,7 +318,7 @@
                     "label": "Secrets",
                     "icon": "locked",
                     "category": {
-                        "label": "Private LLM",
+                        "label": "MODEL Corp",
                         "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
                         "collapsible": true,
                         "order": 5
