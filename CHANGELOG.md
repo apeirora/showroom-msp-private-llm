@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.2.1...v2.3.0) (2025-11-13)
+
+
+### Features
+
+* auto-update appVersion and image tag in Helm chart and values files ([#46](https://github.com/apeirora/showroom-msp-private-llm/issues/46)) ([a594373](https://github.com/apeirora/showroom-msp-private-llm/commit/a594373f745ba7b48aef433ef1d97213859c47f8))
+* update labels and descriptions to reflect MODEL Corp branding in JSON and YAML files ([#45](https://github.com/apeirora/showroom-msp-private-llm/issues/45)) ([3a9a720](https://github.com/apeirora/showroom-msp-private-llm/commit/3a9a720958a73a516538cbfa165971d4165604bb))
+
+
+### Bug Fixes
+
+* enhance ingress configuration and permissions in portal integration ([#44](https://github.com/apeirora/showroom-msp-private-llm/issues/44)) ([b9ad377](https://github.com/apeirora/showroom-msp-private-llm/commit/b9ad3775089504b492db116c0c70127fffcaa829))
+* update labels in UI and add optional deployment instructions in documentation ([#42](https://github.com/apeirora/showroom-msp-private-llm/issues/42)) ([6079d37](https://github.com/apeirora/showroom-msp-private-llm/commit/6079d378a0c000434ef96fd2d2b225dd6ad10125))
+
 ## [2.2.1](https://github.com/apeirora/showroom-msp-private-llm-operator/compare/v2.2.0...v2.2.1) (2025-10-30)
 
 
