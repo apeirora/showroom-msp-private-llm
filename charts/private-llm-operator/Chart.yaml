@@ -3,10 +3,9 @@ name: private-llm-operator
 description: Helm chart for private-llm operator
 type: application
 version: 0.1.0
-appVersion: "2.2.1"
-
+appVersion: 2.3.0
 dependencies:
   - name: traefik
-    version: "25.x.x"
-    repository: "https://traefik.github.io/charts"
+    version: 25.x.x
+    repository: https://traefik.github.io/charts
     condition: traefik.enabled
