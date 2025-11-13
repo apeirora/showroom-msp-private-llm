@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.3.0...v2.3.1) (2025-11-13)
+
+
+### Bug Fixes
+
+* update llama.cpp server image tag to version b7045 ([#47](https://github.com/apeirora/showroom-msp-private-llm/issues/47)) ([b7ae46c](https://github.com/apeirora/showroom-msp-private-llm/commit/b7ae46c467c604fa9c13ec1854fd528744c1eedc))
+
 ## [2.3.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.2.1...v2.3.0) (2025-11-13)
 
 
