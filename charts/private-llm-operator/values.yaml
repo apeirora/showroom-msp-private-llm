@@ -1,83 +1,51 @@
-PUBLIC_HOST: "localhost"
-PUBLIC_SCHEME: "http"
-
+PUBLIC_HOST: localhost
+PUBLIC_SCHEME: http
 tls:
-  # If set, controller will set spec.tls on the Ingress for PUBLIC_HOST
-  secretName: ""
-
+  secretName: ''
 ocm:
   enabled: true
-
 auth:
-  # Optional hard override. If empty, operator constructs URL from pod namespace
-  externalURL: ""
-
+  externalURL: ''
 image:
   repository: ghcr.io/apeirora/private-llm-controller
-  tag: "2.2.1"
+  tag: 2.3.0
   pullPolicy: IfNotPresent
-
 imagePullSecrets: []
-
-# Optional extra environment variables for the manager container.
-# Example to enable OpenTelemetry tracing via OTLP/HTTP:
-# extraEnv:
-#   - name: OTEL_EXPORTER_OTLP_ENDPOINT
-#     value: "http://otel-collector.opentelemetry:4318"
-#   - name: OTEL_SERVICE_NAME
-#     value: "private-llm-operator"
 extraEnv: []
-
-# Traefik ingress controller subchart
 traefik:
-  # Toggle installing Traefik via this chart
   enabled: true
-
-  # Create the Traefik IngressClass named "traefik"
   ingressClass:
     enabled: true
     isDefaultClass: false
     name: traefik
-
-  # Service exposure. For cloud/LB, use LoadBalancer; for kind/local, use NodePort and set nodePorts
   service:
     type: LoadBalancer
 ingress:
-  # When set, applied as ingressClassName on managed Ingress objects.
-  # Leave empty to rely on the cluster default controller.
-  className: ""
-  # Additional annotations to add to managed Ingresses. Operator will merge and keep them in sync.
+  className: ''
   extraAnnotations: {}
-
-  # NodePort values only apply when service.type=NodePort
   ports:
     web:
       nodePort: 30080
     websecure:
       nodePort: 30443
-
 portalIntegration:
   enabled: false
-  # Path under the same PUBLIC_HOST to expose the static JSON
-  contentPath: "/pm-content.json"
+  contentPath: /pm-content.json
   image:
     repository: nginx
-    tag: "1.25"
+    tag: '1.25'
     pullPolicy: IfNotPresent
   resources: {}
   ingress:
     annotations: {}
   kubeconfig:
-    # Name of Secret containing kubeconfig data
-    secretName: ""
-    # Namespace where the kubeconfig Secret lives. If empty, defaults to release namespace.
-    secretNamespace: ""
-    # Key inside Secret that holds the kubeconfig file
+    secretName: ''
+    secretNamespace: ''
     key: kubeconfig
   kubectl:
     image:
       repository: bitnami/kubectl
-      tag: "latest"
+      tag: latest
       pullPolicy: IfNotPresent
   syncAgent:
     enabled: false
