@@ -364,7 +364,7 @@ func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, re
 	}
 	container := corev1.Container{
 		Name:    "llama-cpp-server",
-		Image:   "ghcr.io/ggml-org/llama.cpp:server",
+		Image:   "ghcr.io/ggml-org/llama.cpp:server-b7045",
 		Command: []string{"/app/llama-server"},
 		Args: []string{
 			"-m", modelPath,
