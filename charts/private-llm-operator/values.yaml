@@ -14,7 +14,7 @@ auth:
 
 image:
   repository: ghcr.io/apeirora/private-llm-controller
-  tag: "0.4.0"
+  tag: "2.2.1"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
