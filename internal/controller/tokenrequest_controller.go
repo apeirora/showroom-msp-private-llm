@@ -68,8 +68,8 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return r.finalizeTokenRequest(ctx, &tr)
 	}
 
-	if res, handled, err := r.ensureFinalizer(ctx, &tr); handled {
-		return res, err
+	if res, handled := r.ensureFinalizer(ctx, &tr); handled {
+		return res, nil
 	}
 
 	// Validate referenced instance exists in same namespace
@@ -145,16 +145,16 @@ func (r *APITokenRequestReconciler) finalizeTokenRequest(ctx context.Context, tr
 	return ctrl.Result{}, nil
 }
 
-func (r *APITokenRequestReconciler) ensureFinalizer(ctx context.Context, tr *llmv1alpha1.APITokenRequest) (ctrl.Result, bool, error) {
+func (r *APITokenRequestReconciler) ensureFinalizer(ctx context.Context, tr *llmv1alpha1.APITokenRequest) (ctrl.Result, bool) {
 	if ctrlutil.ContainsFinalizer(tr, apiTokenRequestFinalizer) {
-		return ctrl.Result{}, false, nil
+		return ctrl.Result{}, false
 	}
 	ctrlutil.AddFinalizer(tr, apiTokenRequestFinalizer)
 	if err := r.Update(ctx, tr); err != nil {
 		log.FromContext(ctx).Error(err, "failed to add finalizer, will retry on next reconcile")
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, true, nil
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, true
 	}
-	return ctrl.Result{Requeue: true}, true, nil
+	return ctrl.Result{Requeue: true}, true
 }
 
 func (r *APITokenRequestReconciler) ensureSecret(ctx context.Context, tr *llmv1alpha1.APITokenRequest, inst *llmv1alpha1.LLMInstance, secretName, slug, endpoint string) error {
