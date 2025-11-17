@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -48,6 +49,8 @@ var _ = Describe("APITokenRequest controller", func() {
 		tokenName := "token-" + utilrand.String(5)
 		slug := "slug-" + utilrand.String(5)
 
+		expectedEndpoint := fmt.Sprintf("https://public.example.test/llm/%s", slug)
+
 		inst := &llmv1alpha1.LLMInstance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      instanceName,
@@ -58,6 +61,10 @@ var _ = Describe("APITokenRequest controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		inst.Status.Endpoint = expectedEndpoint
+		inst.Status.ObservedGeneration = inst.Generation
+		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
 		tr := &llmv1alpha1.APITokenRequest{
 			ObjectMeta: metav1.ObjectMeta{
@@ -90,8 +97,11 @@ var _ = Describe("APITokenRequest controller", func() {
 		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/apitokenrequest", tokenName))
 		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/instance", instanceName))
 		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/slug", slug))
+		Expect(secret.Labels).To(HaveKeyWithValue(compatibilityLabelKey, compatibilityLabelOpenAI))
 		Expect(secret.Data).To(HaveKey("OPENAI_API_KEY"))
 		Expect(secret.Data["OPENAI_API_KEY"]).NotTo(BeEmpty())
+		Expect(secret.Data).To(HaveKey(openAIAPIURLKey))
+		Expect(string(secret.Data[openAIAPIURLKey])).To(Equal(expectedEndpoint))
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, tr)).To(Succeed())
 		Expect(tr.Status.SecretName).To(Equal(secret.Name))
@@ -144,6 +154,8 @@ var _ = Describe("APITokenRequest controller", func() {
 		tokenName := "token-" + utilrand.String(5)
 		slug := "slug-" + utilrand.String(5)
 
+		expectedEndpoint := fmt.Sprintf("https://public.example.test/llm/%s", slug)
+
 		inst := &llmv1alpha1.LLMInstance{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      instanceName,
@@ -154,6 +166,10 @@ var _ = Describe("APITokenRequest controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		inst.Status.Endpoint = expectedEndpoint
+		inst.Status.ObservedGeneration = inst.Generation
+		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
 		tr := &llmv1alpha1.APITokenRequest{
 			ObjectMeta: metav1.ObjectMeta{

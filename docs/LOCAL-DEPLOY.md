@@ -126,7 +126,6 @@ spec:
   model: tinyllama
 YAML
 
-ENDPOINT=$(kubectl -n default get llminstance llminstance-sample -o jsonpath='{.status.endpoint}')
 kubectl -n default apply -f - <<'YAML'
 apiVersion: llm.example.com/v1alpha1
 kind: APITokenRequest
@@ -138,9 +137,8 @@ spec:
 YAML
 kubectl -n default wait apitokenrequest/demo-token --for=jsonpath='{.status.phase}'=Ready --timeout=60s
 SECRET=$(kubectl -n default get apitokenrequest demo-token -o jsonpath='{.status.secretName}')
-BEARER_TOKEN=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -D)
+OPENAI_API_KEY=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -D)
+OPENAI_API_URL=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_URL}' | base64 -D)
 
-# With NodePort on kind and HTTP scheme, append :30080 to the published host
-HTTP_ENDPOINT="http://${ENDPOINT#http://}:30080"
-curl -sSik "$HTTP_ENDPOINT/health" -H "Authorization: Bearer $BEARER_TOKEN"
+curl -sSik "${OPENAI_API_URL}/health" -H "Authorization: Bearer $OPENAI_API_KEY"
 ```
