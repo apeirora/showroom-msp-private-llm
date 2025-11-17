@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.3.1...v2.4.0) (2025-11-17)
+
+
+### Features
+
+* **controller:** update API token handling to include OPENAI_API_URL alongside OPENAI_API_KEY in secrets and documentation ([#49](https://github.com/apeirora/showroom-msp-private-llm/issues/49)) ([4a9ad38](https://github.com/apeirora/showroom-msp-private-llm/commit/4a9ad382899f10ec7ea2f68d57b286a2d69808ad))
+
 ## [2.3.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.3.0...v2.3.1) (2025-11-13)
 
 
