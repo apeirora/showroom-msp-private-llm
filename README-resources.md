@@ -29,7 +29,7 @@ Scale by patching `spec.replicas`. Deleting the resource removes the server and 
   - `spec.instanceName` – target instance in the same namespace.
   - `spec.description` (optional) – for operator notes.
 - **What you read back:**
-  - `status.secretName` – Secret storing `OPENAI_API_KEY`.
+  - `status.secretName` – Secret storing `OPENAI_API_KEY` and `OPENAI_API_URL`.
   - `status.phase` – becomes `Ready` once the Secret exists.
 
 Minimal example:
@@ -42,10 +42,12 @@ spec:
   instanceName: llminstance-sample
 ```
 
-To fetch the token:
+To fetch the token and endpoint:
 ```sh
 SECRET=$(kubectl get apitokenrequest sample-client -o jsonpath='{.status.secretName}')
-kubectl get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d
+OPENAI_API_KEY=$(kubectl get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d)
+OPENAI_API_URL=$(kubectl get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_URL}' | base64 -d)
+printf "Key: %s\nURL: %s\n" "$OPENAI_API_KEY" "$OPENAI_API_URL"
 ```
 
 ## Typical Flow

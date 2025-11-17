@@ -36,6 +36,13 @@ import (
 	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
 )
 
+const (
+	openAIAPIKeyKey          = "OPENAI_API_KEY"
+	openAIAPIURLKey          = "OPENAI_API_URL"
+	compatibilityLabelKey    = "apeirora.eu/llm-api-compatibility"
+	compatibilityLabelOpenAI = "openai"
+)
+
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests/finalizers,verbs=update
@@ -127,10 +134,13 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		slug = strings.TrimSpace(inst.Annotations[slugAnnotationKey])
 	}
 
+	endpoint := strings.TrimSpace(inst.Status.Endpoint)
+
 	// Ensure Secret exists with token
 	secretName := fmt.Sprintf("%s-token", tr.Name)
 	var sec corev1.Secret
 	err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: secretName}, &sec)
+	justCreated := false
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			token, terr := generateToken(32)
@@ -146,6 +156,7 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 							"app.kubernetes.io/name":              "llm-token",
 							"llm.privatellms.msp/instance":        inst.Name,
 							"llm.privatellms.msp/apitokenrequest": tr.Name,
+							compatibilityLabelKey:                 compatibilityLabelOpenAI,
 						}
 						if slug != "" {
 							m["llm.privatellms.msp/slug"] = slug
@@ -158,7 +169,8 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				},
 				Type: corev1.SecretTypeOpaque,
 				StringData: map[string]string{
-					"OPENAI_API_KEY": token,
+					openAIAPIKeyKey: token,
+					openAIAPIURLKey: endpoint,
 				},
 			}
 			if err := ctrl.SetControllerReference(&tr, &sec, r.Scheme); err != nil {
@@ -168,19 +180,31 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 				return ctrl.Result{}, err
 			}
 			logger.Info("created token Secret", "name", secretName)
+			justCreated = true
 		} else {
 			return ctrl.Result{}, err
 		}
 	}
 
-	// Ensure slug label is present on the Secret (for legacy/existing secrets)
-	if slug != "" {
+	if !justCreated {
+		// Ensure metadata and data are updated on existing Secret
 		updated := false
 		if sec.Labels == nil {
 			sec.Labels = map[string]string{}
 		}
-		if sec.Labels["llm.privatellms.msp/slug"] != slug {
-			sec.Labels["llm.privatellms.msp/slug"] = slug
+		if sec.Labels[compatibilityLabelKey] != compatibilityLabelOpenAI {
+			sec.Labels[compatibilityLabelKey] = compatibilityLabelOpenAI
+			updated = true
+		}
+		if slug != "" && sec.Labels[slugAnnotationKey] != slug {
+			sec.Labels[slugAnnotationKey] = slug
+			updated = true
+		}
+		if sec.Data == nil {
+			sec.Data = map[string][]byte{}
+		}
+		if val, ok := sec.Data[openAIAPIURLKey]; !ok || string(val) != endpoint {
+			sec.Data[openAIAPIURLKey] = []byte(endpoint)
 			updated = true
 		}
 		if updated {
