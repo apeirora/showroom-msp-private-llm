@@ -11,6 +11,11 @@
         {
           "type": "yaml",
           "path": "charts/private-llm-operator/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "charts/private-llm-operator/Chart.yaml",
           "jsonpath": "$.appVersion"
         },
         {
