@@ -36,6 +36,15 @@ import (
 	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
 )
 
+const (
+	openAIAPIKeyKey          = "OPENAI_API_KEY"
+	openAIAPIURLKey          = "OPENAI_API_URL"
+	compatibilityLabelKey    = "apeirora.eu/llm-api-compatibility"
+	compatibilityLabelOpenAI = "openai"
+)
+
+const apiTokenRequestFinalizer = "llm.privatellms.msp/apitokenrequest-finalizer"
+
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=apitokenrequests/finalizers,verbs=update
@@ -50,61 +59,17 @@ type APITokenRequestReconciler struct {
 }
 
 func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
 	var tr llmv1alpha1.APITokenRequest
 	if err := r.Get(ctx, req.NamespacedName, &tr); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	const finalizerName = "llm.privatellms.msp/apitokenrequest-finalizer"
-	// Handle deletion: ensure associated Secret(s) are removed, then drop finalizer
 	if !tr.DeletionTimestamp.IsZero() {
-		if ctrlutil.ContainsFinalizer(&tr, finalizerName) {
-			var secretList corev1.SecretList
-			if err := r.List(ctx, &secretList, client.InNamespace(req.Namespace)); err == nil {
-				for i := range secretList.Items {
-					sec := secretList.Items[i]
-					if err := r.Delete(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {
-						logger.Error(err, "failed to delete associated secret during finalizer cleanup (non-blocking)", "secret", sec.Name)
-					}
-				}
-			} else {
-				logger.Error(err, "failed to list associated secrets during finalizer cleanup (non-blocking)")
-			}
-			// Remove finalizer with conflict retries to avoid blocking deletion
-			for i := 0; i < 3; i++ {
-				ctrlutil.RemoveFinalizer(&tr, finalizerName)
-				if err := r.Update(ctx, &tr); err != nil {
-					if apierrors.IsNotFound(err) {
-						break
-					}
-					if apierrors.IsConflict(err) {
-						// reload latest and retry
-						var fresh llmv1alpha1.APITokenRequest
-						if gerr := r.Get(ctx, req.NamespacedName, &fresh); gerr != nil {
-							break
-						}
-						tr = fresh
-						continue
-					}
-					// for other errors, return and let controller requeue
-					return ctrl.Result{}, err
-				}
-				break
-			}
-		}
-		return ctrl.Result{}, nil
+		return r.finalizeTokenRequest(ctx, &tr)
 	}
 
-	// Ensure finalizer is present (best-effort, avoid blocking reconcile on errors)
-	if !ctrlutil.ContainsFinalizer(&tr, finalizerName) {
-		ctrlutil.AddFinalizer(&tr, finalizerName)
-		if err := r.Update(ctx, &tr); err != nil {
-			logger.Error(err, "failed to add finalizer, will retry on next reconcile")
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-		}
-		return ctrl.Result{Requeue: true}, nil
+	if res, handled := r.ensureFinalizer(ctx, &tr); handled {
+		return res, nil
 	}
 
 	// Validate referenced instance exists in same namespace
@@ -127,80 +92,165 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		slug = strings.TrimSpace(inst.Annotations[slugAnnotationKey])
 	}
 
-	// Ensure Secret exists with token
+	endpoint := strings.TrimSpace(inst.Status.Endpoint)
 	secretName := fmt.Sprintf("%s-token", tr.Name)
-	var sec corev1.Secret
-	err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: secretName}, &sec)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			token, terr := generateToken(32)
-			if terr != nil {
-				return ctrl.Result{}, terr
-			}
-			sec = corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      secretName,
-					Namespace: req.Namespace,
-					Labels: func() map[string]string {
-						m := map[string]string{
-							"app.kubernetes.io/name":              "llm-token",
-							"llm.privatellms.msp/instance":        inst.Name,
-							"llm.privatellms.msp/apitokenrequest": tr.Name,
-						}
-						if slug != "" {
-							m["llm.privatellms.msp/slug"] = slug
-						}
-						return m
-					}(),
-					Annotations: map[string]string{
-						"llm.privatellms.msp/description": strings.TrimSpace(tr.Spec.Description),
-					},
-				},
-				Type: corev1.SecretTypeOpaque,
-				StringData: map[string]string{
-					"OPENAI_API_KEY": token,
-				},
-			}
-			if err := ctrl.SetControllerReference(&tr, &sec, r.Scheme); err != nil {
-				return ctrl.Result{}, err
-			}
-			if err := r.Create(ctx, &sec); err != nil {
-				return ctrl.Result{}, err
-			}
-			logger.Info("created token Secret", "name", secretName)
-		} else {
-			return ctrl.Result{}, err
-		}
+	if err := r.ensureSecret(ctx, &tr, &inst, secretName, slug, endpoint); err != nil {
+		return ctrl.Result{}, err
 	}
 
-	// Ensure slug label is present on the Secret (for legacy/existing secrets)
-	if slug != "" {
-		updated := false
-		if sec.Labels == nil {
-			sec.Labels = map[string]string{}
-		}
-		if sec.Labels["llm.privatellms.msp/slug"] != slug {
-			sec.Labels["llm.privatellms.msp/slug"] = slug
-			updated = true
-		}
-		if updated {
-			if err := r.Update(ctx, &sec); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-	}
-
-	// Update status
-	cond := metav1.Condition{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Provisioned", Message: "Token generated", LastTransitionTime: metav1.Now()}
-	setTRStatusCondition(&tr, cond)
-	tr.Status.SecretName = secretName
-	tr.Status.Phase = "Ready"
-	tr.Status.ObservedGeneration = tr.Generation
-	if err := r.Status().Update(ctx, &tr); err != nil {
+	if err := r.updateReadyStatus(ctx, &tr, secretName); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *APITokenRequestReconciler) finalizeTokenRequest(ctx context.Context, tr *llmv1alpha1.APITokenRequest) (ctrl.Result, error) {
+	if !ctrlutil.ContainsFinalizer(tr, apiTokenRequestFinalizer) {
+		return ctrl.Result{}, nil
+	}
+
+	logger := log.FromContext(ctx)
+	var secretList corev1.SecretList
+	if err := r.List(ctx, &secretList, client.InNamespace(tr.Namespace)); err == nil {
+		for i := range secretList.Items {
+			sec := secretList.Items[i]
+			if err := r.Delete(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {
+				logger.Error(err, "failed to delete associated secret during finalizer cleanup (non-blocking)", "secret", sec.Name)
+			}
+		}
+	} else {
+		logger.Error(err, "failed to list associated secrets during finalizer cleanup (non-blocking)")
+	}
+
+	key := client.ObjectKeyFromObject(tr)
+	for i := 0; i < 3; i++ {
+		ctrlutil.RemoveFinalizer(tr, apiTokenRequestFinalizer)
+		if err := r.Update(ctx, tr); err != nil {
+			if apierrors.IsNotFound(err) {
+				break
+			}
+			if apierrors.IsConflict(err) {
+				var fresh llmv1alpha1.APITokenRequest
+				if gerr := r.Get(ctx, key, &fresh); gerr != nil {
+					break
+				}
+				*tr = fresh
+				continue
+			}
+			return ctrl.Result{}, err
+		}
+		break
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *APITokenRequestReconciler) ensureFinalizer(ctx context.Context, tr *llmv1alpha1.APITokenRequest) (ctrl.Result, bool) {
+	if ctrlutil.ContainsFinalizer(tr, apiTokenRequestFinalizer) {
+		return ctrl.Result{}, false
+	}
+	ctrlutil.AddFinalizer(tr, apiTokenRequestFinalizer)
+	if err := r.Update(ctx, tr); err != nil {
+		log.FromContext(ctx).Error(err, "failed to add finalizer, will retry on next reconcile")
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, true
+	}
+	return ctrl.Result{Requeue: true}, true
+}
+
+func (r *APITokenRequestReconciler) ensureSecret(ctx context.Context, tr *llmv1alpha1.APITokenRequest, inst *llmv1alpha1.LLMInstance, secretName, slug, endpoint string) error {
+	var sec corev1.Secret
+	err := r.Get(ctx, client.ObjectKey{Namespace: tr.Namespace, Name: secretName}, &sec)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return r.createSecret(ctx, tr, inst, secretName, slug, endpoint)
+		}
+		return err
+	}
+
+	if r.applySecretMutations(&sec, slug, endpoint) {
+		return r.Update(ctx, &sec)
+	}
+	return nil
+}
+
+func (r *APITokenRequestReconciler) createSecret(ctx context.Context, tr *llmv1alpha1.APITokenRequest, inst *llmv1alpha1.LLMInstance, secretName, slug, endpoint string) error {
+	token, err := generateToken(32)
+	if err != nil {
+		return err
+	}
+
+	secret := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: tr.Namespace,
+			Labels: func() map[string]string {
+				m := map[string]string{
+					"app.kubernetes.io/name":              "llm-token",
+					"llm.privatellms.msp/instance":        inst.Name,
+					"llm.privatellms.msp/apitokenrequest": tr.Name,
+					compatibilityLabelKey:                 compatibilityLabelOpenAI,
+				}
+				if slug != "" {
+					m["llm.privatellms.msp/slug"] = slug
+				}
+				return m
+			}(),
+			Annotations: map[string]string{
+				"llm.privatellms.msp/description": strings.TrimSpace(tr.Spec.Description),
+			},
+		},
+		Type: corev1.SecretTypeOpaque,
+		StringData: map[string]string{
+			openAIAPIKeyKey: token,
+			openAIAPIURLKey: endpoint,
+		},
+	}
+	if err := ctrl.SetControllerReference(tr, &secret, r.Scheme); err != nil {
+		return err
+	}
+	if err := r.Create(ctx, &secret); err != nil {
+		return err
+	}
+	log.FromContext(ctx).Info("created token Secret", "name", secretName)
+	return nil
+}
+
+func (r *APITokenRequestReconciler) applySecretMutations(sec *corev1.Secret, slug, endpoint string) bool {
+	updated := false
+	if sec.Labels == nil {
+		sec.Labels = map[string]string{}
+	}
+	if sec.Labels[compatibilityLabelKey] != compatibilityLabelOpenAI {
+		sec.Labels[compatibilityLabelKey] = compatibilityLabelOpenAI
+		updated = true
+	}
+	if slug != "" && sec.Labels[slugAnnotationKey] != slug {
+		sec.Labels[slugAnnotationKey] = slug
+		updated = true
+	}
+	if sec.Data == nil {
+		sec.Data = map[string][]byte{}
+	}
+	if val, ok := sec.Data[openAIAPIURLKey]; !ok || string(val) != endpoint {
+		sec.Data[openAIAPIURLKey] = []byte(endpoint)
+		updated = true
+	}
+	return updated
+}
+
+func (r *APITokenRequestReconciler) updateReadyStatus(ctx context.Context, tr *llmv1alpha1.APITokenRequest, secretName string) error {
+	cond := metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionTrue,
+		Reason:             "Provisioned",
+		Message:            "Token generated",
+		LastTransitionTime: metav1.Now(),
+	}
+	setTRStatusCondition(tr, cond)
+	tr.Status.SecretName = secretName
+	tr.Status.Phase = "Ready"
+	tr.Status.ObservedGeneration = tr.Generation
+	return r.Status().Update(ctx, tr)
 }
 
 func (r *APITokenRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {

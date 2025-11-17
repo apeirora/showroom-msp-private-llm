@@ -83,7 +83,6 @@ spec:
   model: tinyllama
 YAML
 
-ENDPOINT=$(kubectl -n default get llminstances.llm.privatellms.msp llminstance-sample -o jsonpath='{.status.endpoint}')
 kubectl -n default apply -f - <<'YAML'
 apiVersion: llm.privatellms.msp/v1alpha1
 kind: APITokenRequest
@@ -95,8 +94,9 @@ YAML
 # fix: we do not change phase in CR
 kubectl -n default wait apitokenrequest/demo-token --for=jsonpath='{.status.phase}'=Ready --timeout=60s
 SECRET=$(kubectl -n default get apitokenrequest demo-token -o jsonpath='{.status.secretName}')
-BEARER_TOKEN=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -D)
-curl -sSik "${ENDPOINT}/health" -H "Authorization: Bearer $BEARER_TOKEN"
+OPENAI_API_KEY=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -D)
+OPENAI_API_URL=$(kubectl -n default get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_URL}' | base64 -D)
+curl -sSik "${OPENAI_API_URL}/health" -H "Authorization: Bearer $OPENAI_API_KEY"
 ```
 
 ### 6) (Optional) Deploy without OCM

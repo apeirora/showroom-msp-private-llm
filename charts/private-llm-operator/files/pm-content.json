@@ -354,6 +354,14 @@
                                               "key": "OPENAI_API_KEY",
                                               "transform": ["decode"]
                                             }
+                                        },
+                                        {
+                                            "label": "OpenAI API URL",
+                                            "property": "data",
+                                            "propertyField": {
+                                              "key": "OPENAI_API_URL",
+                                              "transform": ["decode"]
+                                            }
                                         }
                                     ]
                                 }
