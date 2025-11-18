@@ -15,6 +15,6 @@ spec:
       url: https://help.privatellms.msp
   icon:
     light:
-      data: "data:image/png;base64,{{ (.Files.Get \"files/icon.png\") | b64enc }}"
+      data: 'data:image/png;base64,{{ (.Files.Get "files/icon.png") | b64enc }}'
     dark:
-      data: "data:image/png;base64,{{ (.Files.Get \"files/icon.png\") | b64enc }}"
+      data: 'data:image/png;base64,{{ (.Files.Get "files/icon.png") | b64enc }}'
