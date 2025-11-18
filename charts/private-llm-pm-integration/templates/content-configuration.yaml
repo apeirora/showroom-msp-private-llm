@@ -1,0 +1,11 @@
+apiVersion: ui.platform-mesh.io/v1alpha1
+kind: ContentConfiguration
+metadata:
+  name: llm-ui
+  labels:
+    ui.platform-mesh.io/entity: core_platform-mesh_io_account
+    ui.platform-mesh.io/content-for: llm.privatellms.msp
+spec:
+  remoteConfiguration:
+    url: {{ printf "%s://%s%s" (.Values.publicScheme | default "https") (.Values.publicHost | default "localhost") (.Values.contentPath | default "/pm-content.json") | quote }}
+    contentType: "json"

@@ -109,10 +109,7 @@ kubectl -n private-llm-operator create secret docker-registry ghcr-credentials \
   --docker-server=ghcr.io --docker-username="<GH_USERNAME>" --docker-password="$GITHUB_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-# 2. (Optional) If you enable portal integration, make sure the remote namespace has
-#    the same pull secret (and annotate it if Helm must adopt a pre-existing namespace).
-
-# 3. Render/apply the chart with your desired version overrides.
+# 2. Render/apply the chart with your desired version overrides.
 helm upgrade --install private-llm-operator charts/private-llm-operator \
   --namespace private-llm-operator --create-namespace \
   --set PUBLIC_HOST=<YOUR_HOSTNAME> \
@@ -122,14 +119,12 @@ helm upgrade --install private-llm-operator charts/private-llm-operator \
   --set image.tag=<CONTROLLER_TAG> \
   --set 'imagePullSecrets[0].name=ghcr-credentials' \
   --set traefik.enabled=false \
-  --set portalIntegration.enabled=<true|false> \
-  --set portalIntegration.kubeconfig.secretName=<REMOTE_KUBECONFIG_SECRET> \
-  --set portalIntegration.kubeconfig.secretNamespace=<REMOTE_NAMESPACE>
+  --set portalIntegration.enabled=<true|false>
 
-# 4. Verify the controller is running with the expected image tag.
+# 3. Verify the controller is running with the expected image tag.
 kubectl -n private-llm-operator get pods
 ```
 
 Helm release notes:
-- If you pre-created namespaces or ConfigMaps for the portal integration hook, annotate them with `meta.helm.sh/release-name=private-llm-operator` and `meta.helm.sh/release-namespace=private-llm-operator` so Helm can adopt them.
 - To roll forward to a new image, run `helm upgrade` with the updated `image.tag`.
+- Apply the `charts/private-llm-pm-integration` chart separately inside the KCP control plane (or via Flux) whenever you need to update the `APIExport`, `ProviderMetadata`, or `ContentConfiguration`.

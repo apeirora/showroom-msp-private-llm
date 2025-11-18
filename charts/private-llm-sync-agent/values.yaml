@@ -1,0 +1,11 @@
+syncAgentOperator:
+  enabled: true
+  apiExportName: llm.privatellms.msp
+  agentName: llm-agent
+  kcpKubeconfig: pm-kcp-kubeconfig
+  extraFlags: []
+
+publishedResources:
+  enabled: true
+  namespace: api-syncagent
+

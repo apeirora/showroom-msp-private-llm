@@ -11,12 +11,17 @@ permissions:
   packages: write
 
 env:
-  CHART_PATH: charts/private-llm-operator
+  HELM_CHARTS: "private-llm-operator private-llm-sync-agent private-llm-pm-integration"
 
 jobs:
-  publish:
-    name: Build and Publish Artifacts
+  publish-image:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.vars.outputs.version }}
+      image: ${{ steps.meta.outputs.image }}
+      chart_registry: ${{ steps.meta.outputs.chart_registry }}
+      ocm_repository: ${{ steps.meta.outputs.ocm_repository }}
+      image_digest: ${{ steps.dig.outputs.digest }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -35,7 +40,6 @@ jobs:
       - name: Prepare metadata
         id: meta
         run: |
-          repo="${GITHUB_REPOSITORY,,}"
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           echo "image=ghcr.io/${owner}/private-llm-controller" >> "$GITHUB_OUTPUT"
           echo "chart_registry=oci://ghcr.io/${owner}/charts" >> "$GITHUB_OUTPUT"
@@ -83,84 +87,136 @@ jobs:
           echo "$DIGEST" | tee image-digest.txt
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
+      - name: Upload image digest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-digest
+          path: image-digest.txt
+
+  package-chart:
+    needs: publish-image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - private-llm-operator
+          - private-llm-sync-agent
+          - private-llm-pm-integration
+    env:
+      VERSION: ${{ needs.publish-image.outputs.version }}
+      CHART_REGISTRY: ${{ needs.publish-image.outputs.chart_registry }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-      - name: Helm dependency update
+      - name: Helm registry login
         run: |
-          helm dependency update "${{ env.CHART_PATH }}"
-      
-      - name: Helm login
-        env:
-          HELM_REGISTRY: ghcr.io
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login "$HELM_REGISTRY" --username "$GITHUB_ACTOR" --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
-      - name: Push Helm chart
-        env:
-          VERSION: ${{ steps.vars.outputs.version }}
+      - name: Package and push chart
+        shell: bash
         run: |
-          chart_dir="${{ env.CHART_PATH }}"
-          chart_name=$(basename "$chart_dir")
-          helm package "$chart_dir" --destination . --version "$VERSION" --app-version "$VERSION"
-          helm push "./${chart_name}-${VERSION}.tgz" ${{ steps.meta.outputs.chart_registry }}
+          set -euo pipefail
+          chart='${{ matrix.chart }}'
+          chart_dir="charts/${chart}"
+          out_dir="dist/${chart}"
+          pkg="${chart}-${VERSION}.tgz"
+          echo "::group::${chart}"
+          helm dependency update "$chart_dir"
+          helm lint "$chart_dir"
+          helm template "release-${chart}" "$chart_dir" --namespace default >/dev/null
+          mkdir -p "$out_dir"
+          helm package "$chart_dir" --destination "$out_dir" --version "$VERSION" --app-version "$VERSION"
+          helm push "$out_dir/$pkg" "$CHART_REGISTRY"
+          sha256sum "$out_dir/$pkg" > "$out_dir/$pkg.sha256"
+          echo "::endgroup::"
+
+      - name: Upload packaged chart
+        uses: actions/upload-artifact@v4
+        with:
+          name: chart-package-${{ matrix.chart }}
+          path: dist/${{ matrix.chart }}/*
+
+  publish-release:
+    needs:
+      - publish-image
+      - package-chart
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.publish-image.outputs.version }}
+      IMAGE: ${{ needs.publish-image.outputs.image }}
+      CHART_REGISTRY: ${{ needs.publish-image.outputs.chart_registry }}
+      OCM_REPOSITORY: ${{ needs.publish-image.outputs.ocm_repository }}
+      HELM_CHARTS: ${{ env.HELM_CHARTS }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download chart artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: chart-package-*
+          path: dist/charts
+          merge-multiple: true
+
+      - name: Download image digest artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: image-digest
+          path: .
+
+      - name: Generate aggregated checksums
+        run: |
+          cat dist/charts/*.sha256 > SHA256SUMS.txt
 
       - name: Write build metadata
         env:
-          VERSION: ${{ steps.vars.outputs.version }}
+          CHART_REGISTRY: ${{ needs.publish-image.outputs.chart_registry }}
         run: |
-          chart_dir="${{ env.CHART_PATH }}"
-          chart_name=$(basename "$chart_dir")
+          charts_json="["
+          sep=""
+          for chart in $HELM_CHARTS; do
+            charts_json="${charts_json}${sep}{\"name\":\"${chart}\",\"version\":\"${VERSION}\",\"registry\":\"${CHART_REGISTRY}\"}"
+            sep=","
+          done
+          charts_json="${charts_json}]"
           cat > build-metadata.json <<EOF
           {
             "commit": {
               "sha": "${GITHUB_SHA}"
             },
             "image": {
-              "name": "${{ steps.meta.outputs.image }}",
+              "name": "${IMAGE}",
               "tag": "${VERSION}",
               "latest": true
             },
-            "chart": {
-              "name": "${chart_name}",
-              "version": "${VERSION}",
-              "registry": "${{ steps.meta.outputs.chart_registry }}"
-            }
+            "charts": ${charts_json}
           }
           EOF
-
-      - name: Generate checksums
-        env:
-          VERSION: ${{ steps.vars.outputs.version }}
-        run: |
-          chart_dir="${{ env.CHART_PATH }}"
-          chart_name=$(basename "$chart_dir")
-          echo "Generating SHA256 sums"
-          sha256sum "./${chart_name}-${VERSION}.tgz" > SHA256SUMS.txt
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          files: |
-            ./*.tgz
-            SHA256SUMS.txt
-            image-digest.txt
-            build-metadata.json
-          fail_on_unmatched_files: true
 
       - name: Install OCM CLI
         run: |
           curl -sSfL https://ocm.software/install.sh | sudo bash
 
       - name: Build and Push OCM component
-        env:
-          VERSION: ${{ steps.vars.outputs.version }}
-          OCM_REPOSITORY: ${{ steps.meta.outputs.ocm_repository }}
         run: |
           mkdir -p dist/ctf
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           ocm add componentversions --create --file dist/ctf .ocm/component-constructor.yaml \
             VERSION="${VERSION}" GITHUB_REPOSITORY_OWNER="${owner}" IMAGE_TAG="${VERSION}" CHART_TAG="${VERSION}"
           ocm transfer commontransportarchive dist/ctf "$OCM_REPOSITORY" --copy-resources --overwrite
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/charts/*.tgz
+            SHA256SUMS.txt
+            image-digest.txt
+            build-metadata.json
+          fail_on_unmatched_files: true

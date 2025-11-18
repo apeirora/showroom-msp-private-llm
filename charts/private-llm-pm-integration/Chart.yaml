@@ -1,0 +1,7 @@
+apiVersion: v2
+name: private-llm-pm-integration
+description: Platform Mesh portal metadata (APIExport/ProviderMetadata/ContentConfiguration) to be applied in the KCP control plane.
+type: application
+version: 0.1.0
+appVersion: 2.4.0
+

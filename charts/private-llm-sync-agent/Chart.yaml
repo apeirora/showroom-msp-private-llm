@@ -1,0 +1,13 @@
+apiVersion: v2
+name: private-llm-sync-agent
+description: Deploy the KCP Sync Agent plus published-resource wrappers for private-llm.
+type: application
+version: 0.1.0
+appVersion: 2.4.0
+dependencies:
+  - name: api-syncagent
+    alias: syncAgentOperator
+    version: 0.4.2
+    repository: https://kcp-dev.github.io/helm-charts
+    condition: syncAgentOperator.enabled
+

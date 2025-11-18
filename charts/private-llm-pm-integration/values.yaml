@@ -1,0 +1,3 @@
+publicHost: llm.private-llm.shop
+publicScheme: https
+contentPath: /pm-content.json
