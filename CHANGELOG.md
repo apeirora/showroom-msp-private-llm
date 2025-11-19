@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.4.0...v2.4.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* update chart version ([#51](https://github.com/apeirora/showroom-msp-private-llm/issues/51)) ([0e7101a](https://github.com/apeirora/showroom-msp-private-llm/commit/0e7101a0b9309c2a16dd6462d8f99cd8943923e1))
+
 ## [2.4.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.3.1...v2.4.0) (2025-11-17)
 
 
