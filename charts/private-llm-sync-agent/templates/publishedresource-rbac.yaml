@@ -43,7 +43,8 @@ roleRef:
   name: api-syncagent:privatellm
 subjects:
   - kind: ServiceAccount
-    name: kcp-syncagent
+    name: {{ .Values.publishedResources.serviceAccountName | default .Release.Name }}
     namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
 {{- end }}
+
 
