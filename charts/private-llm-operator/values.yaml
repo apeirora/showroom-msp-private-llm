@@ -38,15 +38,3 @@ portalIntegration:
   resources: {}
   ingress:
     annotations: {}
-  kubeconfig:
-    secretName: ''
-    secretNamespace: ''
-    key: kubeconfig
-  kubectl:
-    image:
-      repository: bitnami/kubectl
-      tag: latest
-      pullPolicy: IfNotPresent
-  syncAgent:
-    enabled: false
-    namespace: api-syncagent

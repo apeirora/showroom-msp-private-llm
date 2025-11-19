@@ -1,11 +1,11 @@
-{{- if and .Values.portalIntegration.enabled .Values.portalIntegration.syncAgent.enabled }}
+{{- if .Values.publishedResources.enabled }}
 apiVersion: syncagent.kcp.io/v1alpha1
 kind: PublishedResource
 metadata:
   name: publish-llm-llminstances
-  namespace: {{ .Values.portalIntegration.syncAgent.namespace | default "api-syncagent" }}
+  namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
   labels:
-    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/name: private-llm-sync-agent
     app.kubernetes.io/component: portal-integration
 spec:
   resource:
@@ -20,9 +20,9 @@ apiVersion: syncagent.kcp.io/v1alpha1
 kind: PublishedResource
 metadata:
   name: publish-llm-apitokenrequests
-  namespace: {{ .Values.portalIntegration.syncAgent.namespace | default "api-syncagent" }}
+  namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
   labels:
-    {{- include "private-llm-operator.labels" . | nindent 4 }}
+    app.kubernetes.io/name: private-llm-sync-agent
     app.kubernetes.io/component: portal-integration
 spec:
   resource:
@@ -40,5 +40,4 @@ spec:
         reference:
           path: status.secretName
 {{- end }}
-
 
