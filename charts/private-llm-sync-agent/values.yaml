@@ -5,7 +5,7 @@ syncAgentOperator:
   kcpKubeconfig: pm-kcp-kubeconfig
   extraFlags: []
   crds:
-    enabled: false
+    enabled: true
 
 publishedResources:
   enabled: true
