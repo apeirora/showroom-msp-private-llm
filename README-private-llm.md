@@ -160,38 +160,19 @@ Ingress:
 - host: `$PUBLIC_HOST`
 - path: `/llm/<slug>`
 
-## Optional: Portal Integration (serve pm-content.json and apply ContentConfiguration)
+## Optional: Portal Integration (MSP UI + platform mesh metadata)
 
-Enable a lightweight nginx service that serves a static `pm-content.json` under the same public domain as the operator, and a Helm hook Job that applies a `ContentConfiguration`, `APIExport`, and `ProviderMetadata` to the remote cluster.
+Portal integration now relies on three Helm charts (one per layer):
 
-1) Prepare a kubeconfig Secret in the operator namespace:
+- `charts/private-llm-operator` deploys the portal nginx pod + ingress **inside the MSP cluster**.
+- `charts/private-llm-sync-agent` installs the sync agent plus the `PublishedResource`/RBAC bridge that exposes the LLM APIs from the MSP cluster into the platform mesh.
+- `charts/private-llm-pm-integration` renders the `APIExport`, `ProviderMetadata`, and `ContentConfiguration` objects that live **in the platform mesh control plane** (apply via Flux or kubectl pointed at the platform mesh).
 
-```sh
-NAMESPACE=private-llm-system
-KUBECONFIG_SECRET=my-kubeconfig
-kubectl -n "$NAMESPACE" create secret generic "$KUBECONFIG_SECRET" \
-  --from-file=kubeconfig="$HOME/.kube/config"
-```
 
-2) Install/upgrade with portalIntegration enabled:
 
-```sh
-helm upgrade --install private-llm charts/private-llm-operator \
-  --namespace "$NAMESPACE" --create-namespace \
-  --dependency-update \
-  --set PUBLIC_HOST=your.host \
-  --set PUBLIC_SCHEME=https \
-  --set tls.secretName=your-tls-secret \
-  --set portalIntegration.enabled=true \
-  --set portalIntegration.kubeconfig.secretName="$KUBECONFIG_SECRET" \
-  --set portalIntegration.kubeconfig.secretNamespace="$NAMESPACE" \
-  --set portalIntegration.kubeconfig.key=kubeconfig \
-  --set portalIntegration.contentPath=/pm-content.json
-```
+### MSP cluster: serve `pm-content.json`
 
-If the kubeconfig Secret lives in another namespace (for example `api-syncagent`), replace `"$NAMESPACE"` in `portalIntegration.kubeconfig.secretNamespace` with that namespace.
-
-3) Verify the static content is reachable:
+Verify the static content is reachable:
 
 ```sh
 curl -sSik "https://your.host/pm-content.json" | head -n 20
@@ -200,22 +181,29 @@ curl -sSik "https://your.host/pm-content.json" | head -n 20
 On kind/NodePort (HTTP), use `http://your.host:30080/pm-content.json`.
 
 ### Optional: Sync Agent resources
-To integrate with a KCP Sync Agent, you can install supportive RBAC and PublishedResource definitions into a separate namespace (default `api-syncagent`). Enable it with:
+Deploy the Sync Agent (plus the LLM PublishedResources/RBAC) with the dedicated chart:
 
 ```sh
-helm upgrade --install private-llm charts/private-llm-operator \
-  --namespace "$NAMESPACE" --create-namespace \
-  --set portalIntegration.enabled=true \
-  --set portalIntegration.syncAgent.enabled=true \
-  --set portalIntegration.syncAgent.namespace=api-syncagent \
-  --set portalIntegration.kubeconfig.secretNamespace=api-syncagent
+helm upgrade --install private-llm-sync-agent charts/private-llm-sync-agent \
+  --namespace api-syncagent --create-namespace \
+  -f values.sync-agent.deploy.yaml
 ```
 
-This will:
-- Create the namespace (if it does not exist)
-- Create ClusterRole/Binding `api-syncagent:privatellm` for `kcp-syncagent` SA in that namespace
-- Create two PublishedResource objects in that namespace for `LLMInstance` and `APITokenRequest`
-- Apply `APIExport`, `ProviderMetadata`, and `ContentConfiguration` to the remote cluster using your kubeconfig Secret (the supporting ConfigMaps/Job are emitted into `portalIntegration.kubeconfig.secretNamespace`)
+This chart:
+- Installs ClusterRole/Binding `api-syncagent:privatellm` plus the `PublishedResource` objects that expose `LLMInstance` and `APITokenRequest` into the platform mesh (toggle with `publishedResources.enabled`).
+- Pulls in the upstream `kcp-dev/api-syncagent` chart (v0.4.2) whenever `syncAgentOperator.enabled=true`. It runs inside the release namespace (default `api-syncagent`), so make sure the kubeconfig Secret (`pm-kcp-kubeconfig` above) lives there.
+
+### Platform mesh control plane: apply metadata
+
+Use the dedicated chart from inside the platform mesh control plane (or via Flux with `kubeConfig.secretRef`):
+
+```sh
+kubectl config use-context <platform-mesh-context>
+helm upgrade --install private-llm-portal charts/private-llm-pm-integration \
+  --namespace ui-provider-llm --create-namespace
+```
+
+Set `publicHost`, `publicScheme`, and `contentPath` via `charts/private-llm-pm-integration/values.yaml`; if you need to change the APIExport or ProviderMetadata contents, edit the static templates in that chart directly.
 
 Configuring the public host:
 

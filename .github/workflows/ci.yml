@@ -11,15 +11,13 @@ on:
       - go.mod
       - go.sum
       - '**/*.go'
+      - 'charts/**'
       - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
   checks: write
   pull-requests: write
-
-env:
-  CHART_PATH: charts/private-llm-operator
 
 jobs:
   lint-and-test:
@@ -33,17 +31,6 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-
-      - name: Helm dependency update
-        run: |
-          helm dependency update "$CHART_PATH"
-
-      - name: Helm lint
-        run: |
-          helm lint "$CHART_PATH"
 
       - name: Go linters (golangci-lint)
         run: |
@@ -134,5 +121,40 @@ jobs:
             echo "COVERAGE_MIN not set; skipping coverage gate"
           fi
 
+  helm-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        chart:
+          - private-llm-operator
+          - private-llm-operator-ocm
+          - private-llm-pm-integration
+          - private-llm-sync-agent
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
 
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint, template, and package chart
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          chart='${{ matrix.chart }}'
+          chart_dir="charts/${chart}"
+          chart_name=$(basename "$chart")  # chart already name, but keep for clarity
+          out_dir="dist/${chart_name}"
+          echo "::group::${chart}"
+          helm dependency update "$chart_dir"
+          helm lint "$chart_dir"
+          helm template "ci-${chart_name}" "$chart_dir" --namespace default >/dev/null
+          mkdir -p "$out_dir"
+          helm package "$chart_dir" --destination "$out_dir"
+          ls -lh "$out_dir"
+          echo "chart_dir=${out_dir}" >> "$GITHUB_OUTPUT"
+          echo "chart_name=${chart_name}" >> "$GITHUB_OUTPUT"
+          echo "::endgroup::"
 

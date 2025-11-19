@@ -83,24 +83,21 @@ The operator Helm chart already includes a Traefik dependency. For kind, set Nod
   - `spec.traefikNodePortWebsecure: 30443`
 
 ### 3.1) Optional: Portal Integration (kind/NodePort)
-To serve `pm-content.json` and auto-apply the `ContentConfiguration` in local setups, create a kubeconfig Secret in the operator namespace and enable the feature:
+To serve `pm-content.json` locally, just enable the feature when installing the operator:
 
 ```sh
 NAMESPACE=private-llm-system
-KUBECONFIG_SECRET=my-kubeconfig
-kubectl -n "$NAMESPACE" create secret generic "$KUBECONFIG_SECRET" \
-  --from-file=kubeconfig="$HOME/.kube/config"
-
 helm upgrade --install private-llm charts/private-llm-operator \
   --namespace "$NAMESPACE" --create-namespace \
   --set PUBLIC_HOST=localhost \
   --set traefik.service.type=NodePort \
   --set traefik.ports.web.nodePort=30080 \
-  --set portalIntegration.enabled=true \
-  --set portalIntegration.kubeconfig.secretName="$KUBECONFIG_SECRET"
+  --set portalIntegration.enabled=true
 
 curl -sSik "http://localhost:30080/pm-content.json" | head -n 10
 ```
+
+Apply the `charts/private-llm-pm-integration` chart separately inside your local KCP control plane (or via Flux) to create the `APIExport`, `ProviderMetadata`, and `ContentConfiguration` objects.
 
 ### 4) Bootstrap the OCM RGD and deploy the operator
 ```bash

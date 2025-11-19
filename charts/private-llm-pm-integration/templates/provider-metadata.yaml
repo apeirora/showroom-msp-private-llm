@@ -1,0 +1,20 @@
+apiVersion: ui.platform-mesh.io/v1alpha1
+kind: ProviderMetadata
+metadata:
+  name: llm.privatellms.msp
+spec:
+  displayName: MODEL Corp
+  description: |
+    MODEL Corp offers AI service to bring a human-like experience to your products.
+  contacts:
+    - displayName: Alex IT Architect
+      email: alex.it.architect@privatellms.msp
+      role: ["IT Architect"]
+  preferredSupportChannels:
+    - displayName: ApeiroRA Help Desk
+      url: https://help.privatellms.msp
+  icon:
+    light:
+      data: 'data:image/png;base64,{{ (.Files.Get "files/icon.png") | b64enc }}'
+    dark:
+      data: 'data:image/png;base64,{{ (.Files.Get "files/icon.png") | b64enc }}'
