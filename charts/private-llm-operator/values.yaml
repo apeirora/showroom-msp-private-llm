@@ -31,6 +31,8 @@ ingress:
 portalIntegration:
   enabled: false
   contentPath: /pm-content.json
+  sidebar:
+    title: "LLM by MODEL Crop"
   image:
     repository: nginx
     tag: '1.25'

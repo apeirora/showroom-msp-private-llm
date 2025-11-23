@@ -1,4 +1,7 @@
 {{- if .Values.portalIntegration.enabled }}
+{{- $sidebarTitle := dig "portalIntegration" "sidebar" "title" .Values | default "LLM by MODEL Crop" -}}
+{{- $pmContent := .Files.Get "files/pm-content.json" -}}
+{{- $pmContent = replace $pmContent "__SIDEBAR_TITLE__" $sidebarTitle -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,7 +12,7 @@ metadata:
     app.kubernetes.io/component: portal-integration
 data:
   pm-content.json: |-
-{{ (.Files.Get "files/pm-content.json") | indent 4 }}
+{{ $pmContent | indent 4 }}
 {{- end }}
 
 

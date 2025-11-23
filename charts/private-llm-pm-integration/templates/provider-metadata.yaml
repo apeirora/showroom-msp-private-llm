@@ -1,11 +1,13 @@
+{{- $marketplaceTitle := dig "marketplace" "title" .Values | default "LLM Service" -}}
+{{- $marketplaceDescription := dig "marketplace" "description" .Values | default "LLM services provided by MODEL Crop." -}}
 apiVersion: ui.platform-mesh.io/v1alpha1
 kind: ProviderMetadata
 metadata:
   name: llm.privatellms.msp
 spec:
-  displayName: MODEL Corp
+  displayName: {{ $marketplaceTitle | quote }}
   description: |
-    MODEL Corp offers AI service to bring a human-like experience to your products.
+{{ $marketplaceDescription | nindent 4 }}
   contacts:
     - displayName: Alex IT Architect
       email: alex.it.architect@privatellms.msp
