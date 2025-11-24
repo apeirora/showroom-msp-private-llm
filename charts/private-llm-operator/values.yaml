@@ -39,8 +39,5 @@ portalIntegration:
   ingress:
     annotations: {}
 branding:
-  marketplace:
-    title: "LLM Service"
-    description: "LLM services provided by MODEL Corp."
   sidebar:
     title: "LLM by MODEL Corp"
