@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.5.0...v2.5.1) (2025-11-24)
+
+
+### Bug Fixes
+
+* build workflow env reference ([#58](https://github.com/apeirora/showroom-msp-private-llm/issues/58)) ([bbab606](https://github.com/apeirora/showroom-msp-private-llm/commit/bbab60698077863b51df5e7f55dd92e02456ccfe))
+
 ## [2.5.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.4.1...v2.5.0) (2025-11-24)
 
 
