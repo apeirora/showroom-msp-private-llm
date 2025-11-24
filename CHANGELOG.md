@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.5.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.4.1...v2.5.0) (2025-11-24)
+
+
+### Features
+
+* add UI settings for OPENAI_API_KEY to enhance user experience with secret display and copy functionality ([#54](https://github.com/apeirora/showroom-msp-private-llm/issues/54)) ([17efe42](https://github.com/apeirora/showroom-msp-private-llm/commit/17efe422861c9edebc9e2ee684f2993fe8b31f0f))
+* sidebar title dynamic labeling ([#56](https://github.com/apeirora/showroom-msp-private-llm/issues/56)) ([eb7d86b](https://github.com/apeirora/showroom-msp-private-llm/commit/eb7d86bb2945de39de16acfd008d0fcc925cb254))
+
 ## [2.4.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.4.0...v2.4.1) (2025-11-19)
 
 
