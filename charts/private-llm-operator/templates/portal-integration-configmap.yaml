@@ -1,7 +1,7 @@
 {{- if .Values.portalIntegration.enabled }}
 {{- $sidebarTitle := .Values.branding.sidebar.title -}}
 {{- $pmContent := .Files.Get "files/pm-content.json" -}}
-{{- $pmContent = replace $pmContent "__SIDEBAR_TITLE__" $sidebarTitle -}}
+{{- $pmContent = replace "__SIDEBAR_TITLE__" $sidebarTitle $pmContent -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
