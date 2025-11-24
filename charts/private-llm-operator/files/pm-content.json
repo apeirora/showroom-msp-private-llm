@@ -279,6 +279,10 @@
                                             "propertyField": {
                                               "key": "OPENAI_API_KEY",
                                               "transform": ["decode"]
+                                            },
+                                            "uiSettings": {
+                                              "displayAs": "secret",
+                                              "withCopyButton": true
                                             }
                                         },
                                         {
