@@ -1,11 +1,13 @@
+{{- $marketplaceTitle := .Values.branding.marketplace.title -}}
+{{- $marketplaceDescription := .Values.branding.marketplace.description -}}
 apiVersion: ui.platform-mesh.io/v1alpha1
 kind: ProviderMetadata
 metadata:
   name: llm.privatellms.msp
 spec:
-  displayName: MODEL Corp
+  displayName: {{ $marketplaceTitle | quote }}
   description: |
-    MODEL Corp offers AI service to bring a human-like experience to your products.
+{{ $marketplaceDescription | nindent 4 }}
   contacts:
     - displayName: Alex IT Architect
       email: alex.it.architect@privatellms.msp
