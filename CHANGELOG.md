@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.5.1...v2.5.2) (2025-11-24)
+
+
+### Bug Fixes
+
+* correct variable replacement order in portal integration configmap ([8d7f5f6](https://github.com/apeirora/showroom-msp-private-llm/commit/8d7f5f64ab7cebb31f90d03f64814221c6ebc73c))
+
 ## [2.5.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.5.0...v2.5.1) (2025-11-24)
 
 
