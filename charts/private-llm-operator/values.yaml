@@ -31,8 +31,6 @@ ingress:
 portalIntegration:
   enabled: false
   contentPath: /pm-content.json
-  sidebar:
-    title: "LLM by MODEL Corp"
   image:
     repository: nginx
     tag: '1.25'
@@ -40,3 +38,9 @@ portalIntegration:
   resources: {}
   ingress:
     annotations: {}
+branding:
+  marketplace:
+    title: "LLM Service"
+    description: "LLM services provided by MODEL Corp."
+  sidebar:
+    title: "LLM by MODEL Corp"
