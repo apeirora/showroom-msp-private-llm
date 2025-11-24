@@ -10,9 +10,6 @@ permissions:
   contents: write
   packages: write
 
-env:
-  HELM_CHARTS: "private-llm-operator private-llm-sync-agent private-llm-pm-integration"
-
 jobs:
   publish-image:
     runs-on: ubuntu-latest
@@ -151,7 +148,7 @@ jobs:
       IMAGE: ${{ needs.publish-image.outputs.image }}
       CHART_REGISTRY: ${{ needs.publish-image.outputs.chart_registry }}
       OCM_REPOSITORY: ${{ needs.publish-image.outputs.ocm_repository }}
-      HELM_CHARTS: ${{ env.HELM_CHARTS }}
+      HELM_CHARTS: "private-llm-operator private-llm-sync-agent private-llm-pm-integration"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
