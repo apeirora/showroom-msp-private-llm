@@ -10,5 +10,6 @@ syncAgentOperator:
 publishedResources:
   enabled: true
   namespace: api-syncagent
+  serviceAccountName: private-llm-sync-agent
 
 

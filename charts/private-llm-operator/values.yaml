@@ -38,3 +38,6 @@ portalIntegration:
   resources: {}
   ingress:
     annotations: {}
+branding:
+  sidebar:
+    title: "LLM by MODEL Corp"

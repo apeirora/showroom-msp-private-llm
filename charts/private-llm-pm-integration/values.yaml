@@ -1,3 +1,7 @@
 publicHost: llm.private-llm.shop
 publicScheme: https
 contentPath: /pm-content.json
+branding:
+  marketplace:
+    title: "LLM Service"
+    description: "LLM services provided by MODEL Corp."
