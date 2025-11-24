@@ -3,7 +3,7 @@ publicScheme: https
 contentPath: /pm-content.json
 branding:
   sidebar:
-    title: "LLM by MODEL Crop"
+    title: "LLM by MODEL Corp"
   marketplace:
     title: "LLM Service"
-    description: "LLM services provided by MODEL Crop."
+    description: "LLM services provided by MODEL Corp."

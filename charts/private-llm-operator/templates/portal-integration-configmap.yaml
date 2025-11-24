@@ -1,5 +1,5 @@
 {{- if .Values.portalIntegration.enabled }}
-{{- $sidebarTitle := dig "portalIntegration" "sidebar" "title" .Values | default "LLM by MODEL Crop" -}}
+{{- $sidebarTitle := dig "portalIntegration" "sidebar" "title" .Values | default "LLM by MODEL Corp" -}}
 {{- $pmContent := .Files.Get "files/pm-content.json" -}}
 {{- $pmContent = replace $pmContent "__SIDEBAR_TITLE__" $sidebarTitle -}}
 apiVersion: v1

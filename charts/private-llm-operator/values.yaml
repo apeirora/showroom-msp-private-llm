@@ -32,7 +32,7 @@ portalIntegration:
   enabled: false
   contentPath: /pm-content.json
   sidebar:
-    title: "LLM by MODEL Crop"
+    title: "LLM by MODEL Corp"
   image:
     repository: nginx
     tag: '1.25'

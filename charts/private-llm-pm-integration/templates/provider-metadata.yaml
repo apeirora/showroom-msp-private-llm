@@ -1,5 +1,5 @@
 {{- $marketplaceTitle := dig "marketplace" "title" .Values | default "LLM Service" -}}
-{{- $marketplaceDescription := dig "marketplace" "description" .Values | default "LLM services provided by MODEL Crop." -}}
+{{- $marketplaceDescription := dig "marketplace" "description" .Values | default "LLM services provided by MODEL Corp." -}}
 apiVersion: ui.platform-mesh.io/v1alpha1
 kind: ProviderMetadata
 metadata:
