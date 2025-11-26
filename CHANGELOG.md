@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.5.2...v2.6.0) (2025-11-26)
+
+
+### Features
+
+* add RBAC configuration for apiexport binding and anonymous user access ([#61](https://github.com/apeirora/showroom-msp-private-llm/issues/61)) ([3e8e942](https://github.com/apeirora/showroom-msp-private-llm/commit/3e8e9425bdea3a6ce0c29cec703b416866be550c))
+
 ## [2.5.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.5.1...v2.5.2) (2025-11-24)
 
 
