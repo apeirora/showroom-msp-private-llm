@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.2...v2.6.3) (2026-01-29)
+
+
+### Bug Fixes
+
+* add ghcr.io authentication for OCM component build ([#65](https://github.com/apeirora/showroom-msp-private-llm/issues/65)) ([b77ebec](https://github.com/apeirora/showroom-msp-private-llm/commit/b77ebec26a30abdbb4d44748ce362904918154ce))
+
 ## [2.6.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.1...v2.6.2) (2026-01-29)
 
 
