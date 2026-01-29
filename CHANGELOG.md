@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.1...v2.6.2) (2026-01-29)
+
+
+### Bug Fixes
+
+* **pm-integration:** remove unnecessary postgresql RBAC ([507a613](https://github.com/apeirora/showroom-msp-private-llm/commit/507a61321fb95db1c5ebacf58ee5971cc55bb394))
+
 ## [2.6.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.0...v2.6.1) (2026-01-29)
 
 
