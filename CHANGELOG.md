@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.0...v2.6.1) (2026-01-29)
+
+
+### Bug Fixes
+
+* **pm-integration:** add RBAC for sync-agent virtual workspace access ([3f0e531](https://github.com/apeirora/showroom-msp-private-llm/commit/3f0e531544dacf180f93e301d3b7dcffb46e2191))
+
 ## [2.6.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.5.2...v2.6.0) (2025-11-26)
 
 
