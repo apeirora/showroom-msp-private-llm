@@ -46,33 +46,16 @@
                                         },
                                         {
                                             "label": "Replicas",
-                                            "property": "spec.replicas",
-                                            "group": {
-                                                "name": "spec",
-                                                "label": "Spec",
-                                                "delimiter": " • "
-                                            }
+                                            "property": "spec.replicas"
                                         },
                                         {
-                                            "label": "Phase",
+                                            "label": "Status",
                                             "property": "status.phase",
-                                            "labelDisplay": true,
-                                            "group": {
-                                                "name": "status",
-                                                "label": "Status",
-                                                "multiline": true
-                                            }
+                                            "labelDisplay": true
                                         },
                                         {
                                             "label": "Endpoint",
-                                            "property": "status.endpoint",
-                                            "labelDisplay": true,
-                                            "displayAsPlainText": true,
-                                            "group": {
-                                                "name": "status",
-                                                "label": "Status",
-                                                "multiline": true
-                                            }
+                                            "property": "status.endpoint"
                                         }
                                     ]
                                 },
@@ -162,32 +145,16 @@
                                         },
                                         {
                                             "label": "Instance",
-                                            "property": "spec.instanceName",
-                                            "group": {
-                                                "name": "request",
-                                                "label": "Request",
-                                                "delimiter": " • "
-                                            }
+                                            "property": "spec.instanceName"
                                         },
                                         {
-                                            "label": "Phase",
+                                            "label": "Status",
                                             "property": "status.phase",
-                                            "labelDisplay": true,
-                                            "group": {
-                                                "name": "status",
-                                                "label": "Status",
-                                                "multiline": true
-                                            }
+                                            "labelDisplay": true
                                         },
                                         {
                                             "label": "Secret",
-                                            "property": "status.secretName",
-                                            "labelDisplay": true,
-                                            "group": {
-                                                "name": "status",
-                                                "label": "Status",
-                                                "multiline": true
-                                            }
+                                            "property": "status.secretName"
                                         }
                                     ]
                                 },
