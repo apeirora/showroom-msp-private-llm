@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.4...v2.6.5) (2026-02-16)
+
+
+### Bug Fixes
+
+* change default kcpKubeconfig to pm-kubeconfig ([#69](https://github.com/apeirora/showroom-msp-private-llm/issues/69)) ([bb670fc](https://github.com/apeirora/showroom-msp-private-llm/commit/bb670fc1edae61730acb734daf3c439bec52dac8))
+* **controller:** Gate token secret until instance endpoint is ready ([#71](https://github.com/apeirora/showroom-msp-private-llm/issues/71)) ([e893c94](https://github.com/apeirora/showroom-msp-private-llm/commit/e893c945954ee7a680729e930eaafe1e2da7beab))
+
 ## [2.6.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.3...v2.6.4) (2026-02-15)
 
 
