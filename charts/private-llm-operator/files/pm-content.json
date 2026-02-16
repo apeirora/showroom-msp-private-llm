@@ -15,7 +15,7 @@
                         "collapsible": true,
                         "order": 5
                     },
-                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "entityType": "main.core_platform-mesh_io_account.namespace",
                     "loadingIndicator": {
                         "enabled": false
                     },
@@ -27,7 +27,8 @@
                     "context": {
                         "resourceDefinition": {
                             "group": "llm.privatellms.msp",
-                            "plural": "llminstances",
+                            "version": "v1alpha1",
+                            "plural": "LLMInstances",
                             "singular": "llminstance",
                             "kind": "LLMInstance",
                             "scope": "Namespaced",
@@ -98,6 +99,7 @@
                                 "contextKey": "llminstanceId",
                                 "graphqlEntity": {
                                     "group": "llm.privatellms.msp",
+                                    "version": "v1alpha1",
                                     "kind": "LLMInstance",
                                     "query": "{ metadata { name annotations } }"
                                 }
@@ -119,7 +121,7 @@
                         "collapsible": true,
                         "order": 5
                     },
-                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "entityType": "main.core_platform-mesh_io_account.namespace",
                     "loadingIndicator": {
                         "enabled": false
                     },
@@ -131,7 +133,8 @@
                     "context": {
                         "resourceDefinition": {
                             "group": "llm.privatellms.msp",
-                            "plural": "apitokenrequests",
+                            "version": "v1alpha1",
+                            "plural": "APITokenRequests",
                             "singular": "apitokenrequest",
                             "kind": "APITokenRequest",
                             "scope": "Namespaced",
@@ -170,8 +173,8 @@
                                             "property": "spec.instanceName",
                                             "required": true,
                                             "dynamicValuesDefinition": {
-                                                "operation": "llm_privatellms_msp.LLMInstances",
-                                                "gqlQuery": "query ($namespace: String!) { llm_privatellms_msp { LLMInstances(namespace: $namespace) { metadata { name } } } }",
+                                                "operation": "llm_privatellms_msp.v1alpha1.LLMInstances",
+                                                "gqlQuery": "query ($namespace: String!) { llm_privatellms_msp { v1alpha1 { LLMInstances(namespace: $namespace) { metadata { name } } } } }",
                                                 "value": "metadata.name",
                                                 "key": "metadata.name"
                                             }
@@ -195,6 +198,7 @@
                                 "contextKey": "tokenrequestId",
                                 "graphqlEntity": {
                                     "group": "llm.privatellms.msp",
+                                    "version": "v1alpha1",
                                     "kind": "TokenRequest",
                                     "query": "{ metadata { name annotations } }"
                                 }
@@ -204,67 +208,6 @@
                             }
                         }
                     ]
-                },
-                {
-                    "pathSegment": "llm_privatellms_msp_secrets",
-                    "navigationContext": "llm_privatellms_msp_secrets",
-                    "label": "Secrets",
-                    "icon": "locked",
-                    "category": {
-                        "label": "__SIDEBAR_TITLE__",
-                        "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
-                        "collapsible": true,
-                        "order": 5
-                    },
-                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
-                    "loadingIndicator": {
-                        "enabled": false
-                    },
-                    "keepSelectedForChildren": true,
-                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
-                    "webcomponent": {
-                        "selfRegistered": true
-                    },
-                    "context": {
-                        "resourceDefinition": {
-                            "group": "core",
-                            "plural": "secrets",
-                            "singular": "secret",
-                            "kind": "Secret",
-                            "scope": "Namespaced",
-                            "namespace": null,
-                            "ui": {
-                                "listView": {
-                                    "fields": [
-                                        {
-                                            "label": "Name",
-                                            "property": "metadata.name"
-                                        },
-                                        {
-                                            "label": "Token",
-                                            "property": "data",
-                                            "propertyField": {
-                                              "key": "OPENAI_API_KEY",
-                                              "transform": ["decode"]
-                                            },
-                                            "uiSettings": {
-                                              "displayAs": "secret",
-                                              "withCopyButton": true
-                                            }
-                                        },
-                                        {
-                                            "label": "OpenAI API URL",
-                                            "property": "data",
-                                            "propertyField": {
-                                              "key": "OPENAI_API_URL",
-                                              "transform": ["decode"]
-                                            }
-                                        }
-                                    ]
-                                }
-                            }
-                        }
-                    }
                 }
             ]
         }
