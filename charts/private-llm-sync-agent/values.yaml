@@ -2,7 +2,7 @@ syncAgentOperator:
   enabled: true
   apiExportName: llm.privatellms.msp
   agentName: llm-agent
-  kcpKubeconfig: pm-kcp-kubeconfig
+  kcpKubeconfig: pm-kubeconfig
   extraFlags: []
   crds:
     enabled: false
