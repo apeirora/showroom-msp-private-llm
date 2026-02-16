@@ -28,10 +28,13 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
 )
@@ -76,12 +79,7 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	var inst llmv1alpha1.LLMInstance
 	if err := r.Get(ctx, client.ObjectKey{Namespace: req.Namespace, Name: tr.Spec.InstanceName}, &inst); err != nil {
 		if apierrors.IsNotFound(err) {
-			cond := metav1.Condition{Type: "Ready", Status: metav1.ConditionFalse, Reason: "InstanceNotFound", Message: "Referenced LLMInstance not found", LastTransitionTime: metav1.Now()}
-			setTRStatusCondition(&tr, cond)
-			// Mark as Pending until the instance appears
-			tr.Status.Phase = "Pending"
-			tr.Status.ObservedGeneration = tr.Generation
-			_ = r.Status().Update(ctx, &tr)
+			_ = r.updatePendingStatus(ctx, &tr, "InstanceNotFound", "Referenced LLMInstance not found")
 		}
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, client.IgnoreNotFound(err)
 	}
@@ -93,6 +91,19 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	endpoint := strings.TrimSpace(inst.Status.Endpoint)
+	if slug == "" || endpoint == "" {
+		waitingFor := []string{}
+		if slug == "" {
+			waitingFor = append(waitingFor, "annotation "+slugAnnotationKey)
+		}
+		if endpoint == "" {
+			waitingFor = append(waitingFor, "status.endpoint")
+		}
+		message := fmt.Sprintf("Waiting for LLMInstance %q to populate %s", inst.Name, strings.Join(waitingFor, " and "))
+		_ = r.updatePendingStatus(ctx, &tr, "InstanceNotReady", message)
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
 	secretName := fmt.Sprintf("%s-token", tr.Name)
 	if err := r.ensureSecret(ctx, &tr, &inst, secretName, slug, endpoint); err != nil {
 		return ctrl.Result{}, err
@@ -253,11 +264,55 @@ func (r *APITokenRequestReconciler) updateReadyStatus(ctx context.Context, tr *l
 	return r.Status().Update(ctx, tr)
 }
 
+func (r *APITokenRequestReconciler) updatePendingStatus(ctx context.Context, tr *llmv1alpha1.APITokenRequest, reason, message string) error {
+	cond := metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+	}
+	setTRStatusCondition(tr, cond)
+	tr.Status.Phase = "Pending"
+	tr.Status.ObservedGeneration = tr.Generation
+	return r.Status().Update(ctx, tr)
+}
+
 func (r *APITokenRequestReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&llmv1alpha1.APITokenRequest{}).
 		Owns(&corev1.Secret{}).
+		Watches(
+			&llmv1alpha1.LLMInstance{},
+			handler.EnqueueRequestsFromMapFunc(r.findTokenRequestsForInstance),
+		).
 		Complete(r)
+}
+
+func (r *APITokenRequestReconciler) findTokenRequestsForInstance(ctx context.Context, obj client.Object) []reconcile.Request {
+	inst, ok := obj.(*llmv1alpha1.LLMInstance)
+	if !ok {
+		return nil
+	}
+
+	var tokenRequests llmv1alpha1.APITokenRequestList
+	if err := r.List(ctx, &tokenRequests, client.InNamespace(inst.Namespace)); err != nil {
+		return nil
+	}
+
+	requests := make([]reconcile.Request, 0, len(tokenRequests.Items))
+	for _, tr := range tokenRequests.Items {
+		if strings.TrimSpace(tr.Spec.InstanceName) != inst.Name {
+			continue
+		}
+		requests = append(requests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      tr.Name,
+				Namespace: tr.Namespace,
+			},
+		})
+	}
+	return requests
 }
 
 func setTRStatusCondition(tr *llmv1alpha1.APITokenRequest, cond metav1.Condition) {

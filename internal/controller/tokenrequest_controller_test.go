@@ -149,6 +149,142 @@ var _ = Describe("APITokenRequest controller", func() {
 		}).Should(BeTrue())
 	})
 
+	It("should wait for instance slug and endpoint before provisioning secret", func() {
+		instanceName := "instance-" + utilrand.String(5)
+		tokenName := "token-" + utilrand.String(5)
+		slug := "slug-" + utilrand.String(5)
+		expectedEndpoint := fmt.Sprintf("https://public.example.test/llm/%s", slug)
+
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      instanceName,
+				Namespace: namespace,
+			},
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		tr := &llmv1alpha1.APITokenRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      tokenName,
+				Namespace: namespace,
+			},
+			Spec: llmv1alpha1.APITokenRequestSpec{InstanceName: instanceName},
+		}
+		Expect(k8sClient.Create(ctx, tr)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: tokenName, Namespace: namespace}}
+
+		result, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Requeue).To(BeTrue())
+
+		result, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, tr)).To(Succeed())
+		ready := meta.FindStatusCondition(tr.Status.Conditions, "Ready")
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal("InstanceNotReady"))
+
+		secretKey := types.NamespacedName{Name: tokenName + "-token", Namespace: namespace}
+		Eventually(func() bool {
+			err := k8sClient.Get(ctx, secretKey, &corev1.Secret{})
+			return apierrors.IsNotFound(err)
+		}).Should(BeTrue())
+
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: instanceName, Namespace: namespace}, inst)).To(Succeed())
+		if inst.Annotations == nil {
+			inst.Annotations = map[string]string{}
+		}
+		inst.Annotations[slugAnnotationKey] = slug
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: instanceName, Namespace: namespace}, inst)).To(Succeed())
+		inst.Status.Endpoint = expectedEndpoint
+		inst.Status.ObservedGeneration = inst.Generation
+		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
+
+		result, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Requeue || result.RequeueAfter > 0).To(BeFalse())
+
+		var secret corev1.Secret
+		Expect(k8sClient.Get(ctx, secretKey, &secret)).To(Succeed())
+		Expect(string(secret.Data[openAIAPIURLKey])).To(Equal(expectedEndpoint))
+		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/slug", slug))
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, tr)).To(Succeed())
+		ready = meta.FindStatusCondition(tr.Status.Conditions, "Ready")
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Status).To(Equal(metav1.ConditionTrue))
+		Expect(ready.Reason).To(Equal("Provisioned"))
+	})
+
+	It("should backfill endpoint and slug on existing token secret", func() {
+		instanceName := "instance-" + utilrand.String(5)
+		tokenName := "token-" + utilrand.String(5)
+		slug := "slug-" + utilrand.String(5)
+		expectedEndpoint := fmt.Sprintf("https://public.example.test/llm/%s", slug)
+
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      instanceName,
+				Namespace: namespace,
+				Annotations: map[string]string{
+					slugAnnotationKey: slug,
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		inst.Status.Endpoint = expectedEndpoint
+		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
+
+		tr := &llmv1alpha1.APITokenRequest{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      tokenName,
+				Namespace: namespace,
+			},
+			Spec: llmv1alpha1.APITokenRequestSpec{InstanceName: instanceName},
+		}
+		Expect(k8sClient.Create(ctx, tr)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: tokenName, Namespace: namespace}}
+		result, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Requeue).To(BeTrue())
+
+		secretName := tokenName + "-token"
+		staleSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: namespace,
+				Labels: map[string]string{
+					compatibilityLabelKey:                 compatibilityLabelOpenAI,
+					"llm.privatellms.msp/instance":        instanceName,
+					"llm.privatellms.msp/apitokenrequest": tokenName,
+				},
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{
+				openAIAPIKeyKey: []byte("static-test-token"),
+				openAIAPIURLKey: []byte(""),
+			},
+		}
+		Expect(k8sClient.Create(ctx, staleSecret)).To(Succeed())
+
+		result, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Requeue || result.RequeueAfter > 0).To(BeFalse())
+
+		var secret corev1.Secret
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, &secret)).To(Succeed())
+		Expect(string(secret.Data[openAIAPIURLKey])).To(Equal(expectedEndpoint))
+		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/slug", slug))
+		Expect(string(secret.Data[openAIAPIKeyKey])).To(Equal("static-test-token"))
+	})
+
 	It("should remove generated secret during deletion", func() {
 		instanceName := "instance-" + utilrand.String(5)
 		tokenName := "token-" + utilrand.String(5)
