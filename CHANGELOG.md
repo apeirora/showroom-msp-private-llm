@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.3...v2.6.4) (2026-02-15)
+
+
+### Bug Fixes
+
+* **ui:** simplify LLM provider list view columns ([#67](https://github.com/apeirora/showroom-msp-private-llm/issues/67)) ([b794e98](https://github.com/apeirora/showroom-msp-private-llm/commit/b794e985fa104c862f4f04b1b6e35e2d500b3dfc))
+
 ## [2.6.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.2...v2.6.3) (2026-01-29)
 
 
