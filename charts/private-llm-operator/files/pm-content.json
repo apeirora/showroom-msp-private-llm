@@ -173,8 +173,8 @@
                                             "property": "spec.instanceName",
                                             "required": true,
                                             "dynamicValuesDefinition": {
-                                                "operation": "llm_privatellms_msp.v1alpha1.LLMInstances",
-                                                "gqlQuery": "query ($namespace: String!) { llm_privatellms_msp { v1alpha1 { LLMInstances(namespace: $namespace) { metadata { name } } } } }",
+                                                "operation": "llm_privatellms_msp.v1alpha1.LLMInstances.items",
+                                                "gqlQuery": "query ($namespace: String!) { llm_privatellms_msp { v1alpha1 { LLMInstances(namespace: $namespace) { items { metadata { name } } } } } }",
                                                 "value": "metadata.name",
                                                 "key": "metadata.name"
                                             }
@@ -199,7 +199,7 @@
                                 "graphqlEntity": {
                                     "group": "llm.privatellms.msp",
                                     "version": "v1alpha1",
-                                    "kind": "TokenRequest",
+                                    "kind": "APITokenRequest",
                                     "query": "{ metadata { name annotations } }"
                                 }
                             },
@@ -208,6 +208,71 @@
                             }
                         }
                     ]
+                },
+                {
+                    "pathSegment": "llm_privatellms_msp_secrets",
+                    "navigationContext": "llm_privatellms_msp_secrets",
+                    "label": "Secrets",
+                    "icon": "locked",
+                    "category": {
+                        "label": "__SIDEBAR_TITLE__",
+                        "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
+                        "collapsible": true,
+                        "order": 5
+                    },
+                    "entityType": "main.core_platform-mesh_io_account.namespace",
+                    "loadingIndicator": {
+                        "enabled": false
+                    },
+                    "keepSelectedForChildren": true,
+                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
+                    "webcomponent": {
+                        "selfRegistered": true
+                    },
+                    "context": {
+                        "resourceDefinition": {
+                            "version": "v1",
+                            "plural": "secrets",
+                            "singular": "secret",
+                            "kind": "Secret",
+                            "scope": "Namespaced",
+                            "namespace": null,
+                            "ui": {
+                                "listView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Token",
+                                            "property": "data",
+                                            "propertyField": {
+                                                "key": "OPENAI_API_KEY",
+                                                "transform": [
+                                                    "decode"
+                                                ]
+                                            },
+                                            "uiSettings": {
+                                                "displayAs": "secret",
+                                                "withCopyButton": true
+                                            }
+                                        },
+                                        {
+                                            "label": "OpenAI API URL",
+                                            "property": "data",
+                                            "propertyField": {
+                                                "key": "OPENAI_API_URL",
+                                                "transform": [
+                                                    "decode"
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
                 }
             ]
         }
