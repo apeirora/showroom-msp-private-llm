@@ -8,10 +8,7 @@ spec:
   permissionClaims:
     - group: ""
       resource: namespaces
-      all: true
     - group: ""
       resource: events
-      all: true
     - group: ""
       resource: secrets
-      all: true

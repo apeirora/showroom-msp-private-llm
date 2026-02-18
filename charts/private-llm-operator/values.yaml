@@ -30,6 +30,8 @@ ingress:
       nodePort: 30443
 portalIntegration:
   enabled: false
+  # default = current content configuration, legacy = pre-0.2.0 (e.g. cc-two) compatible content configuration
+  contentVariant: default
   contentPath: /pm-content.json
   secretResourceDefinition:
     group: v1
