@@ -229,15 +229,16 @@
                     "webcomponent": {
                         "selfRegistered": true
                     },
-                    "context": {
-                        "resourceDefinition": {
-                            "version": "v1",
-                            "plural": "secrets",
-                            "singular": "secret",
-                            "kind": "Secret",
-                            "scope": "Namespaced",
-                            "namespace": null,
-                            "ui": {
+                        "context": {
+                            "resourceDefinition": {
+                                "group": "__SECRET_GROUP__",
+                                "version": "__SECRET_VERSION__",
+                                "plural": "__SECRET_PLURAL__",
+                                "singular": "__SECRET_SINGULAR__",
+                                "kind": "__SECRET_KIND__",
+                                "scope": "Namespaced",
+                                "namespace": null,
+                                "ui": {
                                 "listView": {
                                     "fields": [
                                         {
