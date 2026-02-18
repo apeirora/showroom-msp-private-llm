@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.6.7](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.6...v2.6.7) (2026-02-18)
+
+
+### Bug Fixes
+
+* **chart:** Default Secret group to v1 ([#75](https://github.com/apeirora/showroom-msp-private-llm/issues/75)) ([f614df4](https://github.com/apeirora/showroom-msp-private-llm/commit/f614df45a8b2c1a2e3ea9c61c316e078485ccc78))
+* remove v1alpha1 'all' field from permissionClaims ([#78](https://github.com/apeirora/showroom-msp-private-llm/issues/78)) ([2f14d29](https://github.com/apeirora/showroom-msp-private-llm/commit/2f14d29e55166c435122923a5224e5becfd4c082))
+* update APIExport apiVersion to v1alpha2 ([#76](https://github.com/apeirora/showroom-msp-private-llm/issues/76)) ([0a8ffaa](https://github.com/apeirora/showroom-msp-private-llm/commit/0a8ffaaf532c2093d62041a55d3c9c7e0ae3b6f2))
+
 ## [2.6.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.5...v2.6.6) (2026-02-18)
 
 
