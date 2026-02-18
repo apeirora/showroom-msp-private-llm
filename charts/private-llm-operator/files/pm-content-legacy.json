@@ -1,0 +1,273 @@
+{
+    "name": "llminstances",
+    "creationTimestamp": "2022-05-17T11:37:17Z",
+    "luigiConfigFragment": {
+        "data": {
+            "nodes": [
+                {
+                    "pathSegment": "llm_privatellms_msp_llminstances",
+                    "navigationContext": "llm_privatellms_msp_llminstances",
+                    "label": "Instances",
+                    "icon": "paint-bucket",
+                    "category": {
+                        "label": "__SIDEBAR_TITLE__",
+                        "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
+                        "collapsible": true,
+                        "order": 5
+                    },
+                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "loadingIndicator": {
+                        "enabled": false
+                    },
+                    "keepSelectedForChildren": true,
+                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
+                    "webcomponent": {
+                        "selfRegistered": true
+                    },
+                    "context": {
+                        "resourceDefinition": {
+                            "group": "llm.privatellms.msp",
+                            "plural": "llminstances",
+                            "singular": "llminstance",
+                            "kind": "LLMInstance",
+                            "scope": "Namespaced",
+                            "namespace": null,
+                            "ui": {
+                                "logoUrl": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
+                                "listView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Model",
+                                            "property": "spec.model"
+                                        },
+                                        {
+                                            "label": "Replicas",
+                                            "property": "spec.replicas"
+                                        },
+                                        {
+                                            "label": "Status",
+                                            "property": "status.phase",
+                                            "labelDisplay": true
+                                        },
+                                        {
+                                            "label": "Endpoint",
+                                            "property": "status.endpoint"
+                                        }
+                                    ]
+                                },
+
+                                "createView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name",
+                                            "required": true
+                                        },
+                                        {
+                                            "label": "Model",
+                                            "property": "spec.model",
+                                            "required": true,
+                                            "values": [
+                                                "tinyllama",
+                                                "phi-2",
+                                                "gemma-3-1b-it",
+                                                "gemma-3-4b-it",
+                                                "gemma-3-12b-it"
+                                            ]
+                                        },
+                                        {
+                                            "label": "Replicas",
+                                            "property": "spec.replicas"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "children": [
+                        {
+                            "pathSegment": ":llminstanceId",
+                            "hideFromNav": true,
+                            "keepSelectedForChildren": false,
+                            "defineEntity": {
+                                "id": "llm_privatellms_msp_llminstance",
+                                "contextKey": "llminstanceId",
+                                "graphqlEntity": {
+                                    "group": "llm.privatellms.msp",
+                                    "kind": "LLMInstance",
+                                    "query": "{ metadata { name annotations } }"
+                                }
+                            },
+                            "context": {
+                                "llminstanceId": ":llminstanceId"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "pathSegment": "llm_privatellms_msp_tokenrequests",
+                    "navigationContext": "llm_privatellms_msp_tokenrequests",
+                    "label": "Token Requests",
+                    "icon": "key",
+                    "category": {
+                        "label": "__SIDEBAR_TITLE__",
+                        "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
+                        "collapsible": true,
+                        "order": 5
+                    },
+                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "loadingIndicator": {
+                        "enabled": false
+                    },
+                    "keepSelectedForChildren": true,
+                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
+                    "webcomponent": {
+                        "selfRegistered": true
+                    },
+                    "context": {
+                        "resourceDefinition": {
+                            "group": "llm.privatellms.msp",
+                            "plural": "apitokenrequests",
+                            "singular": "apitokenrequest",
+                            "kind": "APITokenRequest",
+                            "scope": "Namespaced",
+                            "namespace": null,
+                            "ui": {
+                                "listView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Instance",
+                                            "property": "spec.instanceName"
+                                        },
+                                        {
+                                            "label": "Status",
+                                            "property": "status.phase",
+                                            "labelDisplay": true
+                                        },
+                                        {
+                                            "label": "Secret",
+                                            "property": "status.secretName"
+                                        }
+                                    ]
+                                },
+                                "createView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name",
+                                            "required": true
+                                        },
+                                        {
+                                            "label": "Instance",
+                                            "property": "spec.instanceName",
+                                            "required": true,
+                                            "dynamicValuesDefinition": {
+                                                "operation": "llm_privatellms_msp.LLMInstances",
+                                                "gqlQuery": "query ($namespace: String!) { llm_privatellms_msp { LLMInstances(namespace: $namespace) { metadata { name } } } }",
+                                                "value": "metadata.name",
+                                                "key": "metadata.name"
+                                            }
+                                        },
+                                        {
+                                            "label": "Description",
+                                            "property": "spec.description"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "children": [
+                        {
+                            "pathSegment": ":tokenrequestId",
+                            "hideFromNav": true,
+                            "keepSelectedForChildren": false,
+                            "defineEntity": {
+                                "id": "llm_privatellms_msp_tokenrequest",
+                                "contextKey": "tokenrequestId",
+                                "graphqlEntity": {
+                                    "group": "llm.privatellms.msp",
+                                    "kind": "TokenRequest",
+                                    "query": "{ metadata { name annotations } }"
+                                }
+                            },
+                            "context": {
+                                "tokenrequestId": ":tokenrequestId"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "pathSegment": "llm_privatellms_msp_secrets",
+                    "navigationContext": "llm_privatellms_msp_secrets",
+                    "label": "Secrets",
+                    "icon": "locked",
+                    "category": {
+                        "label": "__SIDEBAR_TITLE__",
+                        "icon": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
+                        "collapsible": true,
+                        "order": 5
+                    },
+                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "loadingIndicator": {
+                        "enabled": false
+                    },
+                    "keepSelectedForChildren": true,
+                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
+                    "webcomponent": {
+                        "selfRegistered": true
+                    },
+                    "context": {
+                        "resourceDefinition": {
+                            "group": "__SECRET_GROUP__",
+                            "version": "__SECRET_VERSION__",
+                            "plural": "__SECRET_PLURAL__",
+                            "singular": "__SECRET_SINGULAR__",
+                            "kind": "__SECRET_KIND__",
+                            "scope": "Namespaced",
+                            "namespace": null,
+                            "ui": {
+                                "listView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Token",
+                                            "property": "data",
+                                            "propertyField": {
+                                              "key": "OPENAI_API_KEY",
+                                              "transform": ["decode"]
+                                            },
+                                            "uiSettings": {
+                                              "displayAs": "secret",
+                                              "withCopyButton": true
+                                            }
+                                        },
+                                        {
+                                            "label": "OpenAI API URL",
+                                            "property": "data",
+                                            "propertyField": {
+                                              "key": "OPENAI_API_URL",
+                                              "transform": ["decode"]
+                                            }
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
