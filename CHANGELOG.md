@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.6.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.5...v2.6.6) (2026-02-18)
+
+
+### Bug Fixes
+
+* **chart:** Default Secret group to v1 ([#75](https://github.com/apeirora/showroom-msp-private-llm/issues/75)) ([f614df4](https://github.com/apeirora/showroom-msp-private-llm/commit/f614df45a8b2c1a2e3ea9c61c316e078485ccc78))
+* **core:** Restore secrets sidebar and token request dynamic query ([46b3f0d](https://github.com/apeirora/showroom-msp-private-llm/commit/46b3f0d28ebad8c4813787460a58d2d1c4a8af10))
+* **core:** Version LLM pm-content GraphQL resources ([#72](https://github.com/apeirora/showroom-msp-private-llm/issues/72)) ([d9c87fc](https://github.com/apeirora/showroom-msp-private-llm/commit/d9c87fc99e03102d30fb754e5d0a19d59cdf6acf))
+* **pm-content:** parametrize secret graphql resource definition ([7b45d63](https://github.com/apeirora/showroom-msp-private-llm/commit/7b45d630b23dae3e6c2d7959e9bd0857151628eb))
+* **ui:** restore secrets sidebar and fix token request dynamic query ([99f6d96](https://github.com/apeirora/showroom-msp-private-llm/commit/99f6d969f9cc2a51a03fd09cb8752d9bfecf6579))
+* update APIExport apiVersion to v1alpha2 ([#76](https://github.com/apeirora/showroom-msp-private-llm/issues/76)) ([0a8ffaa](https://github.com/apeirora/showroom-msp-private-llm/commit/0a8ffaaf532c2093d62041a55d3c9c7e0ae3b6f2))
+
 ## [2.6.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.4...v2.6.5) (2026-02-16)
 
 
