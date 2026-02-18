@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.6.8](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.7...v2.6.8) (2026-02-18)
+
+
+### Bug Fixes
+
+* add required verbs to v1alpha2 permissionClaims ([#81](https://github.com/apeirora/showroom-msp-private-llm/issues/81)) ([979e198](https://github.com/apeirora/showroom-msp-private-llm/commit/979e1988b8d2a9057c5bf89cd4f55e23751560f5))
+* remove v1alpha1 'all' field from permissionClaims ([#78](https://github.com/apeirora/showroom-msp-private-llm/issues/78)) ([2f14d29](https://github.com/apeirora/showroom-msp-private-llm/commit/2f14d29e55166c435122923a5224e5becfd4c082))
+* update APIExport apiVersion to v1alpha2 ([#76](https://github.com/apeirora/showroom-msp-private-llm/issues/76)) ([0a8ffaa](https://github.com/apeirora/showroom-msp-private-llm/commit/0a8ffaaf532c2093d62041a55d3c9c7e0ae3b6f2))
+
 ## [2.6.7](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.6...v2.6.7) (2026-02-18)
 
 
