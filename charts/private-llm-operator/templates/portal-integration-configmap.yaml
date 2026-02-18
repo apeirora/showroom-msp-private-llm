@@ -9,7 +9,12 @@
 {{- if hasKey $secretDef "version" -}}
 {{- $secretVersion = printf "%v" (get $secretDef "version") -}}
 {{- end -}}
-{{- $pmContent := .Files.Get "files/pm-content.json" -}}
+{{- $contentVariant := default "default" .Values.portalIntegration.contentVariant -}}
+{{- $pmContentFile := "files/pm-content.json" -}}
+{{- if eq $contentVariant "legacy" -}}
+{{- $pmContentFile = "files/pm-content-legacy.json" -}}
+{{- end -}}
+{{- $pmContent := .Files.Get $pmContentFile -}}
 {{- $pmContent = replace "__SIDEBAR_TITLE__" $sidebarTitle $pmContent -}}
 {{- $pmContent = replace "__SECRET_GROUP__" $secretGroup $pmContent -}}
 {{- $pmContent = replace "__SECRET_VERSION__" $secretVersion $pmContent -}}
