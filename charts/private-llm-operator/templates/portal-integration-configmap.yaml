@@ -1,7 +1,21 @@
 {{- if .Values.portalIntegration.enabled }}
 {{- $sidebarTitle := .Values.branding.sidebar.title -}}
+{{- $secretDef := default (dict) .Values.portalIntegration.secretResourceDefinition -}}
+{{- $secretGroup := default "core" $secretDef.group -}}
+{{- $secretPlural := default "secrets" $secretDef.plural -}}
+{{- $secretSingular := default "secret" $secretDef.singular -}}
+{{- $secretKind := default "Secret" $secretDef.kind -}}
+{{- $secretVersion := "v1" -}}
+{{- if hasKey $secretDef "version" -}}
+{{- $secretVersion = printf "%v" (get $secretDef "version") -}}
+{{- end -}}
 {{- $pmContent := .Files.Get "files/pm-content.json" -}}
 {{- $pmContent = replace "__SIDEBAR_TITLE__" $sidebarTitle $pmContent -}}
+{{- $pmContent = replace "__SECRET_GROUP__" $secretGroup $pmContent -}}
+{{- $pmContent = replace "__SECRET_VERSION__" $secretVersion $pmContent -}}
+{{- $pmContent = replace "__SECRET_PLURAL__" $secretPlural $pmContent -}}
+{{- $pmContent = replace "__SECRET_SINGULAR__" $secretSingular $pmContent -}}
+{{- $pmContent = replace "__SECRET_KIND__" $secretKind $pmContent -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,5 +28,3 @@ data:
   pm-content.json: |-
 {{ $pmContent | indent 4 }}
 {{- end }}
-
-
