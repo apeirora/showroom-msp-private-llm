@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -58,9 +59,15 @@ type LLMInstanceReconciler struct {
 	ExtraIngressAnnotations map[string]string
 	// TLSSecretName, when non-empty, configures spec.tls with this secret for PublicHost.
 	TLSSecretName string
+	// ServiceHealthChecker probes service endpoints before publishing Ready=True.
+	// If nil, a default HTTP checker is used.
+	ServiceHealthChecker ServiceHealthChecker
 }
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
+const provisioningRequeueAfter = 5 * time.Second
+
+type ServiceHealthChecker func(ctx context.Context, targetURL string) error
 
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=llminstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=llm.privatellms.msp,resources=llminstances/status,verbs=get;update;patch
@@ -71,6 +78,7 @@ const slugAnnotationKey = "llm.privatellms.msp/slug"
 // apps and services
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch
 // networking
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // traefik middleware
@@ -169,7 +177,19 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	if err := r.updateInstanceStatus(ctx, inst, slug); err != nil {
+	ready, reason, message, err := r.evaluateInstanceReadiness(ctx, inst, svcName)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if !ready {
+		if err := r.updateProvisioningStatus(ctx, inst, slug, reason, message); err != nil {
+			return ctrl.Result{}, err
+		}
+		logger.Info("LLMInstance is still provisioning", "name", req.NamespacedName, "reason", reason)
+		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, nil
+	}
+
+	if err := r.updateReadyStatus(ctx, inst, slug); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -371,8 +391,10 @@ func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, re
 			"--port", "8000",
 			"--host", "0.0.0.0",
 		},
-		Env:   []corev1.EnvVar{{Name: "MODEL_PATH", Value: modelPath}},
-		Ports: []corev1.ContainerPort{{ContainerPort: 8000, Protocol: corev1.ProtocolTCP}},
+		Env:            []corev1.EnvVar{{Name: "MODEL_PATH", Value: modelPath}},
+		Ports:          []corev1.ContainerPort{{ContainerPort: 8000, Protocol: corev1.ProtocolTCP}},
+		ReadinessProbe: llmReadinessProbe(),
+		LivenessProbe:  llmLivenessProbe(),
 		VolumeMounts: []corev1.VolumeMount{{
 			Name:      "models-volume",
 			MountPath: "/models",
@@ -453,8 +475,59 @@ func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection) bool
 			c.Args = desiredArgs
 			updated = true
 		}
+		if ensureLLMContainerProbes(c) {
+			updated = true
+		}
 	}
 
+	return updated
+}
+
+func llmReadinessProbe() *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "/health",
+				Port: intstr.FromInt(8000),
+			},
+		},
+		PeriodSeconds:    5,
+		TimeoutSeconds:   2,
+		FailureThreshold: 6,
+	}
+}
+
+func llmLivenessProbe() *corev1.Probe {
+	return &corev1.Probe{
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path: "/health",
+				Port: intstr.FromInt(8000),
+			},
+		},
+		InitialDelaySeconds: 20,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      2,
+		FailureThreshold:    6,
+	}
+}
+
+func ensureLLMContainerProbes(c *corev1.Container) bool {
+	updated := false
+	if c.ReadinessProbe == nil ||
+		c.ReadinessProbe.HTTPGet == nil ||
+		c.ReadinessProbe.HTTPGet.Path != "/health" ||
+		c.ReadinessProbe.HTTPGet.Port.IntValue() != 8000 {
+		c.ReadinessProbe = llmReadinessProbe()
+		updated = true
+	}
+	if c.LivenessProbe == nil ||
+		c.LivenessProbe.HTTPGet == nil ||
+		c.LivenessProbe.HTTPGet.Path != "/health" ||
+		c.LivenessProbe.HTTPGet.Port.IntValue() != 8000 {
+		c.LivenessProbe = llmLivenessProbe()
+		updated = true
+	}
 	return updated
 }
 
@@ -831,24 +904,141 @@ func authMiddlewareName(svcName string) string {
 	return fmt.Sprintf("%s-auth", svcName)
 }
 
-func (r *LLMInstanceReconciler) updateInstanceStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) error {
+func (r *LLMInstanceReconciler) evaluateInstanceReadiness(ctx context.Context, inst *llmv1alpha1.LLMInstance, svcName string) (bool, string, string, error) {
+	deployName := fmt.Sprintf("%s-llama", inst.Name)
+	var deploy appsv1.Deployment
+	if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: deployName}, &deploy); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, "DeploymentNotFound", fmt.Sprintf("Deployment %q not found", deployName), nil
+		}
+		return false, "", "", err
+	}
+
+	desiredReplicas := int32(1)
+	if deploy.Spec.Replicas != nil && *deploy.Spec.Replicas > 0 {
+		desiredReplicas = *deploy.Spec.Replicas
+	}
+
+	if deploy.Status.ObservedGeneration < deploy.Generation {
+		return false, "DeploymentProgressing", fmt.Sprintf("Deployment %q has not observed latest generation", deployName), nil
+	}
+	if deploy.Status.UpdatedReplicas < desiredReplicas {
+		return false, "DeploymentProgressing", fmt.Sprintf("Deployment %q updated replicas %d/%d", deployName, deploy.Status.UpdatedReplicas, desiredReplicas), nil
+	}
+	if deploy.Status.ReadyReplicas < desiredReplicas {
+		return false, "DeploymentNotReady", fmt.Sprintf("Deployment %q ready replicas %d/%d", deployName, deploy.Status.ReadyReplicas, desiredReplicas), nil
+	}
+	if deploy.Status.AvailableReplicas < desiredReplicas {
+		return false, "DeploymentNotAvailable", fmt.Sprintf("Deployment %q available replicas %d/%d", deployName, deploy.Status.AvailableReplicas, desiredReplicas), nil
+	}
+
+	endpointsReady, message, err := r.serviceHasReadyEndpoints(ctx, inst.Namespace, svcName, 8000)
+	if err != nil {
+		return false, "", "", err
+	}
+	if !endpointsReady {
+		return false, "ServiceEndpointsMissing", message, nil
+	}
+
+	probeURL := r.serviceProbeURL(inst.Namespace, svcName, 8000, "/health")
+	if err := r.runServiceHealthCheck(ctx, probeURL); err != nil {
+		return false, "HealthCheckFailed", fmt.Sprintf("Service probe failed for %s: %v", probeURL, err), nil
+	}
+
+	return true, "Provisioned", "LLM instance is ready", nil
+}
+
+func (r *LLMInstanceReconciler) serviceHasReadyEndpoints(ctx context.Context, namespace, serviceName string, expectedPort int32) (bool, string, error) {
+	var endpoints corev1.Endpoints
+	if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serviceName}, &endpoints); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, fmt.Sprintf("Endpoints for Service %q not found", serviceName), nil
+		}
+		return false, "", err
+	}
+	for _, subset := range endpoints.Subsets {
+		if len(subset.Addresses) == 0 {
+			continue
+		}
+		for _, port := range subset.Ports {
+			if port.Port == expectedPort {
+				return true, "", nil
+			}
+		}
+	}
+	return false, fmt.Sprintf("Service %q has no ready endpoints on port %d", serviceName, expectedPort), nil
+}
+
+func (r *LLMInstanceReconciler) serviceProbeURL(namespace, serviceName string, port int32, path string) string {
+	return fmt.Sprintf("http://%s.%s.svc.cluster.local:%d%s", serviceName, namespace, port, path)
+}
+
+func (r *LLMInstanceReconciler) runServiceHealthCheck(ctx context.Context, targetURL string) error {
+	checker := r.ServiceHealthChecker
+	if checker == nil {
+		checker = defaultServiceHealthChecker
+	}
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	return checker(probeCtx, targetURL)
+}
+
+func defaultServiceHealthChecker(ctx context.Context, targetURL string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func (r *LLMInstanceReconciler) updateProvisioningStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug, reason, message string) error {
+	notReadyCond := metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: inst.Generation,
+		Reason:             reason,
+		Message:            message,
+	}
+	meta.SetStatusCondition(&inst.Status.Conditions, notReadyCond)
+	inst.Status.Phase = "Provisioning"
+	inst.Status.Endpoint = r.instanceEndpoint(slug)
+	inst.Status.ObservedGeneration = inst.Generation
+	return r.Status().Update(ctx, inst)
+}
+
+func (r *LLMInstanceReconciler) updateReadyStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) error {
 	readyCond := metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.NewTime(time.Now()),
+		ObservedGeneration: inst.Generation,
 		Reason:             "Provisioned",
 		Message:            "LLM instance is ready",
 	}
 
 	meta.SetStatusCondition(&inst.Status.Conditions, readyCond)
 	inst.Status.Phase = "Ready"
+	inst.Status.Endpoint = r.instanceEndpoint(slug)
+	inst.Status.ObservedGeneration = inst.Generation
+	return r.Status().Update(ctx, inst)
+}
+
+func (r *LLMInstanceReconciler) instanceEndpoint(slug string) string {
 	scheme := r.PublicScheme
 	if scheme == "" {
 		scheme = "http"
 	}
-	inst.Status.Endpoint = fmt.Sprintf("%s://%s/llm/%s", scheme, r.PublicHost, slug)
-	inst.Status.ObservedGeneration = inst.Generation
-	return r.Status().Update(ctx, inst)
+	if strings.TrimSpace(r.PublicHost) == "" || strings.TrimSpace(slug) == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s://%s/llm/%s", scheme, r.PublicHost, slug)
 }
 
 func copyStringMap(in map[string]string) map[string]string {

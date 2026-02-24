@@ -62,8 +62,7 @@ var _ = Describe("APITokenRequest controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
 
-		inst.Status.Endpoint = expectedEndpoint
-		inst.Status.ObservedGeneration = inst.Generation
+		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
 		tr := &llmv1alpha1.APITokenRequest{
@@ -202,8 +201,7 @@ var _ = Describe("APITokenRequest controller", func() {
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: instanceName, Namespace: namespace}, inst)).To(Succeed())
-		inst.Status.Endpoint = expectedEndpoint
-		inst.Status.ObservedGeneration = inst.Generation
+		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
 		result, err = reconciler.Reconcile(ctx, req)
@@ -238,7 +236,7 @@ var _ = Describe("APITokenRequest controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
-		inst.Status.Endpoint = expectedEndpoint
+		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
 		tr := &llmv1alpha1.APITokenRequest{
@@ -303,8 +301,7 @@ var _ = Describe("APITokenRequest controller", func() {
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
 
-		inst.Status.Endpoint = expectedEndpoint
-		inst.Status.ObservedGeneration = inst.Generation
+		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
 		tr := &llmv1alpha1.APITokenRequest{
@@ -343,3 +340,15 @@ var _ = Describe("APITokenRequest controller", func() {
 		}).Should(BeTrue())
 	})
 })
+
+func setInstanceReadyStatus(inst *llmv1alpha1.LLMInstance, endpoint string) {
+	inst.Status.Endpoint = endpoint
+	inst.Status.ObservedGeneration = inst.Generation
+	meta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: inst.Generation,
+		Reason:             "Provisioned",
+		Message:            "LLM instance is ready",
+	})
+}

@@ -55,6 +55,9 @@ var _ = Describe("LLMInstanceReconciler", func() {
 			Scheme:         scheme.Scheme,
 			PublicHost:     "public.example.test",
 			AuthServiceURL: "https://auth.example.test",
+			ServiceHealthChecker: func(_ context.Context, _ string) error {
+				return nil
+			},
 		}
 
 		DeferCleanup(func() {
@@ -65,7 +68,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		})
 	})
 
-	It("creates slug, deployment, service, ingress, and updates status", func() {
+	It("creates resources, reports provisioning, then marks ready after health gates pass", func() {
 		name := "inst-" + utilrand.String(5)
 		inst := &llmv1alpha1.LLMInstance{
 			ObjectMeta: metav1.ObjectMeta{
@@ -95,10 +98,10 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		slug := inst.Annotations[slugAnnotationKey]
 		Expect(slug).NotTo(BeEmpty())
 
-		// third reconcile should provision resources
+		// third reconcile provisions resources, but should not mark ready yet
 		res, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Requeue).To(BeFalse())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
 
 		deployName := fmt.Sprintf("%s-llama", name)
 		var deploy appsv1.Deployment
@@ -118,9 +121,40 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(ing.Spec.Rules[0].HTTP.Paths[0].Path).To(Equal(fmt.Sprintf("/llm/%s", slug)))
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.Phase).To(Equal("Provisioning"))
+		ready := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+
+		By("marking deployment ready and adding service endpoints")
+		deploy.Status.ObservedGeneration = deploy.Generation
+		deploy.Status.Replicas = 2
+		deploy.Status.UpdatedReplicas = 2
+		deploy.Status.ReadyReplicas = 2
+		deploy.Status.AvailableReplicas = 2
+		Expect(k8sClient.Status().Update(ctx, &deploy)).To(Succeed())
+
+		endpoints := &corev1.Endpoints{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      deployName,
+				Namespace: namespace,
+			},
+			Subsets: []corev1.EndpointSubset{{
+				Addresses: []corev1.EndpointAddress{{IP: "10.0.0.10"}},
+				Ports:     []corev1.EndpointPort{{Port: 8000}},
+			}},
+		}
+		Expect(k8sClient.Create(ctx, endpoints)).To(Succeed())
+
+		// fourth reconcile should mark instance as ready
+		res, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Requeue || res.RequeueAfter > 0).To(BeFalse())
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
 		Expect(inst.Status.Phase).To(Equal("Ready"))
 		Expect(inst.Status.Endpoint).To(Equal(fmt.Sprintf("http://public.example.test/llm/%s", slug)))
-		ready := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
+		ready = meta.FindStatusCondition(inst.Status.Conditions, "Ready")
 		Expect(ready).NotTo(BeNil())
 		Expect(ready.Status).To(Equal(metav1.ConditionTrue))
 	})

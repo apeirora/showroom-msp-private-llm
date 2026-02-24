@@ -6,7 +6,8 @@ An example Kubernetes operator (Operator SDK, Go) that provisions a llama.cpp se
 - uses an `initContainer` to download the TinyLlama model into an `emptyDir` mounted at `/models`
 - exposes the Pod via a ClusterIP Service on port 8000
 - creates an Ingress with host set from `PUBLIC_HOST` and a unique path prefix `/llm/<slug>`
-- updates the CR status to Ready with the public URL `http://$PUBLIC_HOST/<instance-name>`
+- keeps the CR in `Provisioning` until Deployment, Service endpoints, and `/health` checks pass
+- updates the CR status to `Ready` only after the service is actually reachable
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use
@@ -119,7 +120,7 @@ Scaling is supported via `spec.replicas`. The `spec.model` field selects which c
   - model: optional string, defaults to `tinyllama`. Supported values: `tinyllama`, `phi-2`, `gemma-3-1b-it`, `gemma-3-4b-it`, `gemma-3-12b-it`
   - replicas: optional int32, defaults to 1
 - status:
-  - phase: string (e.g., "Ready")
+  - phase: string (e.g., `Provisioning`, `Ready`)
   - endpoint: public URL exposed via Ingress
   - observedGeneration: int64
   - conditions: standard Kubernetes conditions
