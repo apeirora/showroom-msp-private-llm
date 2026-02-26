@@ -26,6 +26,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -90,14 +91,18 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		slug = strings.TrimSpace(inst.Annotations[slugAnnotationKey])
 	}
 
+	instanceReady := meta.IsStatusConditionTrue(inst.Status.Conditions, "Ready")
 	endpoint := strings.TrimSpace(inst.Status.Endpoint)
-	if slug == "" || endpoint == "" {
+	if slug == "" || endpoint == "" || !instanceReady {
 		waitingFor := []string{}
 		if slug == "" {
 			waitingFor = append(waitingFor, "annotation "+slugAnnotationKey)
 		}
 		if endpoint == "" {
 			waitingFor = append(waitingFor, "status.endpoint")
+		}
+		if !instanceReady {
+			waitingFor = append(waitingFor, "Ready condition")
 		}
 		message := fmt.Sprintf("Waiting for LLMInstance %q to populate %s", inst.Name, strings.Join(waitingFor, " and "))
 		_ = r.updatePendingStatus(ctx, &tr, "InstanceNotReady", message)
