@@ -8,7 +8,7 @@ auth:
   externalURL: ''
 image:
   repository: ghcr.io/apeirora/private-llm-controller
-  tag: 2.6.8
+  tag: 2.6.9
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 extraEnv: []
