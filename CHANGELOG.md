@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.9](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.8...v2.6.9) (2026-02-26)
+
+
+### Bug Fixes
+
+* **controller:** Gate private LLM readiness on deployment and service health ([#83](https://github.com/apeirora/showroom-msp-private-llm/issues/83)) ([9e1509b](https://github.com/apeirora/showroom-msp-private-llm/commit/9e1509bc5524122421f819812c64dee477fb3165))
+
 ## [2.6.8](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.7...v2.6.8) (2026-02-18)
 
 
