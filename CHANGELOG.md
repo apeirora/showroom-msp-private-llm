@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.10](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.9...v2.6.10) (2026-03-02)
+
+
+### Bug Fixes
+
+* touch APITokenRequest when secret is updated ([#85](https://github.com/apeirora/showroom-msp-private-llm/issues/85)) ([f6b1c3d](https://github.com/apeirora/showroom-msp-private-llm/commit/f6b1c3dc55feeb78448faa12856e020464653c7e))
+
 ## [2.6.9](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.8...v2.6.9) (2026-02-26)
 
 
