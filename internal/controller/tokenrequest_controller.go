@@ -45,6 +45,9 @@ const (
 	openAIAPIURLKey          = "OPENAI_API_URL"
 	compatibilityLabelKey    = "apeirora.eu/llm-api-compatibility"
 	compatibilityLabelOpenAI = "openai"
+	// secretUpdatedAtAnnotation is set on APITokenRequest when its secret is updated.
+	// This triggers the sync agent to re-sync the APITokenRequest and its related secret.
+	secretUpdatedAtAnnotation = "llm.privatellms.msp/secret-updated-at"
 )
 
 const apiTokenRequestFinalizer = "llm.privatellms.msp/apitokenrequest-finalizer"
@@ -174,6 +177,7 @@ func (r *APITokenRequestReconciler) ensureFinalizer(ctx context.Context, tr *llm
 }
 
 func (r *APITokenRequestReconciler) ensureSecret(ctx context.Context, tr *llmv1alpha1.APITokenRequest, inst *llmv1alpha1.LLMInstance, secretName, slug, endpoint string) error {
+	logger := log.FromContext(ctx)
 	var sec corev1.Secret
 	err := r.Get(ctx, client.ObjectKey{Namespace: tr.Namespace, Name: secretName}, &sec)
 	if err != nil {
@@ -184,9 +188,31 @@ func (r *APITokenRequestReconciler) ensureSecret(ctx context.Context, tr *llmv1a
 	}
 
 	if r.applySecretMutations(&sec, slug, endpoint) {
-		return r.Update(ctx, &sec)
+		if err := r.Update(ctx, &sec); err != nil {
+			return err
+		}
+		logger.Info("secret updated, touching APITokenRequest to trigger sync agent re-sync",
+			"secret", secretName, "endpoint", endpoint)
+		// Touch the APITokenRequest to trigger sync agent to re-sync.
+		// This is needed because the sync agent doesn't watch for changes to related
+		// resources (secrets). By updating the APITokenRequest, the sync agent will
+		// re-sync it along with its related secret.
+		if err := r.touchAPITokenRequest(ctx, tr); err != nil {
+			logger.Error(err, "failed to touch APITokenRequest after secret update")
+			// Don't fail the reconcile - the secret was updated successfully
+		}
 	}
 	return nil
+}
+
+// touchAPITokenRequest updates an annotation on the APITokenRequest to trigger
+// the sync agent to re-sync it and its related secret.
+func (r *APITokenRequestReconciler) touchAPITokenRequest(ctx context.Context, tr *llmv1alpha1.APITokenRequest) error {
+	if tr.Annotations == nil {
+		tr.Annotations = map[string]string{}
+	}
+	tr.Annotations[secretUpdatedAtAnnotation] = time.Now().Format(time.RFC3339)
+	return r.Update(ctx, tr)
 }
 
 func (r *APITokenRequestReconciler) createSecret(ctx context.Context, tr *llmv1alpha1.APITokenRequest, inst *llmv1alpha1.LLMInstance, secretName, slug, endpoint string) error {
