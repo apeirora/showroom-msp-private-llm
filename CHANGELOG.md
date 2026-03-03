@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.10...v2.7.0) (2026-03-03)
+
+
+### Features
+
+* **ui:** replace replicas text input with dropdown selector ([#87](https://github.com/apeirora/showroom-msp-private-llm/issues/87)) ([2cfbdc1](https://github.com/apeirora/showroom-msp-private-llm/commit/2cfbdc18d6885a0e2fb6e9680cff8b3a0f1eeea0))
+
 ## [2.6.10](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.9...v2.6.10) (2026-03-02)
 
 
