@@ -82,7 +82,9 @@
                                         },
                                         {
                                             "label": "Replicas",
-                                            "property": "spec.replicas"
+                                            "property": "spec.replicas",
+                                            "values": ["1", "3", "6", "12"],
+                                            "defaultValue": "1"
                                         }
                                     ]
                                 }
