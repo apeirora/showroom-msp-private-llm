@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.7.0...v2.8.0) (2026-03-03)
+
+
+### Features
+
+* **chart:** make replicas field required ([#89](https://github.com/apeirora/showroom-msp-private-llm/issues/89)) ([c08abd7](https://github.com/apeirora/showroom-msp-private-llm/commit/c08abd79588d048ee0bd5237268263916d284140))
+
 ## [2.7.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.6.10...v2.7.0) (2026-03-03)
 
 
