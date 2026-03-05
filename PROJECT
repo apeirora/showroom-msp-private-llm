@@ -2,22 +2,22 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: example.com
+domain: privatellms.msp
 layout:
 - go.kubebuilder.io/v4
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
 projectName: private-llm
-repo: github.com/example/private-llm
+repo: github.com/apeirora/showroom-msp-private-llm
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: example.com
+  domain: privatellms.msp
   group: llm
   kind: LLMInstance
-  path: github.com/example/private-llm/api/v1alpha1
+  path: github.com/apeirora/showroom-msp-private-llm/api/v1alpha1
   version: v1alpha1
 version: "3"
