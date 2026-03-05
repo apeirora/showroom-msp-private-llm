@@ -17,7 +17,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
+	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
 )
 
 var _ = Describe("APITokenRequest controller", func() {
