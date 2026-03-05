@@ -44,7 +44,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 
-	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
+	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
 )
 
 // LLMInstanceReconciler reconciles a LLMInstance object
@@ -198,7 +198,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 }
 
 func (r *LLMInstanceReconciler) startTracing(ctx context.Context) (context.Context, trace.Span) {
-	tracer := otel.Tracer("github.com/example/private-llm/internal/controller")
+	tracer := otel.Tracer("github.com/apeirora/showroom-msp-private-llm/internal/controller")
 	ctx, span := tracer.Start(ctx, "LLMInstanceReconciler.Reconcile", trace.WithAttributes())
 	logger := log.FromContext(ctx)
 	if sc := span.SpanContext(); sc.IsValid() {

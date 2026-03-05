@@ -82,14 +82,14 @@ jobs:
           echo "|---|---|" >> coverage.md
           grep -E '^ok[[:space:]]+.+[[:space:]]+[0-9.]+s[[:space:]]+coverage:[[:space:]]+[0-9.]+%[[:space:]]+of[[:space:]]+statements' test.out | \
             grep -v 'coverage: 0.0% ' | \
-            awk '{cov=""; for (i=1; i<=NF; i++) if ($i=="coverage:") {cov=$(i+1); break} pkg=$2; gsub("^github.com/example/private-llm/","",pkg); print "| " pkg " | " cov " |"}' | head -n 12 >> coverage.md
+            awk '{cov=""; for (i=1; i<=NF; i++) if ($i=="coverage:") {cov=$(i+1); break} pkg=$2; gsub("^github.com/apeirora/showroom-msp-private-llm/","",pkg); print "| " pkg " | " cov " |"}' | head -n 12 >> coverage.md
           echo "" >> coverage.md
           echo "<details><summary>All packages</summary>" >> coverage.md
           echo "" >> coverage.md
           echo "| Package | Coverage |" >> coverage.md
           echo "|---|---|" >> coverage.md
           grep -E '^ok[[:space:]]+.+[[:space:]]+[0-9.]+s[[:space:]]+coverage:[[:space:]]+[0-9.]+%[[:space:]]+of[[:space:]]+statements' test.out | \
-            awk '{cov=""; for (i=1; i<=NF; i++) if ($i=="coverage:") {cov=$(i+1); break} pkg=$2; gsub("^github.com/example/private-llm/","",pkg); print "| " pkg " | " cov " |"}' >> coverage.md
+            awk '{cov=""; for (i=1; i<=NF; i++) if ($i=="coverage:") {cov=$(i+1); break} pkg=$2; gsub("^github.com/apeirora/showroom-msp-private-llm/","",pkg); print "| " pkg " | " cov " |"}' >> coverage.md
           echo "</details>" >> coverage.md
 
       - name: Append coverage report to job summary

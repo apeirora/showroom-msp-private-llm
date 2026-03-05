@@ -46,9 +46,9 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 
-	llmv1alpha1 "github.com/example/private-llm/api/v1alpha1"
-	"github.com/example/private-llm/internal/auth"
-	"github.com/example/private-llm/internal/controller"
+	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-private-llm/internal/auth"
+	"github.com/apeirora/showroom-msp-private-llm/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
 
