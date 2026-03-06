@@ -15,6 +15,8 @@ spec:
       app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
+      annotations:
+        checksum/portal-integration-config: {{ include (print $.Template.BasePath "/portal-integration-configmap.yaml") . | sha256sum }}
       labels:
         {{- include "private-llm-operator.labels" . | nindent 8 }}
         app.kubernetes.io/component: portal-integration
@@ -47,5 +49,4 @@ spec:
               - key: pm-content.json
                 path: pm-content.json
 {{- end }}
-
 
