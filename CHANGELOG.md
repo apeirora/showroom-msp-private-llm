@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.8.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.8.0...v2.8.1) (2026-03-06)
+
+
+### Bug Fixes
+
+* **chart:** Roll portal integration on content changes ([#94](https://github.com/apeirora/showroom-msp-private-llm/issues/94)) ([6a5c13e](https://github.com/apeirora/showroom-msp-private-llm/commit/6a5c13efcbce69ac504c54722ebd961a7d019fe4))
+* update Go module path from example to actual repository ([#91](https://github.com/apeirora/showroom-msp-private-llm/issues/91)) ([d248e5c](https://github.com/apeirora/showroom-msp-private-llm/commit/d248e5c1dd9b6280e17ad65082eb595bcb1c5e51))
+* update remaining example references in PROJECT and e2e test ([#93](https://github.com/apeirora/showroom-msp-private-llm/issues/93)) ([48de2d6](https://github.com/apeirora/showroom-msp-private-llm/commit/48de2d69ca4c6b484c996dcfa547759b086d9068))
+
 ## [2.8.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.7.0...v2.8.0) (2026-03-03)
 
 
