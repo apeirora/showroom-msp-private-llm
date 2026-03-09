@@ -29,6 +29,13 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -46,5 +53,4 @@ subjects:
     name: {{ .Values.publishedResources.serviceAccountName | default .Release.Name }}
     namespace: {{ .Values.publishedResources.namespace | default .Release.Namespace }}
 {{- end }}
-
 
