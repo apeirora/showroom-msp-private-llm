@@ -19,3 +19,6 @@ operator:
   traefikNodePortWebsecure: 30443
   tlsSecretName: ""
   ingressExtraAnnotations: {}
+  # Operator image overrides - should match the OCM component version
+  imageRepository: ghcr.io/apeirora/private-llm-controller
+  imageTag: ""

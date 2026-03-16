@@ -32,6 +32,15 @@ spec:
         {{- end }}
       imagePullSecrets:
         - name: {{ .Values.operator.imagePullSecretName }}
+      {{- if or .Values.operator.imageRepository .Values.operator.imageTag }}
+      image:
+        {{- if .Values.operator.imageRepository }}
+        repository: {{ .Values.operator.imageRepository }}
+        {{- end }}
+        {{- if .Values.operator.imageTag }}
+        tag: {{ .Values.operator.imageTag | quote }}
+        {{- end }}
+      {{- end }}
       {{- if .Values.operator.ingressExtraAnnotations }}
       ingress:
         extraAnnotations:
