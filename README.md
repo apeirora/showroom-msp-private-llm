@@ -157,7 +157,8 @@ curl -sS "$OPENAI_API_URL/v1/chat/completions" \
 | [OCM Installation](docs/installation-ocm.md) | Open Component Model delivery |
 | [Local Development](docs/installation-local.md) | Kind cluster setup for testing |
 | [Remote Deployment](docs/installation-remote.md) | Remote cluster with Flux GitOps |
-| [Release Flow](docs/RELEASE_FLOW.md) | CI/CD pipeline and versioning |
+| [Release Flow](docs/release-flow.md) | CI/CD pipeline and versioning |
+| [Versioning](docs/versioning.md) | SemVer and Conventional Commits policy |
 | [Contributing](CONTRIBUTING.md) | How to contribute |
 
 ## Helm Charts
