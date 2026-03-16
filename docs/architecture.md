@@ -230,3 +230,8 @@ The operator integrates OpenTelemetry for distributed tracing:
 - **Trace context** -- Each reconcile loop creates a span with trace/span IDs logged for correlation
 - **Prometheus metrics** -- Standard controller-runtime metrics exposed on `:8080`
 - **Health probes** -- `/healthz` and `/readyz` on `:8081`
+
+## See Also
+
+- [Release Flow](release-flow.md) -- how releases are cut and delivered
+- [Versioning](versioning.md) -- version numbering and compatibility policy
