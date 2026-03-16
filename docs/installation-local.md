@@ -105,7 +105,7 @@ kubectl get llminstances -w
 
 ## Option C: OCM Bootstrap on Kind
 
-For testing the full OCM delivery pipeline locally. See [Local Deployment with OCM](LOCAL-DEPLOY.md) for the full guide.
+For testing the full OCM delivery pipeline locally. See [OCM Installation](installation-ocm.md) for the full guide.
 
 Quick summary:
 
@@ -119,7 +119,7 @@ helm install kro oci://ghcr.io/kro-run/kro/kro --namespace kro --create-namespac
 kubectl apply -f https://github.com/fluxcd/flux2/releases/latest/download/install.yaml
 
 # 3. Set up credentials and bootstrap
-# (see docs/LOCAL-DEPLOY.md for full instructions)
+# (see docs/installation-ocm.md for full instructions)
 ```
 
 ## Building from Source
