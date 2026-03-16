@@ -27,12 +27,13 @@ spec:
       {{- end }}
       {{- end }}
       containers:
+        {{- if .Values.metricsProxy.enabled }}
         - args:
             - --secure-listen-address=0.0.0.0:8443
             - --upstream=http://127.0.0.1:8080/
             - --logtostderr=true
             - --v=0
-          image: gcr.io/kubebuilder/kube-rbac-proxy:v0.16.0
+          image: {{ .Values.metricsProxy.image.repository }}:{{ .Values.metricsProxy.image.tag }}
           name: kube-rbac-proxy
           ports:
             - containerPort: 8443
@@ -50,9 +51,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+        {{- end }}
         - args:
             - --health-probe-bind-address=:8081
-            - --metrics-bind-address=127.0.0.1:8080
+            - --metrics-bind-address={{ if .Values.metricsProxy.enabled }}127.0.0.1{{ else }}0.0.0.0{{ end }}:8080
             - --leader-elect
             - --auth-bind-address=:8090
             - --auth-external-url=$(AUTH_EXTERNAL_URL)
