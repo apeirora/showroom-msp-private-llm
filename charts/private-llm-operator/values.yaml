@@ -11,6 +11,10 @@ image:
   tag: 2.8.1
   pullPolicy: IfNotPresent
 imagePullSecrets: []
+kubeRbacProxy:
+  image:
+    repository: quay.io/brancz/kube-rbac-proxy
+    tag: v0.16.0
 extraEnv: []
 traefik:
   enabled: true
