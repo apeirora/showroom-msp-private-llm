@@ -202,6 +202,3 @@ This project is licensed under the [Apache License 2.0](LICENSE).
   </a>
 </p>
 
-<p align="center">
-  <sub>Funded by the European Union - NextGenerationEU. The views and opinions expressed are solely those of the author(s) and do not necessarily reflect the views of the European Union or the European Commission. Neither the European Union nor the European Commission can be held responsible for them.</sub>
-</p>
