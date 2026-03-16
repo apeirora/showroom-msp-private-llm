@@ -14,7 +14,7 @@ spec:
         metadata:
           name: {{ .Values.operator.targetNamespace }}
 
-    # Fetch Helm chart resource from the OCM component
+    # Fetch Helm chart resource from the OCM ComponentVersion
     - id: resourceChart
       template:
         apiVersion: delivery.ocm.software/v1alpha1
@@ -23,25 +23,15 @@ spec:
           name: {{ .Values.component.name }}-helm-resource
           namespace: {{ .Values.component.namespace }}
         spec:
-          componentRef:
-            name: {{ .Values.component.name }}
-          resource:
-            byReference:
-              resource:
-                name: oci-helm-chart-private-llm-operator
-                version: {{ trimPrefix "v" .Values.component.semver | quote }}
-          additionalStatusFields:
-            registry: resource.access.imageReference.toOCI().registry
-            repository: resource.access.imageReference.toOCI().repository
-            tag: resource.access.imageReference.toOCI().tag
           interval: {{ .Values.component.interval }}
-          ocmConfig:
-            - kind: Repository
-              apiVersion: delivery.ocm.software/v1alpha1
-              name: {{ .Values.component.repositoryRefName }}
-              namespace: {{ .Values.component.repositoryRefNamespace }}
+          sourceRef:
+            kind: ComponentVersion
+            name: {{ .Values.component.name }}
+            namespace: {{ .Values.component.namespace }}
+            resourceRef:
+              name: oci-helm-chart-private-llm-operator
 
-    # Fetch operator image resource from the OCM component and split reference
+    # Fetch operator image resource from the OCM ComponentVersion
     - id: resourceImage
       template:
         apiVersion: delivery.ocm.software/v1alpha1
@@ -50,23 +40,13 @@ spec:
           name: {{ .Values.component.name }}-image-resource
           namespace: {{ .Values.component.namespace }}
         spec:
-          componentRef:
-            name: {{ .Values.component.name }}
-          resource:
-            byReference:
-              resource:
-                name: private-llm-image
-                version: {{ trimPrefix "v" .Values.component.semver | quote }}
-          additionalStatusFields:
-            registry: resource.access.imageReference.toOCI().registry
-            repository: resource.access.imageReference.toOCI().repository
-            tag: resource.access.imageReference.toOCI().tag
           interval: {{ .Values.component.interval }}
-          ocmConfig:
-            - kind: Repository
-              apiVersion: delivery.ocm.software/v1alpha1
-              name: {{ .Values.component.repositoryRefName }}
-              namespace: {{ .Values.component.repositoryRefNamespace }}
+          sourceRef:
+            kind: ComponentVersion
+            name: {{ .Values.component.name }}
+            namespace: {{ .Values.component.namespace }}
+            resourceRef:
+              name: private-llm-image
 
     - id: ocirepository
       template:
@@ -130,4 +110,3 @@ spec:
               {{- else }}
               extraAnnotations: {}
               {{- end }}
-

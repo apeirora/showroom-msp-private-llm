@@ -1,33 +1,17 @@
 apiVersion: delivery.ocm.software/v1alpha1
-kind: Repository
-metadata:
-  name: bootstrap-repository
-  namespace: ocm-system
-spec:
-  repositorySpec:
-    baseUrl: ghcr.io/${GH_OWNER}/ocm
-    type: OCIRegistry
-  interval: 1m
-  ocmConfig:
-    - kind: Secret
-      name: ghcr-credentials
----
-apiVersion: delivery.ocm.software/v1alpha1
-kind: Component
+kind: ComponentVersion
 metadata:
   name: bootstrap-component
   namespace: ocm-system
 spec:
   component: llm.privatellms.msp/private-llm
-  repositoryRef:
-    name: bootstrap-repository
-  semver: "${VERSION}"
+  version:
+    semver: "${VERSION}"
+  repository:
+    url: ghcr.io/${GH_OWNER}/ocm
+    secretRef:
+      name: ghcr-credentials
   interval: 1m
-  ocmConfig:
-    - kind: Repository
-      apiVersion: delivery.ocm.software/v1alpha1
-      name: bootstrap-repository
-      namespace: ocm-system
 ---
 apiVersion: delivery.ocm.software/v1alpha1
 kind: Resource
@@ -35,29 +19,22 @@ metadata:
   name: bootstrap-rgd
   namespace: ocm-system
 spec:
-  componentRef:
-    name: bootstrap-component
-  resource:
-    byReference:
-      resource:
-        name: kro-resource-graph-definition
   interval: 1m
-  ocmConfig:
-    - kind: Repository
-      apiVersion: delivery.ocm.software/v1alpha1
-      name: bootstrap-repository
-      namespace: ocm-system
+  sourceRef:
+    kind: ComponentVersion
+    name: bootstrap-component
+    namespace: ocm-system
+    resourceRef:
+      name: kro-resource-graph-definition
 ---
 apiVersion: delivery.ocm.software/v1alpha1
-kind: Deployer
+kind: FluxDeployer
 metadata:
   name: bootstrap-deployer
   namespace: ocm-system
 spec:
-  resourceRef:
+  interval: 1m
+  sourceRef:
+    kind: Resource
     name: bootstrap-rgd
     namespace: ocm-system
-  ocmConfig:
-    - kind: Secret
-      name: ghcr-credentials
-      namespace: ocm-system
