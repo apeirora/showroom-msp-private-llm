@@ -1,21 +1,24 @@
 component:
   name: private-llm-operator
-  namespace: ocm-system # fix: cannot be changed
+  namespace: ocm-system
   componentName: llm.privatellms.msp/private-llm
-  repositoryRefName: apeirora-repository
-  repositoryRefNamespace: ocm-system
-  semver: "v2.0.1"
+  repositoryUrl: ghcr.io/apeirora/ocm
+  secretRefName: ghcr-credentials
+  semver: ">=2.0.1"
   interval: 1m
+  chartResourceName: oci-helm-chart-private-llm-operator
 
 operator:
-  targetNamespace: private-llm-operator
+  targetNamespace: private-llm-system
   publicHost: localhost
   publicScheme: http
   imagePullSecretName: ghcr-credentials
-  imagePullPolicy: IfNotPresent
   traefikEnabled: true
   traefikServiceType: LoadBalancer
   traefikNodePortWeb: 30080
   traefikNodePortWebsecure: 30443
   tlsSecretName: ""
   ingressExtraAnnotations: {}
+  # Operator image overrides - should match the OCM component version
+  imageRepository: ghcr.io/apeirora/private-llm-controller
+  imageTag: ""
