@@ -193,8 +193,15 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 ---
 
 <p align="center">
-  <sub>Part of the <a href="https://apeirora.eu/">ApeiroRA</a> Showroom -- built with support from the European Union.</sub>
+  <sub>Built with care by <a href="https://apeirora.eu/">ApeiroRA</a></sub>
 </p>
+
 <p align="center">
-  <img src="https://apeirora.eu/assets/images/eu-funded-en.svg" alt="Co-funded by the European Union" width="240" />
+  <a href="https://apeirora.eu/">
+    <img src="https://apeirora.eu/assets/img/BMWK-EU.png" alt="Funded by the European Union -- NextGenerationEU. Supported by the Federal Ministry for Economic Affairs and Energy on the basis of a decision by the German Bundestag." width="400" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Co-funded by the European Union. Views expressed are those of the author(s) only and do not necessarily reflect those of the EU or the granting authority. Neither the EU nor the granting authority can be held responsible for them.</sub>
 </p>
