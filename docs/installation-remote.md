@@ -1,12 +1,12 @@
 # Remote Deployment
 
-Deploy the Private LLM Operator to a remote Kubernetes cluster using Flux GitOps, as used in the ApeiroRA Platform Mesh production and development environments.
+Deploy the Private LLM Operator to a remote Kubernetes cluster using Flux GitOps, as used in the ApeiroRA Platform Mesh.
 
 ---
 
 ## Overview
 
-In the Platform Mesh deployment model, three Helm charts are deployed via Flux to separate namespaces:
+In the Platform Mesh deployment model, three Helm charts are deployed via Flux per MSP cluster:
 
 ```
 MSP Cluster
@@ -27,15 +27,15 @@ MSP Cluster
 
 ## GitOps Structure
 
-The deployment is defined in `showroom-msp-cluster-infra`:
+Each provider follows a standard layout in the GitOps infrastructure repository with a `base/` directory for shared resources and `overlays/` for environment-specific values:
 
 ```
 apps/private-llm/
 ├── base/
 │   ├── kustomization.yaml
 │   ├── namespace.yaml
-│   ├── pm-kubeconfig-external-secret.yaml    # KCP kubeconfig from OpenBao
-│   ├── ghcr-showroom-external-secret.yaml    # GHCR pull secret from OpenBao
+│   ├── pm-kubeconfig-external-secret.yaml    # KCP kubeconfig from your secrets manager
+│   ├── registry-credentials-external-secret.yaml  # GHCR pull secret from your secrets manager
 │   ├── operator-helm.yaml                    # HelmRelease for the operator
 │   ├── sync-agent-helm.yaml                  # HelmRelease for the sync agent
 │   ├── pm-integration-helm.yaml              # HelmRelease for PM metadata
@@ -53,13 +53,13 @@ apps/private-llm/
         └── pm-integration-values.yaml
 ```
 
-## Operator Configuration (Dev Example)
+## Operator Configuration (Example)
 
-The dev overlay configures the operator for the cc-d2 environment:
+An environment overlay configures the operator with the appropriate domain and ingress settings:
 
 ```yaml
 # operator-values.yaml
-PUBLIC_HOST: llm.private-llm.msp02.dev.showroom.apeirora.eu
+PUBLIC_HOST: llm.example.com
 PUBLIC_SCHEME: https
 
 tls:
@@ -70,7 +70,7 @@ image:
   pullPolicy: Always
 
 imagePullSecrets:
-  - name: ghcr-showroom-secret
+  - name: ghcr-credentials
 
 traefik:
   enabled: false    # Using cluster-level ingress controller
@@ -78,7 +78,7 @@ traefik:
 ingress:
   extraAnnotations:
     dns.gardener.cloud/class: "garden"
-    dns.gardener.cloud/dnsnames: "llm.private-llm.msp02.dev.showroom.apeirora.eu"
+    dns.gardener.cloud/dnsnames: "llm.example.com"
     cert.gardener.cloud/purpose: "managed"
 
 portalIntegration:
@@ -116,7 +116,7 @@ The sync agent:
 
 ```yaml
 # pm-integration-values.yaml
-publicHost: llm.private-llm.msp02.dev.showroom.apeirora.eu
+publicHost: llm.example.com
 publicScheme: https
 contentPath: /pm-content.json
 ```
@@ -126,24 +126,6 @@ This chart is applied to the KCP control plane (not the MSP cluster) using `kube
 - **APIExport** `llm.privatellms.msp` with permission claims for namespaces, events, and secrets
 - **ProviderMetadata** with display name, description, and icon for the marketplace
 - **ContentConfiguration** pointing at the portal content server URL
-
-## Deployment Topology
-
-### Development (cc-d2)
-
-| Component | MSP Cluster | Namespace |
-|-----------|-------------|-----------|
-| Operator | msp02 | `private-llm-operator` |
-| Sync Agent | msp02 | `private-llm-operator` |
-| Portal Integration | msp02 (applied to KCP) | Provider workspace |
-
-### Production (cc-two)
-
-| Component | MSP Cluster | Namespace |
-|-----------|-------------|-----------|
-| Operator | msp02 | `private-llm-operator` |
-| Sync Agent | msp02 | `private-llm-operator` |
-| Portal Integration | msp02 (applied to KCP) | Provider workspace |
 
 ## Manual Deployment (Without Flux)
 
@@ -196,22 +178,20 @@ helm upgrade --install private-llm-portal \
 ## Verification
 
 ```sh
-MSP_KUBECONFIG=zz_clusters/openmcp/mcp/envs/cc-d2/msps/msp02-kubeconfig.yaml
-
 # Check operator pod
-kubectl --kubeconfig=$MSP_KUBECONFIG get pods -n private-llm-operator
+kubectl --kubeconfig=<msp-kubeconfig> get pods -n private-llm-operator
 
 # Check sync agent
-kubectl --kubeconfig=$MSP_KUBECONFIG get pods -n private-llm-operator -l app.kubernetes.io/name=api-syncagent
+kubectl --kubeconfig=<msp-kubeconfig> get pods -n private-llm-operator -l app.kubernetes.io/name=api-syncagent
 
 # Check PublishedResources
-kubectl --kubeconfig=$MSP_KUBECONFIG get publishedresources -n private-llm-operator
+kubectl --kubeconfig=<msp-kubeconfig> get publishedresources -n private-llm-operator
 
 # Check synced LLMInstances
-kubectl --kubeconfig=$MSP_KUBECONFIG get llminstances -A
+kubectl --kubeconfig=<msp-kubeconfig> get llminstances -A
 
 # Check portal content is accessible
-curl -sk "https://llm.private-llm.msp02.dev.showroom.apeirora.eu/pm-content.json" | head -5
+curl -sk "https://llm.example.com/pm-content.json" | head -5
 ```
 
 ## Troubleshooting
@@ -220,10 +200,10 @@ curl -sk "https://llm.private-llm.msp02.dev.showroom.apeirora.eu/pm-content.json
 
 ```sh
 # Check the KCP kubeconfig Secret exists
-kubectl --kubeconfig=$MSP_KUBECONFIG get secret pm-kubeconfig -n private-llm-operator
+kubectl --kubeconfig=<msp-kubeconfig> get secret pm-kubeconfig -n private-llm-operator
 
 # Check sync agent logs
-kubectl --kubeconfig=$MSP_KUBECONFIG logs -n private-llm-operator deploy/private-llm-sync-agent --tail=50
+kubectl --kubeconfig=<msp-kubeconfig> logs -n private-llm-operator deploy/private-llm-sync-agent --tail=50
 ```
 
 ### RBAC errors in sync agent logs
@@ -232,17 +212,17 @@ The sync agent needs a ClusterRoleBinding. Check for namespace mismatches:
 
 ```sh
 # Where does the RBAC binding point?
-kubectl --kubeconfig=$MSP_KUBECONFIG get clusterrolebinding api-syncagent:privatellm \
+kubectl --kubeconfig=<msp-kubeconfig> get clusterrolebinding api-syncagent:privatellm \
   -o jsonpath='{.subjects[0].namespace}'
 
 # Where does the sync agent actually run?
-kubectl --kubeconfig=$MSP_KUBECONFIG get deploy -A | grep sync-agent
+kubectl --kubeconfig=<msp-kubeconfig> get deploy -A | grep sync-agent
 ```
 
 If they differ, patch the binding:
 
 ```sh
-kubectl --kubeconfig=$MSP_KUBECONFIG patch clusterrolebinding api-syncagent:privatellm \
+kubectl --kubeconfig=<msp-kubeconfig> patch clusterrolebinding api-syncagent:privatellm \
   --type=json -p='[{"op":"replace","path":"/subjects/0/namespace","value":"private-llm-operator"}]'
 ```
 
@@ -250,8 +230,8 @@ kubectl --kubeconfig=$MSP_KUBECONFIG patch clusterrolebinding api-syncagent:priv
 
 ```sh
 # Check the portal integration pod
-kubectl --kubeconfig=$MSP_KUBECONFIG get pods -n private-llm-operator -l app.kubernetes.io/component=portal-integration
+kubectl --kubeconfig=<msp-kubeconfig> get pods -n private-llm-operator -l app.kubernetes.io/component=portal-integration
 
 # Check the ingress
-kubectl --kubeconfig=$MSP_KUBECONFIG get ingress -n private-llm-operator
+kubectl --kubeconfig=<msp-kubeconfig> get ingress -n private-llm-operator
 ```
