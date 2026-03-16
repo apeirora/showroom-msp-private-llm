@@ -198,7 +198,7 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 
 <p align="center">
   <a href="https://apeirora.eu/">
-    <img src="https://apeirora.eu/assets/img/BMWK-EU.png" alt="Funded by the European Union -- NextGenerationEU. Supported by the Federal Ministry for Economic Affairs and Energy on the basis of a decision by the German Bundestag." width="400" />
+    <img src="docs/assets/eu-funded.svg" alt="Funded by the European Union -- NextGenerationEU. Supported by the Federal Ministry for Economic Affairs and Energy on the basis of a decision by the German Bundestag." width="400" />
   </a>
 </p>
 
