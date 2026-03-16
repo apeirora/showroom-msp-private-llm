@@ -2,6 +2,8 @@
 
 Deploy the Private LLM Operator to a Kubernetes cluster using Helm.
 
+---
+
 ## Prerequisites
 
 - Kubernetes 1.26+

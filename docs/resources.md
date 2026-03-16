@@ -2,6 +2,8 @@
 
 The operator manages two custom resources in the `llm.privatellms.msp` API group. This page provides a practical overview with examples.
 
+---
+
 ## LLMInstance
 
 **What it does:** Requests a private llama.cpp inference endpoint. The operator turns it into a Deployment, Service, Ingress, and Traefik middlewares.

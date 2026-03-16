@@ -1,6 +1,8 @@
-# User Guide: Platform Mesh Integration
+# User Guide
 
 This guide covers how to use Private LLM through the ApeiroRA Platform Mesh portal and KCP workspaces.
+
+---
 
 ## How It Works
 

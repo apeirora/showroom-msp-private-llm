@@ -10,14 +10,18 @@
 
 <p align="center">
   <a href="https://github.com/apeirora/showroom-msp-private-llm/releases"><img src="https://img.shields.io/github/v/release/apeirora/showroom-msp-private-llm?style=flat-square&color=blue" alt="Release"></a>
-  <a href="https://pkg.go.dev/github.com/apeirora/showroom-msp-private-llm"><img src="https://img.shields.io/badge/Go-1.23-00ADD8?style=flat-square&logo=go" alt="Go 1.23"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/apeirora/showroom-msp-private-llm?style=flat-square" alt="Go Version"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-green?style=flat-square" alt="License"></a>
   <a href="https://github.com/apeirora/showroom-msp-private-llm/actions"><img src="https://img.shields.io/github/actions/workflow/status/apeirora/showroom-msp-private-llm/ci.yml?style=flat-square&label=CI" alt="CI"></a>
 </p>
 
+<p align="center">
+  Part of the <a href="https://apeirora.eu/">ApeiroRA</a> Platform Mesh ecosystem
+</p>
+
 ---
 
-## What is this?
+## What is Private LLM Operator?
 
 Private LLM Operator is a Kubernetes operator that turns a simple custom resource into a fully provisioned, token-secured [llama.cpp](https://github.com/ggerganov/llama.cpp) inference server. It is designed to run inside the [ApeiroRA Platform Mesh](https://apeirora.eu/) as a Managed Service Provider (MSP), but works equally well as a standalone operator on any Kubernetes cluster.
 
@@ -160,12 +164,12 @@ curl -sS "$OPENAI_API_URL/v1/chat/completions" \
 
 This repository ships four Helm charts, each handling a distinct layer:
 
-| Chart | Purpose |
-|-------|---------|
-| `private-llm-operator` | Core operator + optional Traefik + portal content server |
-| `private-llm-sync-agent` | KCP sync agent + PublishedResource definitions |
-| `private-llm-pm-integration` | Platform Mesh metadata (APIExport, ProviderMetadata, ContentConfiguration) |
-| `private-llm-operator-ocm` | OCM Component + KRO ResourceGraphDefinition for supply-chain delivery |
+| Chart | Purpose | Registry |
+|-------|---------|----------|
+| `private-llm-operator` | Core operator + optional Traefik + portal content server | `oci://ghcr.io/apeirora/charts/private-llm-operator` |
+| `private-llm-sync-agent` | KCP sync agent + PublishedResource definitions | `oci://ghcr.io/apeirora/charts/private-llm-sync-agent` |
+| `private-llm-pm-integration` | Platform Mesh metadata (APIExport, ProviderMetadata, ContentConfiguration) | `oci://ghcr.io/apeirora/charts/private-llm-pm-integration` |
+| `private-llm-operator-ocm` | OCM Component + KRO ResourceGraphDefinition for supply-chain delivery | `oci://ghcr.io/apeirora/charts/private-llm-operator-ocm` |
 
 ## Project Structure
 
@@ -185,6 +189,10 @@ This repository ships four Helm charts, each handling a distinct layer:
 ├── docs/                   # Documentation
 └── ocm/                    # OCM bootstrap manifests
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to contribute to this project.
 
 ## License
 

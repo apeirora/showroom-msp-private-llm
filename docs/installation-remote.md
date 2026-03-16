@@ -1,6 +1,8 @@
-# Remote Cluster Deployment
+# Remote Deployment
 
 Deploy the Private LLM Operator to a remote Kubernetes cluster using Flux GitOps, as used in the ApeiroRA Platform Mesh production and development environments.
+
+---
 
 ## Overview
 

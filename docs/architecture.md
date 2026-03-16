@@ -2,6 +2,8 @@
 
 This document describes the Private LLM Operator's architecture, its components, and how they interact within the ApeiroRA Platform Mesh ecosystem.
 
+---
+
 ## System Overview
 
 The Private LLM Operator follows a layered architecture that separates concerns across three distinct planes:

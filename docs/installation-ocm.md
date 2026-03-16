@@ -2,6 +2,8 @@
 
 Deploy the Private LLM Operator using the [Open Component Model](https://ocm.software/) (OCM) supply chain. This approach packages the operator image and Helm chart into an OCM component, then uses KRO (Kubernetes Resource Orchestrator) and Flux to deploy it.
 
+---
+
 ## Prerequisites
 
 - Kubernetes cluster with:

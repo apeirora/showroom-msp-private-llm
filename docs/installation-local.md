@@ -1,6 +1,8 @@
-# Local Development Setup
+# Local Development
 
 Set up a local development environment using Kind for testing and development.
+
+---
 
 ## Prerequisites
 

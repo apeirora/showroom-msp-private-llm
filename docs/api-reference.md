@@ -2,6 +2,8 @@
 
 Complete reference for the Private LLM Operator's custom resources and HTTP API.
 
+---
+
 ## Custom Resource Definitions
 
 The operator registers two CRDs in the `llm.privatellms.msp` API group.
