@@ -53,8 +53,8 @@ The chart bundles Traefik as an optional dependency. When enabled, it deploys a 
 |-----------|-------------|---------|
 | `traefik.enabled` | Deploy bundled Traefik | `true` |
 | `traefik.service.type` | Traefik service type | `LoadBalancer` |
-| `traefik.ports.web.nodePort` | NodePort for HTTP (if type=NodePort) | `30080` |
-| `traefik.ports.websecure.nodePort` | NodePort for HTTPS (if type=NodePort) | `30443` |
+| `ingress.ports.web.nodePort` | NodePort for HTTP (if type=NodePort) | `30080` |
+| `ingress.ports.websecure.nodePort` | NodePort for HTTPS (if type=NodePort) | `30443` |
 
 > **Tip:** If your cluster already has a Traefik (or another IngressClass-compatible controller), set `traefik.enabled=false` and configure `ingress.className` to match your controller.
 
@@ -62,7 +62,7 @@ The chart bundles Traefik as an optional dependency. When enabled, it deploys a 
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `ingress.className` | Override IngressClass name | `""` (defaults to `traefik`) |
+| `ingress.className` | IngressClass for the portal/content server Ingress only (LLM instance Ingresses always use `traefik`) | `""` (defaults to `traefik`) |
 | `ingress.extraAnnotations` | Additional annotations for managed Ingresses | `{}` |
 
 For Gardener-managed DNS and certificates:
@@ -123,8 +123,8 @@ helm upgrade --install private-llm charts/private-llm-operator \
   --dependency-update \
   --set PUBLIC_HOST=localhost \
   --set traefik.service.type=NodePort \
-  --set traefik.ports.web.nodePort=30080 \
-  --set traefik.ports.websecure.nodePort=30443
+  --set ingress.ports.web.nodePort=30080 \
+  --set ingress.ports.websecure.nodePort=30443
 ```
 
 ### Custom Image

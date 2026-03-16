@@ -29,8 +29,8 @@ helm upgrade --install private-llm charts/private-llm-operator \
   --dependency-update \
   --set PUBLIC_HOST=localhost \
   --set traefik.service.type=NodePort \
-  --set traefik.ports.web.nodePort=30080 \
-  --set traefik.ports.websecure.nodePort=30443
+  --set ingress.ports.web.nodePort=30080 \
+  --set ingress.ports.websecure.nodePort=30443
 ```
 
 ### 3. Create and Test an Instance

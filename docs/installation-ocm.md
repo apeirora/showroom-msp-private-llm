@@ -177,7 +177,7 @@ export OCM_REPOSITORY=oci://ghcr.io/$GH_OWNER/ocm
 echo "$GITHUB_TOKEN" | ocm login ghcr.io -u "$GH_OWNER" -p-
 ocm add componentversions --create --file dist/ctf .ocm/component-constructor.yaml \
   VERSION="$VERSION" GITHUB_REPOSITORY_OWNER="$GH_OWNER" IMAGE_TAG="$IMAGE_TAG" CHART_TAG="$CHART_TAG"
-ocm transfer commontransportarchive dist/ctf "$OCM_REPOSITORY" --overwrite
+ocm transfer commontransportarchive dist/ctf "$OCM_REPOSITORY" --copy-resources --overwrite
 ```
 
 ### 4. Verify
