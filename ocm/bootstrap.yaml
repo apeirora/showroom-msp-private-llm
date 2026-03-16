@@ -1,7 +1,7 @@
 apiVersion: delivery.ocm.software/v1alpha1
 kind: ComponentVersion
 metadata:
-  name: bootstrap-component
+  name: private-llm
   namespace: ocm-system
 spec:
   component: llm.privatellms.msp/private-llm
@@ -16,25 +16,35 @@ spec:
 apiVersion: delivery.ocm.software/v1alpha1
 kind: Resource
 metadata:
-  name: bootstrap-rgd
+  name: private-llm-chart
   namespace: ocm-system
 spec:
   interval: 1m
   sourceRef:
     kind: ComponentVersion
-    name: bootstrap-component
+    name: private-llm
     namespace: ocm-system
     resourceRef:
-      name: kro-resource-graph-definition
+      name: oci-helm-chart-private-llm-operator
 ---
 apiVersion: delivery.ocm.software/v1alpha1
 kind: FluxDeployer
 metadata:
-  name: bootstrap-deployer
+  name: private-llm
   namespace: ocm-system
 spec:
   interval: 1m
   sourceRef:
     kind: Resource
-    name: bootstrap-rgd
+    name: private-llm-chart
     namespace: ocm-system
+  helmReleaseTemplate:
+    releaseName: private-llm-operator
+    targetNamespace: private-llm-system
+    values:
+      PUBLIC_HOST: llm.example.com
+      PUBLIC_SCHEME: http
+      traefik:
+        enabled: false
+      imagePullSecrets:
+        - name: ghcr-credentials

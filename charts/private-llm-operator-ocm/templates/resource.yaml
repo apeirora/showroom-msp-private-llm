@@ -1,0 +1,13 @@
+apiVersion: delivery.ocm.software/v1alpha1
+kind: Resource
+metadata:
+  name: {{ .Values.component.name }}-chart
+  namespace: {{ .Values.component.namespace }}
+spec:
+  interval: {{ .Values.component.interval }}
+  sourceRef:
+    kind: ComponentVersion
+    name: {{ .Values.component.name }}
+    namespace: {{ .Values.component.namespace }}
+    resourceRef:
+      name: {{ .Values.component.chartResourceName | default "oci-helm-chart-private-llm-operator" }}
