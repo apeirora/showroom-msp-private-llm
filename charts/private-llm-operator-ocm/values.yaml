@@ -2,9 +2,9 @@ component:
   name: private-llm-operator
   namespace: ocm-system # fix: cannot be changed
   componentName: llm.privatellms.msp/private-llm
-  repositoryRefName: apeirora-repository
-  repositoryRefNamespace: ocm-system
-  semver: "v2.0.1"
+  repositoryUrl: ghcr.io/apeirora/ocm
+  secretRefName: ghcr-credentials
+  semver: ">=2.0.1"
   interval: 1m
 
 operator:
