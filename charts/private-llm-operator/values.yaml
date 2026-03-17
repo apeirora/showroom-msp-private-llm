@@ -12,8 +12,9 @@ image:
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 kubeRbacProxy:
+  enabled: true
   image:
-    repository: quay.io/brancz/kube-rbac-proxy
+    repository: registry.k8s.io/kubebuilder/kube-rbac-proxy
     tag: v0.16.0
 extraEnv: []
 traefik:
