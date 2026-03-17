@@ -27,6 +27,7 @@ spec:
       {{- end }}
       {{- end }}
       containers:
+        {{- if .Values.kubeRbacProxy.enabled }}
         - args:
             - --secure-listen-address=0.0.0.0:8443
             - --upstream=http://127.0.0.1:8080/
@@ -50,9 +51,10 @@ spec:
             capabilities:
               drop:
                 - ALL
+        {{- end }}
         - args:
             - --health-probe-bind-address=:8081
-            - --metrics-bind-address=127.0.0.1:8080
+            - --metrics-bind-address={{ if .Values.kubeRbacProxy.enabled }}127.0.0.1{{ else }}0.0.0.0{{ end }}:8080
             - --leader-elect
             - --auth-bind-address=:8090
             - --auth-external-url=$(AUTH_EXTERNAL_URL)

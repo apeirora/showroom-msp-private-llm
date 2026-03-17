@@ -10,62 +10,206 @@ Set up a local development environment using Kind for testing and development.
 - [Kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - [Helm](https://helm.sh/) 3.14+
-- Go 1.23+ (for building from source)
+- [kubectl-kcp plugin](https://github.com/kcp-dev/kcp/releases) — provides `kubectl ws` for KCP workspace management
+- [Platform Mesh local-setup](https://github.com/platform-mesh/helm-charts/tree/main/local-setup) — provides KCP, the portal UI, and workspace hierarchy
+- Go 1.23+ (only if building from source)
 
-## Option A: Helm Install on Kind
+### Install kubectl-kcp
 
-The fastest way to get a working local setup.
-
-### 1. Create a Kind Cluster
+Download the plugin for your platform from [kcp releases](https://github.com/kcp-dev/kcp/releases) and place `kubectl-kcp` on your `PATH`:
 
 ```sh
-kind delete cluster --name private-llm || true
-kind create cluster --name private-llm
+# macOS (Apple Silicon)
+wget -qO- https://github.com/kcp-dev/kcp/releases/latest/download/kubectl-kcp-plugin_*_darwin_arm64.tar.gz | tar xz -C /usr/local/bin bin/kubectl-kcp --strip-components=1
+
+# Linux (amd64)
+wget -qO- https://github.com/kcp-dev/kcp/releases/latest/download/kubectl-kcp-plugin_*_linux_amd64.tar.gz | tar xz -C /usr/local/bin bin/kubectl-kcp --strip-components=1
+
+# Verify
+kubectl ws --help
 ```
 
-### 2. Install the Operator
+### Run the Platform Mesh local-setup
 
 ```sh
+# From the helm-charts repo
+task local-setup
+```
+
+After completion:
+- KCP API at `https://kcp.api.portal.dev.local:8443`
+- Admin kubeconfig at `.secret/kcp/admin.kubeconfig`
+- Portal UI at `https://portal.dev.local:8443`
+
+Add to `/etc/hosts` if not already present:
+```
+127.0.0.1 portal.dev.local kcp.api.portal.dev.local
+```
+
+> **Private registry:** The operator image is hosted on `ghcr.io/apeirora` (private). If you get `ImagePullBackOff`, either run `docker login ghcr.io` before creating the Kind cluster (Kind inherits local Docker credentials) or create a pull secret:
+>
+> ```sh
+> kubectl -n private-llm-system create secret docker-registry ghcr-creds \
+>   --docker-server=ghcr.io \
+>   --docker-username="$GH_OWNER" \
+>   --docker-password="$GITHUB_TOKEN"
+> ```
+>
+> Then add `--set 'imagePullSecrets[0].name=ghcr-creds'` to the Helm install command.
+
+## Key Concepts
+
+If you're new to Platform Mesh, these resources explain the core concepts used in this guide:
+
+- [**KCP Workspaces**](https://docs.kcp.io/kcp/main/concepts/workspaces/) — multi-tenant control plane that hosts provider and consumer workspaces
+- [**APIExport & APIBinding**](https://docs.kcp.io/kcp/main/concepts/apis/) — how providers expose APIs and consumers bind to them
+- [**API Sync Agent & PublishedResource**](https://docs.kcp.io/api-syncagent/) — how CRs created in KCP are synced to workload clusters
+- [**Architecture overview**](./architecture.md) — how the operator, sync agent, and KCP fit together
+
+## Quick Start
+
+### 1. Install the operator
+
+The operator installs on the Kind cluster created by the local-setup. Make sure your `KUBECONFIG` points to the Kind cluster (not the KCP admin kubeconfig):
+
+```sh
+unset KUBECONFIG  # ensure we target the Kind cluster, not KCP
+
 helm upgrade --install private-llm charts/private-llm-operator \
   --namespace private-llm-system --create-namespace \
   --dependency-update \
   --set PUBLIC_HOST=localhost \
-  --set traefik.service.type=NodePort \
-  --set ingress.ports.web.nodePort=30080 \
-  --set ingress.ports.websecure.nodePort=30443
+  --set traefik.enabled=false \
+  --set kubeRbacProxy.enabled=false
 ```
 
-### 3. Create and Test an Instance
+### 2. Create a [provider workspace](https://docs.kcp.io/kcp/main/concepts/apis/) in KCP
+
+Switch to the KCP admin kubeconfig for workspace management:
 
 ```sh
-# Create an LLMInstance
-kubectl apply -f config/samples/llm_v1alpha1_llminstance.yaml
+export KUBECONFIG=.secret/kcp/admin.kubeconfig
+export KCP_URL="https://kcp.api.portal.dev.local:8443"
 
-# Watch until Ready
-kubectl get llminstance llminstance-sample -w
-
-# Create a token
-kubectl apply -f config/samples/llm_v1alpha1_apitokenrequest.yaml
-
-# Wait for token
-kubectl wait apitokenrequest/example-apitokenrequest \
-  --for=jsonpath='{.status.phase}'=Ready --timeout=120s
-
-# Retrieve credentials
-SECRET=$(kubectl get apitokenrequest example-apitokenrequest -o jsonpath='{.status.secretName}')
-OPENAI_API_KEY=$(kubectl get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_KEY}' | base64 -d)
-OPENAI_API_URL=$(kubectl get secret "$SECRET" -o jsonpath='{.data.OPENAI_API_URL}' | base64 -d)
-
-# Test (replace https with http and host with localhost:30080)
-curl -sSk "http://localhost:30080/llm/$(kubectl get llminstance llminstance-sample -o jsonpath='{.metadata.annotations.llm\.privatellms\.msp/slug}')/health" \
-  -H "Authorization: Bearer $OPENAI_API_KEY"
+kubectl ws create providers --type=root:providers --ignore-existing
+kubectl ws create private-llm --type=root:provider \
+  --server="$KCP_URL/clusters/root:providers"
 ```
 
-> **Note:** On Kind with NodePort, the model download takes 1-3 minutes depending on your connection. The instance stays in `Provisioning` phase until the init container completes.
+### 3. Install the PM integration chart in KCP
 
-## Option B: Run Operator Locally (Development Mode)
+This registers the [APIExport](https://docs.kcp.io/kcp/main/concepts/apis/), [ProviderMetadata, and ContentConfiguration](./architecture.md) so the provider appears in the marketplace:
 
-Best for rapid iteration on controller code.
+```sh
+helm upgrade --install private-llm-pm charts/private-llm-pm-integration \
+  --namespace default \
+  --kubeconfig .secret/kcp/admin.kubeconfig \
+  --kube-apiserver "$KCP_URL/clusters/root:providers:private-llm" \
+  --set publicHost=localhost \
+  --set publicScheme=http
+```
+
+### 4. Install the [sync agent](https://docs.kcp.io/api-syncagent/)
+
+The sync agent bridges KCP and the Kind cluster. It watches for LLMInstance CRs created in KCP workspaces and syncs them to the cluster where the operator runs via [PublishedResources](https://docs.kcp.io/api-syncagent/).
+
+Switch back to the Kind kubeconfig:
+
+```sh
+unset KUBECONFIG  # target the Kind cluster
+
+# Create the KCP kubeconfig secret
+kubectl create namespace api-syncagent --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n api-syncagent create secret generic pm-kubeconfig \
+  --from-file=kubeconfig=.secret/kcp/admin.kubeconfig \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+# Install the sync agent
+helm upgrade --install private-llm-sync-agent charts/private-llm-sync-agent \
+  --namespace api-syncagent --create-namespace \
+  --dependency-update \
+  --set syncAgentOperator.enabled=true \
+  --set syncAgentOperator.apiExportName=llm.privatellms.msp \
+  --set syncAgentOperator.agentName=llm-agent \
+  --set syncAgentOperator.kcpKubeconfig=pm-kubeconfig \
+  --set publishedResources.enabled=true \
+  --set publishedResources.namespace=api-syncagent
+```
+
+Verify it's running:
+
+```sh
+kubectl -n api-syncagent get pods
+kubectl -n api-syncagent logs deploy/llm-agent --tail=20
+```
+
+### 5. Create an LLMInstance via KCP
+
+Create resources through KCP as a customer would via the portal:
+
+```sh
+export KUBECONFIG=.secret/kcp/admin.kubeconfig
+export KCP_URL="https://kcp.api.portal.dev.local:8443"
+
+# Create an org workspace and bind to the LLM APIExport
+kubectl ws create orgs --type=root:organization --ignore-existing
+kubectl ws create demo --server="$KCP_URL/clusters/root:orgs"
+
+# Bind to the LLM APIExport (see https://docs.kcp.io/kcp/main/concepts/apis/)
+kubectl apply --server="$KCP_URL/clusters/root:orgs:demo" -f - <<'EOF'
+apiVersion: apis.kcp.io/v1alpha2
+kind: APIBinding
+metadata:
+  name: llm-binding
+spec:
+  reference:
+    export:
+      path: root:providers:private-llm
+      name: llm.privatellms.msp
+EOF
+
+# Create an LLMInstance
+kubectl apply --server="$KCP_URL/clusters/root:orgs:demo" -f - <<'EOF'
+apiVersion: llm.privatellms.msp/v1alpha1
+kind: LLMInstance
+metadata:
+  name: demo-llm
+spec:
+  model: tinyllama
+  replicas: 1
+EOF
+
+# Watch until Ready (1-3 min for model download)
+kubectl get llminstances --server="$KCP_URL/clusters/root:orgs:demo" -w
+```
+
+### 6. Access the LLM
+
+```sh
+unset KUBECONFIG  # target the Kind cluster
+
+# Find the namespace created by the sync agent
+NS=$(kubectl get llminstances -A -o jsonpath='{.items[0].metadata.namespace}')
+
+# Port-forward the llama.cpp service
+kubectl port-forward -n "$NS" svc/demo-llm-llama 8000:8000
+
+# Test
+curl http://localhost:8000/v1/models
+curl http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "/models/tinyllama.gguf", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+The full flow: **KCP workspace** → sync agent → **Kind cluster** → operator reconciles → status synced back → **KCP / Portal UI**.
+
+### 7. Connect Chat UI (optional)
+
+To test both operators together, see the [Chat UI local installation guide](https://github.com/apeirora/showroom-msp-chat-ui/blob/main/docs/installation-local.md).
+
+## Development Mode
+
+For rapid iteration on controller code without the full Platform Mesh stack.
 
 ### 1. Create a Kind Cluster
 
@@ -101,26 +245,9 @@ kubectl apply -f config/samples/llm_v1alpha1_llminstance.yaml
 kubectl get llminstances -w
 ```
 
-> **Tip:** When running locally, the operator can create Deployments and Services but the health check will fail because it tries to probe the in-cluster service DNS. For full end-to-end testing, use Option A (Helm on Kind).
+> **Tip:** When running locally, the operator can create Deployments and Services but the health check will fail because it tries to probe the in-cluster service DNS. For full end-to-end testing, use the Quick Start above.
 
-## Option C: OCM Bootstrap on Kind
-
-For testing the full OCM delivery pipeline locally. See [OCM Installation](installation-ocm.md) for the full guide.
-
-Quick summary:
-
-```sh
-# 1. Create cluster
-kind create cluster --name private-llm
-
-# 2. Install OCM controller + KRO + Flux
-kubectl apply -k https://github.com/open-component-model/open-component-model/kubernetes/controller/config/default?ref=main
-helm install kro oci://ghcr.io/kro-run/kro/kro --namespace kro --create-namespace
-kubectl apply -f https://github.com/fluxcd/flux2/releases/latest/download/install.yaml
-
-# 3. Set up credentials and bootstrap
-# (see docs/installation-ocm.md for full instructions)
-```
+> For testing the OCM delivery pipeline locally, see [OCM Installation](installation-ocm.md).
 
 ## Building from Source
 
@@ -155,7 +282,8 @@ helm upgrade --install private-llm charts/private-llm-operator \
   --set image.repository=private-llm-controller \
   --set image.tag=dev \
   --set image.pullPolicy=Never \
-  --set traefik.service.type=NodePort
+  --set traefik.enabled=false \
+  --set kubeRbacProxy.enabled=false
 ```
 
 ## Running Tests
@@ -193,14 +321,40 @@ The init container downloads GGUF models from HuggingFace. If your network is re
 ```sh
 # Check init container logs
 kubectl logs <pod-name> -c download-model
-
-# For large models, increase the pod timeout or pre-download
 ```
+
+### ImagePullBackOff for operator image
+
+The operator image at `ghcr.io/apeirora/private-llm-controller` is private. You need either:
+- `docker login ghcr.io` before creating the Kind cluster (Kind inherits local Docker credentials)
+- An `imagePullSecrets` entry pointing to a `docker-registry` secret (see Prerequisites)
 
 ### Operator can't create Traefik Middleware
 
-If Traefik CRDs are not installed, the operator gracefully skips middleware creation. Install Traefik CRDs or use the bundled Traefik chart.
+If Traefik CRDs are not installed, the operator gracefully skips middleware creation. This is expected when using `traefik.enabled=false`.
 
-### Health check fails in local mode
+### Health check fails in development mode
 
-When running `make run`, the operator tries to probe `http://<service>.svc.cluster.local:8000/health` which is not reachable from outside the cluster. This is expected -- use Helm on Kind for end-to-end testing.
+When running `make run`, the operator tries to probe `http://<service>.svc.cluster.local:8000/health` which is not reachable from outside the cluster. This is expected -- use the Quick Start for end-to-end testing.
+
+### KUBECONFIG confusion
+
+The Quick Start switches between two kubeconfigs:
+- **Kind cluster** (default, `unset KUBECONFIG`) — for installing operators, sync agents, port-forwarding
+- **KCP admin** (`export KUBECONFIG=.secret/kcp/admin.kubeconfig`) — for creating workspaces, applying APIBindings, creating CRs in KCP
+
+If a command fails with "unauthorized" or targets the wrong cluster, check which `KUBECONFIG` is active.
+
+### Sync agent can't connect to KCP
+
+Check the kubeconfig secret exists and contains a valid kubeconfig:
+
+```sh
+kubectl -n api-syncagent get secret pm-kubeconfig -o jsonpath='{.data.kubeconfig}' | base64 -d | head -5
+```
+
+Since both KCP and the sync agent run in the same Kind cluster, the KCP admin kubeconfig (which uses `kcp.api.portal.dev.local:8443`) should work. Make sure `/etc/hosts` has the entry for `kcp.api.portal.dev.local`.
+
+### kubectl ws: command not found
+
+Install the [kubectl-kcp plugin](https://github.com/kcp-dev/kcp/releases). The `kubectl ws` command is provided by the `kubectl-kcp` binary which must be on your `PATH`. See Prerequisites.
