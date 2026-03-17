@@ -30,4 +30,4 @@ dist
 .bin
 .tmp
 charts/**/*.tgz
-tokenzz_clusters/
+token
