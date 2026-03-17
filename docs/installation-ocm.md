@@ -1,6 +1,6 @@
 # OCM Installation
 
-Deploy the Private LLM Operator using the [Open Component Model](https://ocm.software/) (OCM) supply chain. This approach packages the operator image and Helm chart into an OCM component, then uses KRO (Kubernetes Resource Orchestrator) and Flux to deploy it.
+Deploy the Private LLM Operator using the [Open Component Model](https://ocm.software/) (OCM) supply chain. The OCM controller resolves the component version from an OCI registry, extracts the Helm chart via a `Resource`, and hands it to a `FluxDeployer` that creates a Flux `HelmRelease`.
 
 ---
 
@@ -8,94 +8,95 @@ Deploy the Private LLM Operator using the [Open Component Model](https://ocm.sof
 
 - Kubernetes cluster with:
   - [OCM Controller](https://github.com/open-component-model/open-component-model) installed
-  - [KRO](https://github.com/kubernetes-sigs/kro) installed
-  - [Flux](https://fluxcd.io/) controllers installed
-- `kubectl`, `helm` 3.14+, `ocm` CLI
+  - [Flux](https://fluxcd.io/) controllers (source-controller, helm-controller)
+- `kubectl`, `helm` 3.14+
 - `GITHUB_TOKEN` with read access to GHCR packages
+
+> **Note**: KRO is **not** required. The chart uses the OCM controller's built-in `FluxDeployer` to create the `HelmRelease` directly.
 
 ## Architecture
 
 ```mermaid
 graph LR
-    OCM[OCM Component<br>ghcr.io/apeirora/ocm] --> Resource_Chart[Resource: Helm Chart]
-    OCM --> Resource_Image[Resource: Container Image]
-    Resource_Chart --> Flux_OCI[Flux OCIRepository]
-    Flux_OCI --> Flux_HR[Flux HelmRelease]
-    Resource_Image --> Flux_HR
-    Flux_HR --> Operator[Private LLM Operator]
-
-    KRO[KRO ResourceGraphDefinition] --> Flux_OCI
-    KRO --> Flux_HR
+    CV[ComponentVersion] --> R[Resource<br>Helm chart ref]
+    R --> S[Snapshot]
+    S --> FD[FluxDeployer]
+    FD --> HR[Flux HelmRelease]
+    HR --> Op[Private LLM Operator<br>in target namespace]
 ```
 
-The OCM component version contains two resources:
-- **oci-helm-chart-private-llm-operator** -- the Helm chart as an OCI artifact
-- **private-llm-image** -- the operator container image
+The Helm chart creates three OCM custom resources:
 
-KRO's `ResourceGraphDefinition` wires these together into a Flux `OCIRepository` + `HelmRelease` pipeline.
+| Resource | Kind | Purpose |
+|----------|------|---------|
+| `private-llm-operator` | `ComponentVersion` | Points to the OCM component in the OCI registry |
+| `private-llm-operator-chart` | `Resource` | Extracts the Helm chart artifact from the component |
+| `private-llm-operator` | `FluxDeployer` | Creates a Flux `HelmRelease` from the extracted chart |
 
-## Step 1: Set Up Credentials
+All three resources are created in the `ocm-system` namespace.
+
+## Step 1: Create GHCR Credentials
+
+The OCM controller needs pull access to `ghcr.io/apeirora`:
 
 ```sh
-# OCM controller needs GHCR access
 kubectl -n ocm-system create secret docker-registry ghcr-credentials \
   --docker-server=ghcr.io \
   --docker-username="apeirora" \
   --docker-password="$GITHUB_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
-
-kubectl -n ocm-system create serviceaccount ocm-repo-access --dry-run=client -o yaml | kubectl apply -f -
-kubectl -n ocm-system patch serviceaccount ocm-repo-access \
-  -p '{"imagePullSecrets":[{"name":"ghcr-credentials"}]}'
-
-# Create OCM Repository reference
-kubectl apply -f - <<'EOF'
-apiVersion: delivery.ocm.software/v1alpha1
-kind: Repository
-metadata:
-  name: apeirora-repository
-  namespace: ocm-system
-spec:
-  repositorySpec:
-    baseUrl: ghcr.io/apeirora/ocm
-    type: OCIRegistry
-  interval: 1m
-  ocmConfig:
-    - kind: Secret
-      name: ghcr-credentials
-EOF
 ```
 
-## Step 2: Prepare the Workload Namespace
+If the operator image is also private, create the same secret in the target namespace:
 
 ```sh
-kubectl create namespace private-llm-operator || true
-kubectl -n private-llm-operator create secret docker-registry ghcr-credentials \
+kubectl create namespace private-llm-system || true
+kubectl -n private-llm-system create secret docker-registry ghcr-credentials \
   --docker-server=ghcr.io \
   --docker-username="apeirora" \
   --docker-password="$GITHUB_TOKEN" \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
 
-## Step 3: Configure Values
+## Step 2: Configure Values
 
-Create a `values.yaml` file:
+Create a `values.yaml` override file:
 
 ```yaml
 component:
-  semver: "v2.8.1"    # OCM component version to deploy
+  semver: ">=2.0.1"               # semver constraint for the component version
 
 operator:
-  targetNamespace: private-llm-operator
+  targetNamespace: private-llm-system
   publicHost: llm.example.com
   publicScheme: https
   imagePullSecretName: ghcr-credentials
-  traefikEnabled: true       # false if Traefik is managed externally
+  traefikEnabled: true             # false if Traefik is managed externally
   tlsSecretName: "private-llm"
   ingressExtraAnnotations: {}
 ```
 
-## Step 4: Render and Apply
+### All Values
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `component.name` | Name for the OCM resources | `private-llm-operator` |
+| `component.namespace` | Namespace for OCM resources | `ocm-system` |
+| `component.componentName` | OCM component identity | `llm.privatellms.msp/private-llm` |
+| `component.repositoryUrl` | OCI registry URL | `ghcr.io/apeirora/ocm` |
+| `component.secretRefName` | Secret with registry credentials | `ghcr-credentials` |
+| `component.semver` | Semver version or constraint | `>=2.0.1` |
+| `component.interval` | Reconciliation interval | `1m` |
+| `component.chartResourceName` | Name of the chart resource in the component | `oci-helm-chart-private-llm-operator` |
+| `operator.targetNamespace` | Namespace where the operator is deployed | `private-llm-system` |
+| `operator.publicHost` | Public hostname for the LLM API | `localhost` |
+| `operator.publicScheme` | `http` or `https` | `http` |
+| `operator.imagePullSecretName` | Image pull secret name | `ghcr-credentials` |
+| `operator.traefikEnabled` | Deploy bundled Traefik | `true` |
+| `operator.tlsSecretName` | TLS secret for ingress | `""` |
+| `operator.ingressExtraAnnotations` | Extra ingress annotations | `{}` |
+
+## Step 3: Install via Helm
 
 ```sh
 helm template private-llm charts/private-llm-operator-ocm/ \
@@ -104,42 +105,60 @@ helm template private-llm charts/private-llm-operator-ocm/ \
   | kubectl apply -f -
 ```
 
-This creates:
-- An OCM `Component` pointing at the specified version
-- A KRO `ResourceGraphDefinition` that orchestrates the deployment pipeline
-- OCM `Resource` objects that resolve the chart and image references
-- Flux `OCIRepository` and `HelmRelease` that deploy the operator
+This creates three resources in `ocm-system`:
 
-## Step 5: Verify
+1. **ComponentVersion** `private-llm-operator` -- resolves the component from `ghcr.io/apeirora/ocm`
+2. **Resource** `private-llm-operator-chart` -- extracts the `oci-helm-chart-private-llm-operator` artifact
+3. **FluxDeployer** `private-llm-operator` -- creates a `HelmRelease` targeting `private-llm-system`
+
+The OCM controller reconciles the chain: `ComponentVersion` -> `Resource` -> `Snapshot` -> `FluxDeployer` -> `HelmRelease` -> operator pods.
+
+## Step 4: Verify
 
 ```sh
-# Check the OCM component
-kubectl get component -n ocm-system
+# 1. ComponentVersion should be Ready
+kubectl get componentversion -n ocm-system
 
-# Check KRO resources
-kubectl get resourcegraphdefinition
+# 2. Resource should be Ready with a Snapshot
+kubectl get resource -n ocm-system
+kubectl get snapshot -n ocm-system
 
-# Check Flux resources
-kubectl get ocirepository -n private-llm-operator
-kubectl get helmrelease -n private-llm-operator
+# 3. FluxDeployer should have created a HelmRelease
+kubectl get fluxdeployer -n ocm-system
+kubectl get helmrelease -n ocm-system
 
-# Check the operator
-kubectl get pods -n private-llm-operator
+# 4. Operator pods should be running
+kubectl get pods -n private-llm-system
 ```
+
+> **Tip**: If the `ComponentVersion` stays in a non-ready state, check that the `ghcr-credentials` secret exists in `ocm-system` and has valid credentials.
 
 ## Upgrading
 
-To upgrade, update `component.semver` in your values file and re-apply:
+Update `component.semver` in your values file and re-apply:
 
 ```sh
-# Edit values.yaml: component.semver: "v2.9.0"
+# Edit values.yaml: component.semver: ">=2.1.0"
 helm template private-llm charts/private-llm-operator-ocm/ \
   -f charts/private-llm-operator-ocm/values.yaml \
   -f ./values.yaml \
   | kubectl apply -f -
 ```
 
-The OCM controller detects the version change, resolves new chart/image references, and KRO+Flux roll out the upgrade automatically.
+The OCM controller detects the version change, resolves the new chart, and the `FluxDeployer` rolls out the upgrade via the `HelmRelease`.
+
+## Manual Deployment via bootstrap.yaml
+
+For quick testing without Helm, use `ocm/bootstrap.yaml` with `envsubst`:
+
+```sh
+export GH_OWNER=apeirora
+export VERSION=">=2.0.1"
+
+envsubst < ocm/bootstrap.yaml | kubectl apply -f -
+```
+
+This creates the same three resources (`ComponentVersion`, `Resource`, `FluxDeployer`) with sensible defaults. Edit the `FluxDeployer`'s `.spec.helmReleaseTemplate.values` section in the file to customize operator settings before applying.
 
 ## Publishing a Custom OCM Component
 
@@ -194,7 +213,7 @@ If you prefer to skip OCM entirely and install the chart directly:
 
 ```sh
 helm upgrade --install private-llm-operator charts/private-llm-operator \
-  --namespace private-llm-operator --create-namespace \
+  --namespace private-llm-system --create-namespace \
   --set PUBLIC_HOST=llm.example.com \
   --set PUBLIC_SCHEME=https \
   --set tls.secretName=private-llm \

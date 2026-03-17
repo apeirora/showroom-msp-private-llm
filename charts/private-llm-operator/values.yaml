@@ -11,7 +11,7 @@ image:
   tag: 2.8.1
   pullPolicy: IfNotPresent
 imagePullSecrets: []
-metricsProxy:
+kubeRbacProxy:
   enabled: true
   image:
     repository: registry.k8s.io/kubebuilder/kube-rbac-proxy

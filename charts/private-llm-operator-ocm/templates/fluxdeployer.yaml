@@ -1,0 +1,48 @@
+apiVersion: delivery.ocm.software/v1alpha1
+kind: FluxDeployer
+metadata:
+  name: {{ .Values.component.name }}
+  namespace: {{ .Values.component.namespace }}
+spec:
+  interval: {{ .Values.component.interval }}
+  sourceRef:
+    kind: Resource
+    name: {{ .Values.component.name }}-chart
+    namespace: {{ .Values.component.namespace }}
+  helmReleaseTemplate:
+    releaseName: {{ .Values.component.name }}
+    targetNamespace: {{ .Values.operator.targetNamespace }}
+    values:
+      PUBLIC_HOST: {{ .Values.operator.publicHost }}
+      PUBLIC_SCHEME: {{ .Values.operator.publicScheme }}
+      {{- if .Values.operator.tlsSecretName }}
+      tls:
+        secretName: {{ .Values.operator.tlsSecretName | quote }}
+      {{- end }}
+      traefik:
+        enabled: {{ .Values.operator.traefikEnabled }}
+        {{- if .Values.operator.traefikEnabled }}
+        service:
+          type: {{ .Values.operator.traefikServiceType }}
+        ports:
+          web:
+            nodePort: {{ .Values.operator.traefikNodePortWeb }}
+          websecure:
+            nodePort: {{ .Values.operator.traefikNodePortWebsecure }}
+        {{- end }}
+      imagePullSecrets:
+        - name: {{ .Values.operator.imagePullSecretName }}
+      {{- if or .Values.operator.imageRepository .Values.operator.imageTag }}
+      image:
+        {{- if .Values.operator.imageRepository }}
+        repository: {{ .Values.operator.imageRepository }}
+        {{- end }}
+        {{- if .Values.operator.imageTag }}
+        tag: {{ .Values.operator.imageTag | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.operator.ingressExtraAnnotations }}
+      ingress:
+        extraAnnotations:
+          {{- toYaml .Values.operator.ingressExtraAnnotations | nindent 10 }}
+      {{- end }}

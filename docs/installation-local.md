@@ -80,7 +80,7 @@ helm upgrade --install private-llm charts/private-llm-operator \
   --dependency-update \
   --set PUBLIC_HOST=localhost \
   --set traefik.enabled=false \
-  --set metricsProxy.enabled=false
+  --set kubeRbacProxy.enabled=false
 ```
 
 ### 2. Create a [provider workspace](https://docs.kcp.io/kcp/main/concepts/apis/) in KCP
@@ -247,6 +247,8 @@ kubectl get llminstances -w
 
 > **Tip:** When running locally, the operator can create Deployments and Services but the health check will fail because it tries to probe the in-cluster service DNS. For full end-to-end testing, use the Quick Start above.
 
+> For testing the OCM delivery pipeline locally, see [OCM Installation](installation-ocm.md).
+
 ## Building from Source
 
 ### Build the Operator Binary
@@ -281,7 +283,7 @@ helm upgrade --install private-llm charts/private-llm-operator \
   --set image.tag=dev \
   --set image.pullPolicy=Never \
   --set traefik.enabled=false \
-  --set metricsProxy.enabled=false
+  --set kubeRbacProxy.enabled=false
 ```
 
 ## Running Tests
