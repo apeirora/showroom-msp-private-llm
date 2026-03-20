@@ -10,7 +10,6 @@ spec:
 {{ $marketplaceDescription | nindent 4 }}
   contacts:
     - displayName: Alex IT Architect
-      email: alex.it.architect@privatellms.msp
       role: ["IT Architect"]
   preferredSupportChannels:
     - displayName: ApeiroRA Help Desk
