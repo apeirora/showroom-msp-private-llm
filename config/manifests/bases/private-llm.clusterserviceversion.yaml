@@ -33,8 +33,7 @@ spec:
   - name: Private Llm
     url: https://private-llm.domain
   maintainers:
-  - email: your@email.com
-    name: Maintainer Name
+  - name: Maintainer Name
   maturity: alpha
   provider:
     name: Provider Name
