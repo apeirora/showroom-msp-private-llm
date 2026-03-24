@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.8.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.8.1...v2.8.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* golint formatting ([#107](https://github.com/apeirora/showroom-msp-private-llm/issues/107)) ([0d51107](https://github.com/apeirora/showroom-msp-private-llm/commit/0d51107c142f140ee572b59c59b2ab4ee221f310))
+* make OCM chart compatible with controller v0.29.0 ([29f8809](https://github.com/apeirora/showroom-msp-private-llm/commit/29f8809ed343bccf862683e36207c351667a6897))
+* **metadata:** remove tracked email placeholders ([#104](https://github.com/apeirora/showroom-msp-private-llm/issues/104)) ([c9c64d0](https://github.com/apeirora/showroom-msp-private-llm/commit/c9c64d05639310c6d8e88e5cea3a33c248752dbd))
+* OCM chart consistency improvements ([6acbe0f](https://github.com/apeirora/showroom-msp-private-llm/commit/6acbe0fa9d50b418850f173e3a0d884466850ce6))
+* replace KRO with plain OCM resources (tested on cluster) ([80105dd](https://github.com/apeirora/showroom-msp-private-llm/commit/80105ddaf810dfaa66e64fc96bd56f083065035c))
+* update kube-rbac-proxy image to registry.k8s.io ([bc48695](https://github.com/apeirora/showroom-msp-private-llm/commit/bc48695bce697c963c1b4e3f4ea5ae9ed3ee5ed7))
+* update kube-rbac-proxy image to registry.k8s.io ([abd10ad](https://github.com/apeirora/showroom-msp-private-llm/commit/abd10ad0c4593ff7f4fcb664b56614f2f5d9ccd9))
+* use quay.io/brancz/kube-rbac-proxy and make image configurable ([df4962d](https://github.com/apeirora/showroom-msp-private-llm/commit/df4962d3ceabf029a73bc42a4be3353c451d1e87))
+
 ## [2.8.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.8.0...v2.8.1) (2026-03-06)
 
 
