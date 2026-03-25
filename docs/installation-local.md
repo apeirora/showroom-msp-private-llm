@@ -37,14 +37,14 @@ task local-setup
 ```
 
 After completion:
-- KCP API at `https://kcp.api.portal.dev.local:8443`
+- KCP API at `https://localhost:8443`
 - Admin kubeconfig at `.secret/kcp/admin.kubeconfig`
 - Portal UI at `https://portal.dev.local:8443`
 
-Add to `/etc/hosts` if not already present:
-```
-127.0.0.1 portal.dev.local kcp.api.portal.dev.local
-```
+> **`/etc/hosts`**: The KCP API URL (`localhost:8443`) works without any `/etc/hosts` entries. If you want to access the Portal UI at `portal.dev.local:8443`, add:
+> ```
+> 127.0.0.1 portal.dev.local
+> ```
 
 > **Private registry:** The operator image is hosted on `ghcr.io/apeirora` (private). If you get `ImagePullBackOff`, either run `docker login ghcr.io` before creating the Kind cluster (Kind inherits local Docker credentials) or create a pull secret:
 >
@@ -89,7 +89,7 @@ Switch to the KCP admin kubeconfig for workspace management:
 
 ```sh
 export KUBECONFIG=.secret/kcp/admin.kubeconfig
-export KCP_URL="https://kcp.api.portal.dev.local:8443"
+export KCP_URL="https://localhost:8443"
 
 kubectl ws create providers --type=root:providers --ignore-existing
 kubectl ws create private-llm --type=root:provider \
@@ -149,7 +149,7 @@ Create resources through KCP as a customer would via the portal:
 
 ```sh
 export KUBECONFIG=.secret/kcp/admin.kubeconfig
-export KCP_URL="https://kcp.api.portal.dev.local:8443"
+export KCP_URL="https://localhost:8443"
 
 # Create an org workspace and bind to the LLM APIExport
 kubectl ws create orgs --type=root:organization --ignore-existing
@@ -353,7 +353,7 @@ Check the kubeconfig secret exists and contains a valid kubeconfig:
 kubectl -n api-syncagent get secret pm-kubeconfig -o jsonpath='{.data.kubeconfig}' | base64 -d | head -5
 ```
 
-Since both KCP and the sync agent run in the same Kind cluster, the KCP admin kubeconfig (which uses `kcp.api.portal.dev.local:8443`) should work. Make sure `/etc/hosts` has the entry for `kcp.api.portal.dev.local`.
+Since both KCP and the sync agent run in the same Kind cluster, the KCP admin kubeconfig (which uses `localhost:8443`) should work without any `/etc/hosts` entries.
 
 ### kubectl ws: command not found
 
