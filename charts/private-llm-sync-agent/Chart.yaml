@@ -7,6 +7,6 @@ appVersion: 2.8.2
 dependencies:
   - name: api-syncagent
     alias: syncAgentOperator
-    version: 0.4.2
+    version: 0.5.1
     repository: https://kcp-dev.github.io/helm-charts
     condition: syncAgentOperator.enabled
