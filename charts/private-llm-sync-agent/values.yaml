@@ -6,6 +6,13 @@ syncAgentOperator:
   extraFlags: []
   crds:
     enabled: false
+  hostAliases: []
+  # For local Platform Mesh setup (Kind cluster), uncomment:
+  # hostAliases:
+  #   - ip: "10.96.x.x"  # Traefik ClusterIP — run: kubectl get svc traefik -o jsonpath='{.spec.clusterIP}'
+  #     hostnames:
+  #       - "root.kcp.localhost"
+  #       - "kcp.localhost"
 
 publishedResources:
   enabled: true
