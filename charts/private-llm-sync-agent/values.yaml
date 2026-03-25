@@ -6,10 +6,19 @@ syncAgentOperator:
   extraFlags: []
   crds:
     enabled: false
+  # Optional: Configure host aliases for the sync agent pods.
+  # Useful when KCP's shard baseURL uses a hostname (e.g. root.kcp.localhost)
+  # that resolves to 127.0.0.1 inside pods.
+  hostAliases: []
+  # Example for local setup:
+  # hostAliases:
+  #   - ip: "10.96.188.4"  # Traefik ClusterIP
+  #     hostnames:
+  #       - "root.kcp.localhost"
 
 publishedResources:
   enabled: true
-  namespace: api-syncagent
+  # Defaults to Release.Namespace when not set, so each sync agent
+  # only sees its own PublishedResources in its deploy namespace.
+  # namespace: api-syncagent
   serviceAccountName: private-llm-sync-agent
-
-

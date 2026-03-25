@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: '{{ template "name" . }}'
+  labels:
+    app.kubernetes.io/name: kcp-api-syncagent
+    app.kubernetes.io/instance: '{{ template "agentname" . }}'
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: '{{ template "name" . }}'
+spec:
+  replicas: {{ .Values.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kcp-api-syncagent
+      app.kubernetes.io/instance: '{{ template "agentname" . }}'
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kcp-api-syncagent
+        app.kubernetes.io/instance: '{{ template "agentname" . }}'
+        app.kubernetes.io/version: '{{ .Values.image.tag | default .Chart.AppVersion }}'
+    spec:
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- include "imagePullSecrets" . | trim | nindent 8 }}
+      {{- end }}
+      {{- if .Values.hostAliases }}
+      hostAliases:
+{{ toYaml .Values.hostAliases | indent 8 }}
+      {{- end }}
+      containers:
+        - name: agent
+          args:
+            - --namespace=$(POD_NAMESPACE)
+            - --enable-leader-election={{ .Values.enableLeaderElection }}
+            {{- with .Values.apiExportEndpointSliceName }}
+            - --apiexportendpointslice-ref={{ . }}
+            {{- else with .Values.apiExportName }}
+            - --apiexport-ref={{ . }}
+            {{- else }}
+            {{- required "Either an APIExportEndpointSliceRef or APIExportRef must be configured." "" }}
+            {{- end }}
+            - --agent-name=$(AGENT_NAME)
+            - --kcp-kubeconfig=/etc/api-syncagent/kcp/kubeconfig
+            {{- with .Values.kubeconfig }}
+            - --kubeconfig=/etc/api-syncagent/cluster/kubeconfig
+            {{- end }}
+            {{- with .Values.kubeconfigHostOverride }}
+            - "--kubeconfig-host-override={{ . }}"
+            {{- end }}
+            {{- with .Values.kubeconfigCAFileOverride }}
+            - "--kubeconfig-ca-file-override={{ . }}"
+            {{- end }}
+            {{- with .Values.publishedResourceSelector }}
+            - "--published-resource-selector={{ . }}"
+            {{- end }}
+            {{- with .Values.disabledControllers }}
+            - "--disabled-controllers={{ . | join ',' }}"
+            {{- end }}
+            {{- range .Values.extraFlags }}
+            - {{ . | quote }}
+            {{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: AGENT_NAME
+              value: '{{ template "agentname" . }}'
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          resources: {{ .Values.resources | toYaml | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: kcp-kubeconfig
+              mountPath: /etc/api-syncagent/kcp
+          {{- with .Values.kubeconfig }}
+            - name: cluster-kubeconfig
+              mountPath: /etc/api-syncagent/cluster
+          {{- end }}
+{{- if .Values.extraVolumeMounts }}
+{{ toYaml .Values.extraVolumeMounts | indent 12 }}
+{{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: '{{ template "name" . }}'
+      volumes:
+        - name: kcp-kubeconfig
+          secret:
+            secretName: '{{ required "Kubernetes Secret for the kcp kubeconfig must be configured." .Values.kcpKubeconfig }}'
+        {{- with .Values.kubeconfig }}
+        - name: cluster-kubeconfig
+          secret:
+            secretName: "{{ . }}"
+        {{- end }}
+{{- if .Values.extraVolumes }}
+{{ toYaml .Values.extraVolumes | indent 8 }}
+{{- end }}
+

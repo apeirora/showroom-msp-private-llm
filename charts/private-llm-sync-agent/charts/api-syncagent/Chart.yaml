@@ -1,0 +1,17 @@
+apiVersion: v2
+appVersion: v0.4.2
+description: A Kubernetes agent to synchronize APIs and their objects between Kubernetes
+  clusters and kcp.
+home: https://www.kcp.io/
+icon: https://raw.githubusercontent.com/kcp-dev/kcp/main/contrib/logo/blue-green.svg
+keywords:
+- kcp
+- kubernetes
+- multitenancy
+- controlplane
+name: api-syncagent
+sources:
+- https://github.com/kcp-dev/helm-charts
+- https://github.com/kcp-dev/api-syncagent
+type: application
+version: 0.4.2
