@@ -28,7 +28,7 @@
                         "resourceDefinition": {
                             "group": "llm.privatellms.msp",
                             "version": "v1alpha1",
-                            "plural": "LLMInstances",
+                            "plural": "llminstances",
                             "singular": "llminstance",
                             "kind": "LLMInstance",
                             "scope": "Namespaced",
@@ -137,7 +137,7 @@
                         "resourceDefinition": {
                             "group": "llm.privatellms.msp",
                             "version": "v1alpha1",
-                            "plural": "APITokenRequests",
+                            "plural": "apitokenrequests",
                             "singular": "apitokenrequest",
                             "kind": "APITokenRequest",
                             "scope": "Namespaced",
