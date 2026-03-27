@@ -10,7 +10,7 @@ Set up a local development environment using Kind for testing and development.
 - [Kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - [Helm](https://helm.sh/) 3.14+
-- [kubectl-kcp plugin](https://github.com/kcp-dev/kcp/releases) — provides `kubectl ws` for KCP workspace management
+- [kubectl-kcp plugin](https://github.com/kcp-dev/kcp/releases) — provides `kubectl kcp workspace` for KCP workspace management
 - [Platform Mesh local-setup](https://github.com/platform-mesh/helm-charts/tree/main/local-setup) — provides KCP, the portal UI, and workspace hierarchy
 - Go 1.23+ (only if building from source)
 
@@ -26,7 +26,7 @@ wget -qO- https://github.com/kcp-dev/kcp/releases/latest/download/kubectl-kcp-pl
 wget -qO- https://github.com/kcp-dev/kcp/releases/latest/download/kubectl-kcp-plugin_*_linux_amd64.tar.gz | tar xz -C /usr/local/bin bin/kubectl-kcp --strip-components=1
 
 # Verify
-kubectl ws --help
+kubectl kcp workspace --help
 ```
 
 ### Run the Platform Mesh local-setup
@@ -39,23 +39,7 @@ task local-setup
 After completion:
 - KCP API at `https://localhost:8443`
 - Admin kubeconfig at `.secret/kcp/admin.kubeconfig`
-- Portal UI at `https://portal.dev.local:8443`
-
-> **`/etc/hosts`**: The KCP API URL (`localhost:8443`) works without any `/etc/hosts` entries. If you want to access the Portal UI at `portal.dev.local:8443`, add:
-> ```
-> 127.0.0.1 portal.dev.local
-> ```
-
-> **Private registry:** The operator image is hosted on `ghcr.io/apeirora` (private). If you get `ImagePullBackOff`, either run `docker login ghcr.io` before creating the Kind cluster (Kind inherits local Docker credentials) or create a pull secret:
->
-> ```sh
-> kubectl -n private-llm-system create secret docker-registry ghcr-creds \
->   --docker-server=ghcr.io \
->   --docker-username="$GH_OWNER" \
->   --docker-password="$GITHUB_TOKEN"
-> ```
->
-> Then add `--set 'imagePullSecrets[0].name=ghcr-creds'` to the Helm install command.
+- Portal UI at `https://portal.localhost:8443`
 
 ## Key Concepts
 
@@ -91,9 +75,10 @@ Switch to the KCP admin kubeconfig for workspace management:
 export KUBECONFIG=.secret/kcp/admin.kubeconfig
 export KCP_URL="https://localhost:8443"
 
-kubectl ws create providers --type=root:providers --ignore-existing
-kubectl ws create private-llm --type=root:provider \
+kubectl kcp workspace create providers --type=root:providers --ignore-existing
+kubectl kcp workspace create private-llm --type=root:provider \
   --server="$KCP_URL/clusters/root:providers"
+kubectl create ns default --server="$KCP_URL/clusters/root:providers:private-llm"
 ```
 
 ### 3. Install the PM integration chart in KCP
@@ -118,10 +103,14 @@ Switch back to the Kind kubeconfig:
 ```sh
 unset KUBECONFIG  # target the Kind cluster
 
-# Create the KCP kubeconfig secret
+# Create a kubeconfig for the sync agent with in-cluster KCP access
+FRONTPROXY="https://frontproxy-front-proxy.platform-mesh-system.svc.cluster.local:6443"
+sed "s|https://localhost:8443/clusters/root|${FRONTPROXY}/clusters/root:providers:private-llm|" \
+  .secret/kcp/admin.kubeconfig > /tmp/sync-agent-kubeconfig.yaml
+
 kubectl create namespace api-syncagent --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n api-syncagent create secret generic pm-kubeconfig \
-  --from-file=kubeconfig=.secret/kcp/admin.kubeconfig \
+  --from-file=kubeconfig=/tmp/sync-agent-kubeconfig.yaml \
   --dry-run=client -o yaml | kubectl apply -f -
 
 # Install the sync agent
@@ -133,7 +122,13 @@ helm upgrade --install private-llm-sync-agent charts/private-llm-sync-agent \
   --set syncAgentOperator.agentName=llm-agent \
   --set syncAgentOperator.kcpKubeconfig=pm-kubeconfig \
   --set publishedResources.enabled=true \
-  --set publishedResources.namespace=api-syncagent
+  --set publishedResources.namespace=api-syncagent \
+  --set 'syncAgentOperator.extraFlags[0]=--published-resource-selector=app.kubernetes.io/name=private-llm-sync-agent'
+
+# Patch sync agent to resolve KCP virtual workspace endpoints inside the cluster
+TRAEFIK_IP=$(kubectl get svc traefik -o jsonpath='{.spec.clusterIP}')
+kubectl -n api-syncagent patch deployment private-llm-sync-agent \
+  --type=json -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/hostAliases\",\"value\":[{\"ip\":\"$TRAEFIK_IP\",\"hostnames\":[\"root.kcp.localhost\"]}]}]"
 ```
 
 Verify it's running:
@@ -151,9 +146,9 @@ Create resources through KCP as a customer would via the portal:
 export KUBECONFIG=.secret/kcp/admin.kubeconfig
 export KCP_URL="https://localhost:8443"
 
-# Create an org workspace and bind to the LLM APIExport
-kubectl ws create orgs --type=root:organization --ignore-existing
-kubectl ws create demo --server="$KCP_URL/clusters/root:orgs"
+# Create a demo workspace and bind to the LLM APIExport
+kubectl kcp workspace create demo --type=root:org --server="$KCP_URL/clusters/root:orgs"
+kubectl create ns default --server="$KCP_URL/clusters/root:orgs:demo"
 
 # Bind to the LLM APIExport (see https://docs.kcp.io/kcp/main/concepts/apis/)
 kubectl apply --server="$KCP_URL/clusters/root:orgs:demo" -f - <<'EOF'
@@ -323,12 +318,6 @@ The init container downloads GGUF models from HuggingFace. If your network is re
 kubectl logs <pod-name> -c download-model
 ```
 
-### ImagePullBackOff for operator image
-
-The operator image at `ghcr.io/apeirora/private-llm-controller` is private. You need either:
-- `docker login ghcr.io` before creating the Kind cluster (Kind inherits local Docker credentials)
-- An `imagePullSecrets` entry pointing to a `docker-registry` secret (see Prerequisites)
-
 ### Operator can't create Traefik Middleware
 
 If Traefik CRDs are not installed, the operator gracefully skips middleware creation. This is expected when using `traefik.enabled=false`.
@@ -353,8 +342,8 @@ Check the kubeconfig secret exists and contains a valid kubeconfig:
 kubectl -n api-syncagent get secret pm-kubeconfig -o jsonpath='{.data.kubeconfig}' | base64 -d | head -5
 ```
 
-Since both KCP and the sync agent run in the same Kind cluster, the KCP admin kubeconfig (which uses `localhost:8443`) should work without any `/etc/hosts` entries.
+The sync agent kubeconfig should use the in-cluster front-proxy address (`frontproxy-front-proxy.platform-mesh-system.svc.cluster.local:6443`), not `localhost:8443` which is not reachable from inside Kind pods.
 
-### kubectl ws: command not found
+### kubectl kcp workspace: command not found
 
-Install the [kubectl-kcp plugin](https://github.com/kcp-dev/kcp/releases). The `kubectl ws` command is provided by the `kubectl-kcp` binary which must be on your `PATH`. See Prerequisites.
+Install the [kubectl-kcp plugin](https://github.com/kcp-dev/kcp/releases). The `kubectl kcp workspace` command is provided by the `kubectl-kcp` binary which must be on your `PATH`. See Prerequisites.
