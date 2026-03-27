@@ -122,7 +122,8 @@ helm upgrade --install private-llm-sync-agent charts/private-llm-sync-agent \
   --set syncAgentOperator.agentName=llm-agent \
   --set syncAgentOperator.kcpKubeconfig=pm-kubeconfig \
   --set publishedResources.enabled=true \
-  --set publishedResources.namespace=api-syncagent
+  --set publishedResources.namespace=api-syncagent \
+  --set 'syncAgentOperator.extraFlags[0]=--published-resource-selector=app.kubernetes.io/name=private-llm-sync-agent'
 
 # Patch sync agent to resolve KCP virtual workspace endpoints inside the cluster
 TRAEFIK_IP=$(kubectl get svc traefik -o jsonpath='{.spec.clusterIP}')
