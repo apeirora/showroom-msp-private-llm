@@ -4,25 +4,10 @@ metadata:
   name: llm.privatellms.msp
   labels:
     ui.platform-mesh.io/content-for: llm.privatellms.msp
-spec:
-  # Canonical v1alpha2 shape — matches ECOFed/CNPG which publish to the
-  # marketplace successfully. Do NOT add `all: true`; the live CRD schema
-  # on cc-d2 does not declare that field and Flux's server-side dry-run
-  # rejects the manifest.
-  #
-  # Known-limitation: sync-agent does not cleanly populate
-  # `spec.resources` on first install when the chart creates the APIExport
-  # (its v1alpha1 write conflicts with the v1alpha2 stored shape). The
-  # deployer preserves a manual patch via `driftDetection.ignore` on
-  # `/spec/resources`. Proper fix is to stop shipping the APIExport from
-  # this chart and let the sync-agent be the sole owner (ECOFed pattern).
-  permissionClaims:
-    - group: ""
-      resource: namespaces
-      verbs: ["*"]
-    - group: ""
-      resource: events
-      verbs: ["*"]
-    - group: ""
-      resource: secrets
-      verbs: ["*"]
+# spec omitted deliberately — the sync-agent owns spec.permissionClaims and
+# spec.resources (it writes via v1alpha1 with `all: true` claims). If the
+# chart also shipped claims, their v1alpha2-to-v1alpha1 conversion would
+# drop the `all` marker, sync-agent would treat them as missing and append
+# duplicates, whole patch would fail validation, and spec.resources would
+# never be populated. Keeping the chart's template to just the shell
+# (metadata only) lets the sync-agent converge cleanly on first install.
