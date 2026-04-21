@@ -1,0 +1,9 @@
+dependencies:
+- name: private-llm-operator
+  repository: file://../private-llm-operator
+  version: 2.8.2
+- name: private-llm-sync-agent
+  repository: file://../private-llm-sync-agent
+  version: 2.8.2
+digest: sha256:dd844eb6c782e936aaf4186d250901bbba5bc6a275507dcdffc659db22656b9a
+generated: "2026-04-21T09:58:08.921945+02:00"

@@ -1,0 +1,21 @@
+# Public host the portal integration advertises (used in ContentConfiguration).
+# Local: "localhost". Prod: FQDN served by the MSP-side ingress.
+publicHost: localhost
+publicScheme: http
+contentPath: /pm-content.json
+
+# Marketplace-facing display info.
+branding:
+  marketplace:
+    title: "LLM Service"
+    description: "LLM services provided by MODEL Corp."
+
+# Values passed through to the pm-integration sub-chart.
+private-llm-pm-integration:
+  publicHost: localhost
+  publicScheme: http
+  contentPath: /pm-content.json
+  branding:
+    marketplace:
+      title: "LLM Service"
+      description: "LLM services provided by MODEL Corp."
