@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.7](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.6...v2.9.7) (2026-04-21)
+
+
+### Bug Fixes
+
+* **chart:** stop shipping permissionClaims from chart, let sync-agent own them ([#130](https://github.com/apeirora/showroom-msp-private-llm/issues/130)) ([c3c0f7e](https://github.com/apeirora/showroom-msp-private-llm/commit/c3c0f7e12863801270ead1981260b8edc9bf2d44))
+
 ## [2.9.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.5...v2.9.6) (2026-04-21)
 
 

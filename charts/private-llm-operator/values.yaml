@@ -8,7 +8,7 @@ auth:
   externalURL: ''
 image:
   repository: ghcr.io/apeirora/private-llm-controller
-  tag: 2.9.6
+  tag: 2.9.7
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 kubeRbacProxy:
