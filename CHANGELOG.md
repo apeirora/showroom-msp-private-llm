@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.5...v2.9.6) (2026-04-21)
+
+
+### Reverts
+
+* **chart:** APIExport claim shape to verbs-only (no all:true) ([#128](https://github.com/apeirora/showroom-msp-private-llm/issues/128)) ([d26a145](https://github.com/apeirora/showroom-msp-private-llm/commit/d26a14500a3da49d7daef7c88fb7a83271a429fb))
+
 ## [2.9.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.4...v2.9.5) (2026-04-21)
 
 
