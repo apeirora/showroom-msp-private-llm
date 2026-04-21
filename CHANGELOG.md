@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.4...v2.9.5) (2026-04-21)
+
+
+### Bug Fixes
+
+* **chart:** APIExport claims need both verbs and all:true ([#126](https://github.com/apeirora/showroom-msp-private-llm/issues/126)) ([5a05c39](https://github.com/apeirora/showroom-msp-private-llm/commit/5a05c3985ecb9c418a060cc6396f989cbaeda4b2))
+
 ## [2.9.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.3...v2.9.4) (2026-04-21)
 
 
