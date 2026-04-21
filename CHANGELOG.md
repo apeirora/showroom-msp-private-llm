@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.1...v2.9.2) (2026-04-21)
+
+
+### Bug Fixes
+
+* **chart:** widen umbrella sub-chart version constraints ([#120](https://github.com/apeirora/showroom-msp-private-llm/issues/120)) ([1390f1b](https://github.com/apeirora/showroom-msp-private-llm/commit/1390f1bea07a4d19c223067fd75f0b36a717aebb))
+
 ## [2.9.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.0...v2.9.1) (2026-04-21)
 
 
