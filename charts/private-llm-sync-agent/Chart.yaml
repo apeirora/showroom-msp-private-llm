@@ -2,8 +2,8 @@ apiVersion: v2
 name: private-llm-sync-agent
 description: Deploy the KCP Sync Agent plus published-resource wrappers for private-llm.
 type: application
-version: 2.9.1
-appVersion: 2.9.1
+version: 2.9.2
+appVersion: 2.9.2
 dependencies:
   - name: api-syncagent
     alias: syncAgentOperator

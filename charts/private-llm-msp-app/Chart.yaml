@@ -5,15 +5,12 @@ description: >-
   sync agent on an MSP (workload) cluster, and generates the sync agent's
   in-cluster KCP kubeconfig when given the KCP admin kubeconfig.
 type: application
-version: 2.9.1
-appVersion: 2.9.1
+version: 2.9.2
+appVersion: 2.9.2
 dependencies:
-  # Track the same major the umbrella itself publishes under. release-please
-  # bumps all sub-charts in lockstep, so a range avoids editing the umbrella
-  # on every release.
   - name: private-llm-operator
-    version: ">=2.8.0 <3.0.0"
+    version: '>=2.8.0 <3.0.0'
     repository: file://../private-llm-operator
   - name: private-llm-sync-agent
-    version: ">=2.8.0 <3.0.0"
+    version: '>=2.8.0 <3.0.0'
     repository: file://../private-llm-sync-agent
