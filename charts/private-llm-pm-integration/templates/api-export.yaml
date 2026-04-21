@@ -5,23 +5,24 @@ metadata:
   labels:
     ui.platform-mesh.io/content-for: llm.privatellms.msp
 spec:
-  # KCP v1alpha2 APIExport validation requires each permissionClaim to carry
-  # BOTH `verbs` AND one of `all: true` / `resourceSelector`. The sync-agent
-  # reconciler only recognises claims with `all: true` as already-present —
-  # shipping the claim without it causes the sync-agent to re-add a duplicate
-  # (now with `all: true`), which then fails "duplicate group/resource"
-  # validation and blocks the whole patch, leaving `spec.resources` empty
-  # and the provider missing from the marketplace listing.
+  # Canonical v1alpha2 shape — matches ECOFed/CNPG which publish to the
+  # marketplace successfully. Do NOT add `all: true`; the live CRD schema
+  # on cc-d2 does not declare that field and Flux's server-side dry-run
+  # rejects the manifest.
+  #
+  # Known-limitation: sync-agent does not cleanly populate
+  # `spec.resources` on first install when the chart creates the APIExport
+  # (its v1alpha1 write conflicts with the v1alpha2 stored shape). The
+  # deployer preserves a manual patch via `driftDetection.ignore` on
+  # `/spec/resources`. Proper fix is to stop shipping the APIExport from
+  # this chart and let the sync-agent be the sole owner (ECOFed pattern).
   permissionClaims:
     - group: ""
       resource: namespaces
       verbs: ["*"]
-      all: true
     - group: ""
       resource: events
       verbs: ["*"]
-      all: true
     - group: ""
       resource: secrets
       verbs: ["*"]
-      all: true
