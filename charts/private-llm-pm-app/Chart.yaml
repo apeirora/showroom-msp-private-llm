@@ -6,8 +6,8 @@ description: >-
   provider workspace. Install with kubeconfig/kube-apiserver pointing at the
   target KCP workspace.
 type: application
-version: 2.8.2
-appVersion: 2.8.2
+version: 2.9.0
+appVersion: 2.9.0
 dependencies:
   - name: private-llm-pm-integration
     version: 2.8.2
