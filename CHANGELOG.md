@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.9.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.8.2...v2.9.0) (2026-04-21)
+
+
+### Features
+
+* **charts:** add private-llm-msp-app and private-llm-pm-app umbrellas ([#117](https://github.com/apeirora/showroom-msp-private-llm/issues/117)) ([43fd7e0](https://github.com/apeirora/showroom-msp-private-llm/commit/43fd7e0afa778a19944f1ce669ff57302bb6f913))
+
+
+### Bug Fixes
+
+* **sync-agent:** bump api-syncagent to 0.5.1 for hostAliases support ([#111](https://github.com/apeirora/showroom-msp-private-llm/issues/111)) ([f89cc22](https://github.com/apeirora/showroom-msp-private-llm/commit/f89cc221111e4294cce59631d3be8e5e81708fa8))
+* **sync-agent:** fix hostAliases format and add apiExportEndpointSliceName ([#113](https://github.com/apeirora/showroom-msp-private-llm/issues/113)) ([3e54f8c](https://github.com/apeirora/showroom-msp-private-llm/commit/3e54f8c9aeeec9870e8b113e7e1ec001733302cf))
+
 ## [2.8.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.8.1...v2.8.2) (2026-03-24)
 
 
