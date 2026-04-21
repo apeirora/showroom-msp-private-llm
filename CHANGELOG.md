@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.2...v2.9.3) (2026-04-21)
+
+
+### Bug Fixes
+
+* **ci:** recursively pull deps before packaging umbrella charts ([#122](https://github.com/apeirora/showroom-msp-private-llm/issues/122)) ([418d0fe](https://github.com/apeirora/showroom-msp-private-llm/commit/418d0fe727f360d093e472725b20ac1da18c0cdb))
+
 ## [2.9.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.1...v2.9.2) (2026-04-21)
 
 
