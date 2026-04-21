@@ -5,19 +5,23 @@ metadata:
   labels:
     ui.platform-mesh.io/content-for: llm.privatellms.msp
 spec:
-  # Each claim needs `all: true` (or `resourceSelector`); KCP validation
-  # rejects claims with neither. The sync-agent's APIExport reconciler only
-  # treats claims with `all: true` as already-existing, so shipping them in
-  # the `verbs: ["*"]` shape caused the sync-agent to re-add duplicates,
-  # whole patch rejected, and spec.resources never populated — which in turn
-  # made the provider disappear from the marketplace listing.
+  # KCP v1alpha2 APIExport validation requires each permissionClaim to carry
+  # BOTH `verbs` AND one of `all: true` / `resourceSelector`. The sync-agent
+  # reconciler only recognises claims with `all: true` as already-present —
+  # shipping the claim without it causes the sync-agent to re-add a duplicate
+  # (now with `all: true`), which then fails "duplicate group/resource"
+  # validation and blocks the whole patch, leaving `spec.resources` empty
+  # and the provider missing from the marketplace listing.
   permissionClaims:
     - group: ""
       resource: namespaces
+      verbs: ["*"]
       all: true
     - group: ""
       resource: events
+      verbs: ["*"]
       all: true
     - group: ""
       resource: secrets
+      verbs: ["*"]
       all: true
