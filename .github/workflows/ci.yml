@@ -131,6 +131,8 @@ jobs:
           - private-llm-operator-ocm
           - private-llm-pm-integration
           - private-llm-sync-agent
+          - private-llm-msp-app
+          - private-llm-pm-app
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

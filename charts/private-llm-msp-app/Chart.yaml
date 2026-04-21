@@ -1,0 +1,16 @@
+apiVersion: v2
+name: private-llm-msp-app
+description: >-
+  Umbrella chart for the Private LLM provider. Installs the operator and the
+  sync agent on an MSP (workload) cluster, and generates the sync agent's
+  in-cluster KCP kubeconfig when given the KCP admin kubeconfig.
+type: application
+version: 2.8.2
+appVersion: 2.8.2
+dependencies:
+  - name: private-llm-operator
+    version: 2.8.2
+    repository: file://../private-llm-operator
+  - name: private-llm-sync-agent
+    version: 2.8.2
+    repository: file://../private-llm-sync-agent

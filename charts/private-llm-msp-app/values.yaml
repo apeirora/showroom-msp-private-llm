@@ -1,0 +1,73 @@
+# Public host the operator advertises to consumers.
+# Local: "localhost". Prod: FQDN served by ingress.
+publicHost: localhost
+publicScheme: http
+
+# KCP sync-agent kubeconfig.
+#
+# Two modes:
+#   1. inline  — pass the admin kubeconfig as a file via `--set-file
+#      kcpKubeconfig.adminContent=.secret/kcp/admin.kubeconfig`. The chart
+#      rewrites the server URL to `inClusterServerUrl` + the provider workspace
+#      path and creates the Secret consumed by the sync agent.
+#   2. existing — the Secret is already present (e.g., provisioned by an
+#      ExternalSecret from OpenBao). Set `existingSecret` to its name.
+kcpKubeconfig:
+  # Name of the Secret the sync agent will mount. Must exist (either via
+  # `adminContent`/chart-generated, or externally when `existingSecret` is set).
+  secretName: pm-kubeconfig
+  # When non-empty the chart uses this Secret as-is and skips rewriting.
+  existingSecret: ""
+  # Inline admin kubeconfig content. Required when `existingSecret` is empty.
+  adminContent: ""
+  # Workspace the sync agent should target.
+  providerWorkspace: root:providers:private-llm
+  # In-cluster KCP front-proxy URL. The default works on a local `task
+  # local-setup` install; prod typically uses the same form with the
+  # environment-specific front-proxy service DNS.
+  inClusterServerUrl: https://frontproxy-front-proxy.platform-mesh-system.svc.cluster.local:6443
+
+# Image pull secret for ghcr.io. Creates a docker-registry Secret when set.
+# Prod provisions this via ExternalSecret — leave disabled.
+imagePullSecret:
+  create: false
+  name: ghcr-credentials
+  # Only used when create=true.
+  dockerConfigJson: ""
+
+# Passed through to the operator sub-chart.
+private-llm-operator:
+  PUBLIC_HOST: localhost
+  PUBLIC_SCHEME: http
+  # Local-only: Traefik stack is provided by `task local-setup`.
+  traefik:
+    enabled: false
+  kubeRbacProxy:
+    enabled: false
+
+# Passed through to the sync agent sub-chart. Values are duplicated under the
+# `syncAgentOperator` alias (used by the wrapper chart and Flux/Helm 3) and the
+# `api-syncagent` chart name (used by Helm 4, whose alias value-propagation
+# behaviour differs). Consumers should not normally touch these — override via
+# the top-level `kcpKubeconfig.*` and `publicHost` instead.
+private-llm-sync-agent:
+  syncAgentOperator: &syncAgentValues
+    enabled: true
+    apiExportName: llm.privatellms.msp
+    apiExportEndpointSliceName: llm.privatellms.msp
+    agentName: llm-agent
+    kcpKubeconfig: pm-kubeconfig
+    # Default excludes resources owned by other providers' sync agents sharing
+    # the same namespace.
+    extraFlags:
+      - --published-resource-selector=app.kubernetes.io/name=private-llm-sync-agent
+    # PublishedResource CRD is cluster-wide; install it once (via Platform
+    # Mesh local-setup or the api-syncagent operator release), not per
+    # provider.
+    crds:
+      enabled: false
+  api-syncagent: *syncAgentValues
+  publishedResources:
+    enabled: true
+    namespace: ""  # defaults to release namespace; set in templates
+    serviceAccountName: ""  # defaults to the sync-agent release name
