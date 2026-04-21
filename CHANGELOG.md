@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.3...v2.9.4) (2026-04-21)
+
+
+### Bug Fixes
+
+* **chart:** emit APIExport permissionClaims with all:true ([#124](https://github.com/apeirora/showroom-msp-private-llm/issues/124)) ([c95172b](https://github.com/apeirora/showroom-msp-private-llm/commit/c95172bfdd686af9ea01b2eca80a23d74c9eabff))
+
 ## [2.9.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.2...v2.9.3) (2026-04-21)
 
 
