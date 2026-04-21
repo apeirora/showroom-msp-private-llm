@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.9.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.0...v2.9.1) (2026-04-21)
+
+
+### Bug Fixes
+
+* **build:** bump builder image to golang:1.24 to match go.mod ([#118](https://github.com/apeirora/showroom-msp-private-llm/issues/118)) ([60c046e](https://github.com/apeirora/showroom-msp-private-llm/commit/60c046e67b66bd5df2102aac1adff4401e73727b))
+
 ## [2.9.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.8.2...v2.9.0) (2026-04-21)
 
 
