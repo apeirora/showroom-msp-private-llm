@@ -125,6 +125,15 @@ jobs:
           out_dir="dist/${chart}"
           pkg="${chart}-${VERSION}.tgz"
           echo "::group::${chart}"
+          # Pull deps recursively for any sub-chart with its own deps. `helm
+          # dep update` on the umbrella alone does not descend, so file:// sub
+          # charts get packaged without their own transitive deps (e.g.
+          # private-llm-sync-agent loses the api-syncagent sub-chart).
+          for sub in charts/*/; do
+            if [ -f "$sub/Chart.yaml" ] && grep -q "^dependencies:" "$sub/Chart.yaml"; then
+              helm dependency update "$sub"
+            fi
+          done
           helm dependency update "$chart_dir"
           helm lint "$chart_dir"
           helm template "release-${chart}" "$chart_dir" --namespace default >/dev/null
