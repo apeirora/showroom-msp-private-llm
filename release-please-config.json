@@ -42,6 +42,26 @@
           "type": "yaml",
           "path": "charts/private-llm-sync-agent/Chart.yaml",
           "jsonpath": "$.appVersion"
+        },
+        {
+          "type": "yaml",
+          "path": "charts/private-llm-msp-app/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "charts/private-llm-msp-app/Chart.yaml",
+          "jsonpath": "$.appVersion"
+        },
+        {
+          "type": "yaml",
+          "path": "charts/private-llm-pm-app/Chart.yaml",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "yaml",
+          "path": "charts/private-llm-pm-app/Chart.yaml",
+          "jsonpath": "$.appVersion"
         }
       ]
     }
