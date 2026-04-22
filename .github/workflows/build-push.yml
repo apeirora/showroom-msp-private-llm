@@ -49,40 +49,40 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Docker image
-        env:
-          IMG: ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
-          VERSION: ${{ steps.vars.outputs.version }}
-        run: |
-          make docker-build IMG="$IMG" VERSION="$VERSION"
+      - name: Set up QEMU (for multi-arch builds)
+        uses: docker/setup-qemu-action@v3
 
-      - name: Push Docker image (immutable tag)
-        env:
-          IMG: ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
-        run: |
-          make docker-push IMG="$IMG"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Push Docker image (latest)
-        env:
-          IMAGE_BASE: ${{ steps.meta.outputs.image }}
-          VERSION: ${{ steps.vars.outputs.version }}
-        run: |
-          docker tag "$IMAGE_BASE:$VERSION" "$IMAGE_BASE:latest"
-          docker push "$IMAGE_BASE:latest"
+      - name: Build and push multi-arch Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: |
+            VERSION=${{ steps.vars.outputs.version }}
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Capture image digest
         id: dig
         env:
+          DIGEST: ${{ steps.build.outputs.digest }}
           IMAGE: ${{ steps.meta.outputs.image }}:${{ steps.vars.outputs.version }}
         run: |
           set -e
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" || true)
           if [ -z "$DIGEST" ]; then
-            echo "Repo digest not available; attempting registry lookup skipped"
             DIGEST="unknown"
           fi
-          echo "$DIGEST" | tee image-digest.txt
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          FULL="${IMAGE%%:*}@${DIGEST}"
+          echo "$FULL" | tee image-digest.txt
+          echo "digest=$FULL" >> "$GITHUB_OUTPUT"
 
       - name: Upload image digest artifact
         uses: actions/upload-artifact@v4
