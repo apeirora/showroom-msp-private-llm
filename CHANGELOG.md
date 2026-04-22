@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.7...v2.10.0) (2026-04-22)
+
+
+### Features
+
+* **ci:** build multi-arch (amd64 + arm64) operator images ([#133](https://github.com/apeirora/showroom-msp-private-llm/issues/133)) ([8ceff44](https://github.com/apeirora/showroom-msp-private-llm/commit/8ceff447d9b973e2befaed6723ac10bac0324c5d))
+
 ## [2.9.7](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.6...v2.9.7) (2026-04-21)
 
 
