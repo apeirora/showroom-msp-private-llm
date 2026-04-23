@@ -1,7 +1,15 @@
 # Public host the operator advertises to consumers.
-# Local: "localhost". Prod: FQDN served by ingress.
-publicHost: localhost
-publicScheme: http
+# Local: "localhost" (default). Prod: FQDN served by ingress.
+#
+# Wiring: these are Helm globals, so `--set global.publicHost=X` (and
+# publicScheme) propagate to every sub-chart's `.Values.global` in one shot.
+# The operator sub-chart coalesces `global.publicHost` > sub-chart
+# `PUBLIC_HOST` > "localhost". Empty-string defaults here mean "unset";
+# fall through to the sub-chart default so a legacy
+# `--set private-llm-operator.PUBLIC_HOST=X` still wins when no global is set.
+global:
+  publicHost: ""
+  publicScheme: ""
 
 # KCP sync-agent kubeconfig.
 #
@@ -35,10 +43,9 @@ imagePullSecret:
   # Only used when create=true.
   dockerConfigJson: ""
 
-# Passed through to the operator sub-chart.
+# Passed through to the operator sub-chart. Public-facing config comes from
+# `global.publicHost` / `global.publicScheme` above — no duplication here.
 private-llm-operator:
-  PUBLIC_HOST: localhost
-  PUBLIC_SCHEME: http
   # Local-only: Traefik stack is provided by `task local-setup`.
   traefik:
     enabled: false

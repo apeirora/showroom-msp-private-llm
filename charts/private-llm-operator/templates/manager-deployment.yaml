@@ -62,9 +62,9 @@ spec:
             - /manager
           env:
             - name: PUBLIC_HOST
-              value: {{ .Values.PUBLIC_HOST | quote }}
+              value: {{ coalesce (index (.Values.global | default dict) "publicHost") .Values.PUBLIC_HOST "localhost" | quote }}
             - name: PUBLIC_SCHEME
-              value: {{ .Values.PUBLIC_SCHEME | default "http" | quote }}
+              value: {{ coalesce (index (.Values.global | default dict) "publicScheme") .Values.PUBLIC_SCHEME "http" | quote }}
             - name: TLS_SECRET_NAME
               value: {{ .Values.tls.secretName | default "" | quote }}
             - name: INGRESS_EXTRA_ANNOTATIONS
