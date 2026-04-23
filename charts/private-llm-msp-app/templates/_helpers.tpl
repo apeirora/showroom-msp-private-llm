@@ -13,7 +13,7 @@ Usage:
 {{- $admin := .Values.kcpKubeconfig.adminContent -}}
 {{- $ws := .Values.kcpKubeconfig.providerWorkspace -}}
 {{- $target := printf "%s/clusters/%s" .Values.kcpKubeconfig.inClusterServerUrl $ws -}}
-{{- regexReplaceAll "server: https://[^/\\s]+/clusters/root\\b" $admin (printf "server: %s" $target) -}}
+{{- regexReplaceAll "(?m)server: https://[^/\\s]+/clusters/root$" $admin (printf "server: %s" $target) -}}
 {{- end -}}
 
 {{/*
