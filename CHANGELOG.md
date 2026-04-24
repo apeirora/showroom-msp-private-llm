@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.10.0...v2.10.1) (2026-04-24)
+
+
+### Bug Fixes
+
+* **chart:** rewrite workspace-scoped KCP kubeconfigs ([87df296](https://github.com/apeirora/showroom-msp-private-llm/commit/87df2967fdd1974ebb2eb328e968a9e0bb1c5d96))
+* **chart:** wire publicHost via Helm globals in msp-app umbrella ([#136](https://github.com/apeirora/showroom-msp-private-llm/issues/136)) ([5c7667e](https://github.com/apeirora/showroom-msp-private-llm/commit/5c7667e113b99f6a9100622759942c17cc1c04e2))
+
 ## [2.10.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.9.7...v2.10.0) (2026-04-22)
 
 

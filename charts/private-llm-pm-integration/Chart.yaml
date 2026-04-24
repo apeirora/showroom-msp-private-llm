@@ -5,5 +5,5 @@ description: >-
   (APIExport/ProviderMetadata/ContentConfiguration) to be applied in the KCP
   control plane.
 type: application
-version: 2.10.0
-appVersion: 2.10.0
+version: 2.10.1
+appVersion: 2.10.1

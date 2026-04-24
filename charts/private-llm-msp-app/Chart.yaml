@@ -5,8 +5,8 @@ description: >-
   sync agent on an MSP (workload) cluster, and generates the sync agent's
   in-cluster KCP kubeconfig when given the KCP admin kubeconfig.
 type: application
-version: 2.10.0
-appVersion: 2.10.0
+version: 2.10.1
+appVersion: 2.10.1
 dependencies:
   - name: private-llm-operator
     version: '>=2.8.0 <3.0.0'
