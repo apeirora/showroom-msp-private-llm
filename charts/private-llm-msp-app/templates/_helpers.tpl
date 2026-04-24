@@ -1,9 +1,10 @@
 {{/*
-Rewrite a KCP admin kubeconfig so the `server:` field points at the in-cluster
-front-proxy under a specific provider workspace path.
+Rewrite a KCP admin kubeconfig so every KCP `server:` field points at the
+in-cluster front-proxy under a specific provider workspace path.
 
-Input: an admin kubeconfig whose server is `https://<external-host>/clusters/root`.
-Output: the same YAML with server replaced by
+Input: an admin kubeconfig whose KCP clusters point at
+`https://<external-host>/clusters/<workspace>`.
+Output: the same YAML with each KCP server replaced by
 `<inClusterServerUrl>/clusters/<providerWorkspace>`.
 
 Usage:
@@ -13,7 +14,7 @@ Usage:
 {{- $admin := .Values.kcpKubeconfig.adminContent -}}
 {{- $ws := .Values.kcpKubeconfig.providerWorkspace -}}
 {{- $target := printf "%s/clusters/%s" .Values.kcpKubeconfig.inClusterServerUrl $ws -}}
-{{- regexReplaceAll "server: https://[^/\\s]+/clusters/root\\b" $admin (printf "server: %s" $target) -}}
+{{- regexReplaceAll "server: https://[^[:space:]]+(/clusters/[A-Za-z0-9:_-]+)?" $admin (printf "server: %s" $target) -}}
 {{- end -}}
 
 {{/*
