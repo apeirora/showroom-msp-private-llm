@@ -8,7 +8,13 @@ metadata:
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
-  customresourcedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: LLMInstance is the Schema for the llminstances API
+      displayName: LLMInstance
+      kind: LLMInstance
+      name: llminstances.llm.privatellms.msp
+      version: v1alpha1
   description: Private Llm description. TODO.
   displayName: Private Llm
   icon:

@@ -8,25 +8,8 @@ rules:
   - ""
   resources:
   - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
   - secrets
+  - services
   verbs:
   - create
   - delete
@@ -46,15 +29,10 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - services
+  - events
   verbs:
   - create
-  - delete
-  - get
-  - list
   - patch
-  - update
-  - watch
 - apiGroups:
   - apps
   resources:
@@ -95,31 +73,6 @@ rules:
   - llm.privatellms.msp
   resources:
   - apitokenrequests
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - llm.privatellms.msp
-  resources:
-  - apitokenrequests/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - llm.privatellms.msp
-  resources:
-  - apitokenrequests/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - llm.privatellms.msp
-  resources:
   - llminstances
   verbs:
   - create
@@ -132,12 +85,14 @@ rules:
 - apiGroups:
   - llm.privatellms.msp
   resources:
+  - apitokenrequests/finalizers
   - llminstances/finalizers
   verbs:
   - update
 - apiGroups:
   - llm.privatellms.msp
   resources:
+  - apitokenrequests/status
   - llminstances/status
   verbs:
   - get

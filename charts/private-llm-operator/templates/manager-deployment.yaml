@@ -27,34 +27,10 @@ spec:
       {{- end }}
       {{- end }}
       containers:
-        {{- if .Values.kubeRbacProxy.enabled }}
-        - args:
-            - --secure-listen-address=0.0.0.0:8443
-            - --upstream=http://127.0.0.1:8080/
-            - --logtostderr=true
-            - --v=0
-          image: {{ .Values.kubeRbacProxy.image.repository }}:{{ .Values.kubeRbacProxy.image.tag }}
-          name: kube-rbac-proxy
-          ports:
-            - containerPort: 8443
-              name: https
-              protocol: TCP
-          resources:
-            limits:
-              cpu: 500m
-              memory: 128Mi
-            requests:
-              cpu: 5m
-              memory: 64Mi
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
-        {{- end }}
         - args:
             - --health-probe-bind-address=:8081
-            - --metrics-bind-address={{ if .Values.kubeRbacProxy.enabled }}127.0.0.1{{ else }}0.0.0.0{{ end }}:8080
+            - --metrics-bind-address=:8443
+            - --metrics-secure=true
             - --leader-elect
             - --auth-bind-address=:8090
             - --auth-external-url=$(AUTH_EXTERNAL_URL)
@@ -95,6 +71,9 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           ports:
+            - containerPort: 8443
+              name: https
+              protocol: TCP
             - containerPort: 8090
               name: auth
               protocol: TCP
