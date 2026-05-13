@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.10.1...v2.10.2) (2026-05-13)
+
+
+### Bug Fixes
+
+* Remove private LLM metrics proxy ([#141](https://github.com/apeirora/showroom-msp-private-llm/issues/141)) ([7c0caea](https://github.com/apeirora/showroom-msp-private-llm/commit/7c0caeaf5686271077aa26995ff9f7bd1195c8c7))
+
 ## [2.10.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.10.0...v2.10.1) (2026-04-24)
 
 
