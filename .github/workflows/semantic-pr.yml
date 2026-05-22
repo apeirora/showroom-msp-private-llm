@@ -28,11 +28,14 @@ jobs:
             style
             revert
           scopes: |
-            checker
-            alert
-            config
+            api
+            controller
+            auth
+            crd
+            rbac
             chart
             docs
             release
             deps
+            main
           requireScope: false
