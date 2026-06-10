@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.11.1...v2.11.2) (2026-06-10)
+
+
+### Bug Fixes
+
+* keep BYOC kubeconfig Secret until remote cleanup has run ([#147](https://github.com/apeirora/showroom-msp-private-llm/issues/147)) ([c49fb65](https://github.com/apeirora/showroom-msp-private-llm/commit/c49fb65a10515847311412abff28f18c3afc8cb7))
+
 ## [2.11.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.11.0...v2.11.1) (2026-06-10)
 
 
