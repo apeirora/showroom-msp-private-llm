@@ -33,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -52,6 +53,11 @@ const (
 	byocBootstrapAnnotation  = "llm.privatellms.msp/bootstrap-key"
 	byocBootstrapTrue        = "true"
 	instanceLabelKey         = "llm.privatellms.msp/instance"
+	// byocSecretFinalizer keeps the kubeconfig Secret around until remote
+	// cleanup has run. The sync agent deletes related Secrets before the
+	// primary object, which would otherwise strand the operator without
+	// credentials for the BYOC cluster and orphan the remote workloads.
+	byocSecretFinalizer = "llm.privatellms.msp/byoc-cleanup"
 )
 
 // byocBaseName derives an RFC 1123/1035-safe object name from the slug.
@@ -113,8 +119,59 @@ func (r *LLMInstanceReconciler) byocClient(ctx context.Context, inst *llmv1alpha
 	return remote, "", "", nil
 }
 
+// ensureKubeconfigSecretFinalizer protects the kubeconfig Secret from being
+// removed before this instance's remote cleanup has run.
+func (r *LLMInstanceReconciler) ensureKubeconfigSecretFinalizer(ctx context.Context, inst *llmv1alpha1.LLMInstance) error {
+	var sec corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: inst.Spec.ClusterRef.KubeconfigSecretName}, &sec); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !sec.DeletionTimestamp.IsZero() || ctrlutil.ContainsFinalizer(&sec, byocSecretFinalizer) {
+		return nil
+	}
+	ctrlutil.AddFinalizer(&sec, byocSecretFinalizer)
+	return r.Update(ctx, &sec)
+}
+
+// releaseKubeconfigSecretFinalizer removes the cleanup finalizer once no other
+// live instance references the same kubeconfig Secret.
+func (r *LLMInstanceReconciler) releaseKubeconfigSecretFinalizer(ctx context.Context, inst *llmv1alpha1.LLMInstance) {
+	logger := log.FromContext(ctx)
+	secretName := inst.Spec.ClusterRef.KubeconfigSecretName
+
+	var instances llmv1alpha1.LLMInstanceList
+	if err := r.List(ctx, &instances, client.InNamespace(inst.Namespace)); err != nil {
+		logger.Error(err, "failed to list instances while releasing kubeconfig Secret finalizer (non-blocking)")
+		return
+	}
+	for _, other := range instances.Items {
+		if other.Name == inst.Name || other.Spec.ClusterRef == nil || !other.DeletionTimestamp.IsZero() {
+			continue
+		}
+		if other.Spec.ClusterRef.KubeconfigSecretName == secretName {
+			return
+		}
+	}
+
+	var sec corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: secretName}, &sec); err != nil {
+		return
+	}
+	if !ctrlutil.ContainsFinalizer(&sec, byocSecretFinalizer) {
+		return
+	}
+	ctrlutil.RemoveFinalizer(&sec, byocSecretFinalizer)
+	if err := r.Update(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {
+		logger.Error(err, "failed to remove kubeconfig Secret finalizer (non-blocking)", "secret", secretName)
+	}
+}
+
 func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	if err := r.ensureKubeconfigSecretFinalizer(ctx, inst); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	remote, reason, message, err := r.byocClient(ctx, inst)
 	if err != nil {
@@ -469,11 +526,13 @@ func (r *LLMInstanceReconciler) cleanupBYOC(ctx context.Context, inst *llmv1alph
 		slug = strings.TrimSpace(anns[slugAnnotationKey])
 	}
 	if slug == "" {
+		r.releaseKubeconfigSecretFinalizer(ctx, inst)
 		return
 	}
 	remote, reason, _, err := r.byocClient(ctx, inst)
 	if err != nil || remote == nil {
 		logger.Info("skipping BYOC cleanup; target cluster not reachable", "reason", reason, "error", err)
+		r.releaseKubeconfigSecretFinalizer(ctx, inst)
 		return
 	}
 	objects := []client.Object{
@@ -486,6 +545,7 @@ func (r *LLMInstanceReconciler) cleanupBYOC(ctx context.Context, inst *llmv1alph
 			logger.Error(err, "failed to delete BYOC object (non-blocking)", "name", obj.GetName())
 		}
 	}
+	r.releaseKubeconfigSecretFinalizer(ctx, inst)
 }
 
 // findInstancesForSecret requeues instances when one of their token Secrets
