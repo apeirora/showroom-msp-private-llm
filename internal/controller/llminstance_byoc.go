@@ -33,7 +33,6 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -53,11 +52,6 @@ const (
 	byocBootstrapAnnotation  = "llm.privatellms.msp/bootstrap-key"
 	byocBootstrapTrue        = "true"
 	instanceLabelKey         = "llm.privatellms.msp/instance"
-	// byocSecretFinalizer keeps the kubeconfig Secret around until remote
-	// cleanup has run. The sync agent deletes related Secrets before the
-	// primary object, which would otherwise strand the operator without
-	// credentials for the BYOC cluster and orphan the remote workloads.
-	byocSecretFinalizer = "llm.privatellms.msp/byoc-cleanup"
 )
 
 // byocBaseName derives an RFC 1123/1035-safe object name from the slug.
@@ -70,6 +64,15 @@ func byocBaseName(slug string) string {
 
 func byocKeySecretName(slug string) string {
 	return byocBaseName(slug) + "-keys"
+}
+
+// byocCredentialsName is the operator-owned local copy of the BYOC kubeconfig.
+// The sync agent deletes the synced kubeconfig Secret before the LLMInstance
+// itself and waits for it to disappear, so cleanup cannot depend on it (a
+// finalizer on it deadlocks the agent). The cache is invisible to the agent
+// and lives exactly as long as the instance.
+func byocCredentialsName(slug string) string {
+	return byocBaseName(slug) + "-credentials"
 }
 
 func byocAPIKeyFilePath() string {
@@ -92,21 +95,41 @@ func (r *LLMInstanceReconciler) defaultRemoteClient(kubeconfig []byte) (client.C
 	return client.New(cfg, client.Options{Scheme: r.Scheme})
 }
 
-// byocClient resolves the kubeconfig Secret and builds a client for the BYOC
-// cluster. A nil client with a non-empty reason signals a user-fixable
-// provisioning condition rather than a reconcile error.
-func (r *LLMInstanceReconciler) byocClient(ctx context.Context, inst *llmv1alpha1.LLMInstance) (client.Client, string, string, error) {
+// byocKubeconfig fetches the BYOC kubeconfig, preferring the user-supplied
+// Secret and falling back to the operator's cached copy (the sync agent
+// removes the synced Secret before the instance during deletion).
+func (r *LLMInstanceReconciler) byocKubeconfig(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) ([]byte, string, string, error) {
 	secretName := inst.Spec.ClusterRef.KubeconfigSecretName
 	var sec corev1.Secret
-	if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: secretName}, &sec); err != nil {
-		if apierrors.IsNotFound(err) {
-			return nil, "KubeconfigSecretMissing", fmt.Sprintf("kubeconfig Secret %q not found", secretName), nil
+	err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: secretName}, &sec)
+	if err == nil {
+		if kubeconfig := sec.Data[byocKubeconfigKey]; len(kubeconfig) > 0 {
+			return kubeconfig, "", "", nil
 		}
+		return nil, "KubeconfigInvalid", fmt.Sprintf("kubeconfig Secret %q has no %q key", secretName, byocKubeconfigKey), nil
+	}
+	if !apierrors.IsNotFound(err) {
 		return nil, "", "", err
 	}
-	kubeconfig := sec.Data[byocKubeconfigKey]
-	if len(kubeconfig) == 0 {
-		return nil, "KubeconfigInvalid", fmt.Sprintf("kubeconfig Secret %q has no %q key", secretName, byocKubeconfigKey), nil
+
+	var cached corev1.Secret
+	if slug != "" {
+		if cerr := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: byocCredentialsName(slug)}, &cached); cerr == nil {
+			if kubeconfig := cached.Data[byocKubeconfigKey]; len(kubeconfig) > 0 {
+				return kubeconfig, "", "", nil
+			}
+		}
+	}
+	return nil, "KubeconfigSecretMissing", fmt.Sprintf("kubeconfig Secret %q not found", secretName), nil
+}
+
+// byocClient builds a client for the BYOC cluster. A nil client with a
+// non-empty reason signals a user-fixable provisioning condition rather than
+// a reconcile error.
+func (r *LLMInstanceReconciler) byocClient(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) (client.Client, string, string, error) {
+	kubeconfig, reason, message, err := r.byocKubeconfig(ctx, inst, slug)
+	if err != nil || kubeconfig == nil {
+		return nil, reason, message, err
 	}
 	builder := r.RemoteClientBuilder
 	if builder == nil {
@@ -119,61 +142,54 @@ func (r *LLMInstanceReconciler) byocClient(ctx context.Context, inst *llmv1alpha
 	return remote, "", "", nil
 }
 
-// ensureKubeconfigSecretFinalizer protects the kubeconfig Secret from being
-// removed before this instance's remote cleanup has run.
-func (r *LLMInstanceReconciler) ensureKubeconfigSecretFinalizer(ctx context.Context, inst *llmv1alpha1.LLMInstance) error {
-	var sec corev1.Secret
-	if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: inst.Spec.ClusterRef.KubeconfigSecretName}, &sec); err != nil {
-		return client.IgnoreNotFound(err)
+// ensureCachedCredentials keeps an operator-owned copy of the kubeconfig so
+// that remote cleanup still has credentials after the sync agent removed the
+// user-supplied Secret. Owned by the instance, so GC removes it afterwards.
+func (r *LLMInstanceReconciler) ensureCachedCredentials(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) error {
+	kubeconfig, _, _, err := r.byocKubeconfig(ctx, inst, slug)
+	if err != nil || kubeconfig == nil {
+		return err
 	}
-	if !sec.DeletionTimestamp.IsZero() || ctrlutil.ContainsFinalizer(&sec, byocSecretFinalizer) {
+
+	name := byocCredentialsName(slug)
+	var existing corev1.Secret
+	err = r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: name}, &existing)
+	if err != nil {
+		if !apierrors.IsNotFound(err) {
+			return err
+		}
+		secret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: inst.Namespace,
+				Labels:    byocLabels(inst.Name, slug),
+			},
+			Type: corev1.SecretTypeOpaque,
+			Data: map[string][]byte{byocKubeconfigKey: kubeconfig},
+		}
+		if err := ctrl.SetControllerReference(inst, &secret, r.Scheme); err != nil {
+			return err
+		}
+		return r.Create(ctx, &secret)
+	}
+	if string(existing.Data[byocKubeconfigKey]) == string(kubeconfig) {
 		return nil
 	}
-	ctrlutil.AddFinalizer(&sec, byocSecretFinalizer)
-	return r.Update(ctx, &sec)
-}
-
-// releaseKubeconfigSecretFinalizer removes the cleanup finalizer once no other
-// live instance references the same kubeconfig Secret.
-func (r *LLMInstanceReconciler) releaseKubeconfigSecretFinalizer(ctx context.Context, inst *llmv1alpha1.LLMInstance) {
-	logger := log.FromContext(ctx)
-	secretName := inst.Spec.ClusterRef.KubeconfigSecretName
-
-	var instances llmv1alpha1.LLMInstanceList
-	if err := r.List(ctx, &instances, client.InNamespace(inst.Namespace)); err != nil {
-		logger.Error(err, "failed to list instances while releasing kubeconfig Secret finalizer (non-blocking)")
-		return
+	if existing.Data == nil {
+		existing.Data = map[string][]byte{}
 	}
-	for _, other := range instances.Items {
-		if other.Name == inst.Name || other.Spec.ClusterRef == nil || !other.DeletionTimestamp.IsZero() {
-			continue
-		}
-		if other.Spec.ClusterRef.KubeconfigSecretName == secretName {
-			return
-		}
-	}
-
-	var sec corev1.Secret
-	if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: secretName}, &sec); err != nil {
-		return
-	}
-	if !ctrlutil.ContainsFinalizer(&sec, byocSecretFinalizer) {
-		return
-	}
-	ctrlutil.RemoveFinalizer(&sec, byocSecretFinalizer)
-	if err := r.Update(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {
-		logger.Error(err, "failed to remove kubeconfig Secret finalizer (non-blocking)", "secret", secretName)
-	}
+	existing.Data[byocKubeconfigKey] = kubeconfig
+	return r.Update(ctx, &existing)
 }
 
 func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	if err := r.ensureKubeconfigSecretFinalizer(ctx, inst); err != nil {
+	if err := r.ensureCachedCredentials(ctx, inst, slug); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	remote, reason, message, err := r.byocClient(ctx, inst)
+	remote, reason, message, err := r.byocClient(ctx, inst, slug)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -526,26 +542,30 @@ func (r *LLMInstanceReconciler) cleanupBYOC(ctx context.Context, inst *llmv1alph
 		slug = strings.TrimSpace(anns[slugAnnotationKey])
 	}
 	if slug == "" {
-		r.releaseKubeconfigSecretFinalizer(ctx, inst)
 		return
 	}
-	remote, reason, _, err := r.byocClient(ctx, inst)
+	remote, reason, _, err := r.byocClient(ctx, inst, slug)
 	if err != nil || remote == nil {
 		logger.Info("skipping BYOC cleanup; target cluster not reachable", "reason", reason, "error", err)
-		r.releaseKubeconfigSecretFinalizer(ctx, inst)
-		return
-	}
-	objects := []client.Object{
-		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocBaseName(slug)}},
-		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocBaseName(slug)}},
-		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocKeySecretName(slug)}},
-	}
-	for _, obj := range objects {
-		if err := remote.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
-			logger.Error(err, "failed to delete BYOC object (non-blocking)", "name", obj.GetName())
+	} else {
+		objects := []client.Object{
+			&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocBaseName(slug)}},
+			&corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocBaseName(slug)}},
+			&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocKeySecretName(slug)}},
+		}
+		for _, obj := range objects {
+			if err := remote.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
+				logger.Error(err, "failed to delete BYOC object (non-blocking)", "name", obj.GetName())
+			}
 		}
 	}
-	r.releaseKubeconfigSecretFinalizer(ctx, inst)
+
+	// Remove the cached credentials eagerly; ownerRef GC would also get them,
+	// but not before the finalizer completes.
+	cached := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: byocCredentialsName(slug)}}
+	if err := r.Delete(ctx, cached); err != nil && !apierrors.IsNotFound(err) {
+		logger.Error(err, "failed to delete cached BYOC credentials (non-blocking)", "name", cached.Name)
+	}
 }
 
 // findInstancesForSecret requeues instances when one of their token Secrets

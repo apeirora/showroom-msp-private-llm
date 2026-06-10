@@ -307,17 +307,21 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &deploy)).To(Succeed())
 		Expect(deploy.Spec.Template.Annotations[byocAPIKeysRevAnnotation]).NotTo(Equal(initialRevision))
 
-		By("protecting the kubeconfig Secret with a cleanup finalizer")
+		By("caching the kubeconfig in an operator-owned Secret")
+		var cached corev1.Secret
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &cached)).To(Succeed())
+		Expect(cached.Data["kubeconfig"]).NotTo(BeEmpty())
+		Expect(cached.OwnerReferences).NotTo(BeEmpty())
+		Expect(cached.OwnerReferences[0].Name).To(Equal(name))
+
+		By("cleaning up remote objects even when the sync agent removed the kubeconfig Secret first")
+		// the sync agent deletes the synced kubeconfig Secret before the
+		// primary object and waits for it to be gone; cleanup must run from
+		// the cached credentials instead
 		var kcSec corev1.Secret
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "customer-kubeconfig", Namespace: namespace}, &kcSec)).To(Succeed())
-		Expect(kcSec.Finalizers).To(ContainElement(byocSecretFinalizer))
-
-		By("cleaning up remote objects even when the sync agent deletes the kubeconfig Secret first")
-		// the sync agent removes related Secrets before the primary object;
-		// the finalizer must keep the credentials available for cleanup
 		Expect(k8sClient.Delete(ctx, &kcSec)).To(Succeed())
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "customer-kubeconfig", Namespace: namespace}, &kcSec)).To(Succeed())
-		Expect(kcSec.DeletionTimestamp.IsZero()).To(BeFalse())
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: "customer-kubeconfig", Namespace: namespace}, &corev1.Secret{}))).To(BeTrue())
 
 		Expect(k8sClient.Delete(ctx, inst)).To(Succeed())
 		_, err = reconciler.Reconcile(ctx, req)
@@ -327,8 +331,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{}))).To(BeTrue())
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &corev1.Service{}))).To(BeTrue())
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-keys", Namespace: byocNamespace}, &corev1.Secret{}))).To(BeTrue())
-		// finalizer released -> the half-deleted kubeconfig Secret is now gone
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: "customer-kubeconfig", Namespace: namespace}, &corev1.Secret{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{}))).To(BeTrue())
 	})
 
 	It("reports a missing BYOC kubeconfig Secret instead of erroring", func() {
