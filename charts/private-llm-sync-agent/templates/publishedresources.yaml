@@ -15,6 +15,15 @@ spec:
   naming:
     namespace: "{{`{{ .ClusterName }}`}}"
     name: "{{`{{ .Object.metadata.name }}`}}"
+  related:
+    # BYOC mode: sync the user-supplied cluster kubeconfig Secret referenced
+    # by spec.clusterRef from the kcp workspace down to the service cluster.
+    - identifier: byoc-kubeconfig
+      origin: kcp
+      kind: Secret
+      object:
+        reference:
+          path: spec.clusterRef.kubeconfigSecretName
 ---
 apiVersion: syncagent.kcp.io/v1alpha1
 kind: PublishedResource

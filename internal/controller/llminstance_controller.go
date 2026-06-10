@@ -39,6 +39,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlutil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.opentelemetry.io/otel"
@@ -62,6 +63,9 @@ type LLMInstanceReconciler struct {
 	// ServiceHealthChecker probes service endpoints before publishing Ready=True.
 	// If nil, a default HTTP checker is used.
 	ServiceHealthChecker ServiceHealthChecker
+	// RemoteClientBuilder builds a client for a BYOC cluster from kubeconfig
+	// bytes. If nil, a default clientcmd-based builder is used.
+	RemoteClientBuilder func(kubeconfig []byte) (client.Client, error)
 }
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
@@ -75,6 +79,8 @@ type ServiceHealthChecker func(ctx context.Context, targetURL string) error
 // core resources
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// read kubeconfig and token secrets for BYOC mode
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // apps and services
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
@@ -111,6 +117,11 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	const finalizerName = "llm.privatellms.msp/llminstance-finalizer"
 	if !inst.DeletionTimestamp.IsZero() {
 		if ctrlutil.ContainsFinalizer(inst, finalizerName) {
+			// BYOC objects live on a remote cluster where ownerRefs GC cannot
+			// reach; remove them explicitly (best-effort).
+			if inst.Spec.ClusterRef != nil {
+				r.cleanupBYOC(ctx, inst)
+			}
 			// Attempt to remove owned resources via ownerRefs GC; nothing to do explicitly
 			// Remove finalizer with small retry window to avoid blocking deletion
 			for i := 0; i < 3; i++ {
@@ -153,8 +164,13 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	labels := llamaLabels(inst.Name)
 	model := resolveModel(inst.Spec.Model)
+
+	if inst.Spec.ClusterRef != nil {
+		return r.reconcileBYOC(ctx, inst, slug, model)
+	}
+
+	labels := llamaLabels(inst.Name)
 
 	if err := r.reconcileDeployment(ctx, inst, labels, model); err != nil {
 		return ctrl.Result{}, err
@@ -182,14 +198,14 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 	if !ready {
-		if err := r.updateProvisioningStatus(ctx, inst, slug, reason, message); err != nil {
+		if err := r.updateProvisioningStatus(ctx, inst, r.instanceEndpoint(slug), reason, message); err != nil {
 			return ctrl.Result{}, err
 		}
 		logger.Info("LLMInstance is still provisioning", "name", req.NamespacedName, "reason", reason)
 		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, nil
 	}
 
-	if err := r.updateReadyStatus(ctx, inst, slug); err != nil {
+	if err := r.updateReadyStatus(ctx, inst, r.instanceEndpoint(slug)); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -364,33 +380,40 @@ func (r *LLMInstanceReconciler) reconcileDeployment(ctx context.Context, inst *l
 	return nil
 }
 
-func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, replicas int32, model modelSelection) appsv1.Deployment {
-	modelPath := model.path()
-	volume := corev1.Volume{
+func llamaModelVolume() corev1.Volume {
+	return corev1.Volume{
 		Name: "models-volume",
 		VolumeSource: corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 	}
-	initContainer := corev1.Container{
+}
+
+func llamaInitContainer(model modelSelection) corev1.Container {
+	return corev1.Container{
 		Name:    "download-model",
 		Image:   "curlimages/curl:8.8.0",
 		Command: []string{"/bin/sh", "-c"},
-		Args:    []string{fmt.Sprintf("curl -fL -o %s %s", modelPath, model.url)},
+		Args:    []string{fmt.Sprintf("curl -fL -o %s %s", model.path(), model.url)},
 		VolumeMounts: []corev1.VolumeMount{{
 			Name:      "models-volume",
 			MountPath: "/models",
 		}},
 	}
-	container := corev1.Container{
-		Name:    "llama-cpp-server",
-		Image:   "ghcr.io/ggml-org/llama.cpp:server-b7045",
-		Command: []string{"/app/llama-server"},
-		Args: []string{
-			"-m", modelPath,
-			"--port", "8000",
-			"--host", "0.0.0.0",
-		},
+}
+
+func llamaServerContainer(model modelSelection, extraArgs ...string) corev1.Container {
+	modelPath := model.path()
+	args := append([]string{
+		"-m", modelPath,
+		"--port", "8000",
+		"--host", "0.0.0.0",
+	}, extraArgs...)
+	return corev1.Container{
+		Name:           "llama-cpp-server",
+		Image:          "ghcr.io/ggml-org/llama.cpp:server-b7045",
+		Command:        []string{"/app/llama-server"},
+		Args:           args,
 		Env:            []corev1.EnvVar{{Name: "MODEL_PATH", Value: modelPath}},
 		Ports:          []corev1.ContainerPort{{ContainerPort: 8000, Protocol: corev1.ProtocolTCP}},
 		ReadinessProbe: llmReadinessProbe(),
@@ -400,6 +423,12 @@ func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, re
 			MountPath: "/models",
 		}},
 	}
+}
+
+func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, replicas int32, model modelSelection) appsv1.Deployment {
+	volume := llamaModelVolume()
+	initContainer := llamaInitContainer(model)
+	container := llamaServerContainer(model)
 
 	return appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -434,7 +463,7 @@ func ensureDeploymentReplicas(deploy *appsv1.Deployment, desired int32) (bool, i
 	return false, current
 }
 
-func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection) bool {
+func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection, extraArgs ...string) bool {
 	updated := false
 	modelPath := model.path()
 	desiredInitArg := fmt.Sprintf("curl -fL -o %s %s", modelPath, model.url)
@@ -449,7 +478,7 @@ func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection) bool
 		}
 	}
 
-	desiredArgs := []string{"-m", modelPath, "--port", "8000", "--host", "0.0.0.0"}
+	desiredArgs := append([]string{"-m", modelPath, "--port", "8000", "--host", "0.0.0.0"}, extraArgs...)
 	for i := range deploy.Spec.Template.Spec.Containers {
 		c := &deploy.Spec.Template.Spec.Containers[i]
 		if c.Name != "llama-cpp-server" {
@@ -904,6 +933,27 @@ func authMiddlewareName(svcName string) string {
 	return fmt.Sprintf("%s-auth", svcName)
 }
 
+func deploymentReadiness(deploy *appsv1.Deployment, deployName string) (bool, string, string) {
+	desiredReplicas := int32(1)
+	if deploy.Spec.Replicas != nil && *deploy.Spec.Replicas > 0 {
+		desiredReplicas = *deploy.Spec.Replicas
+	}
+
+	if deploy.Status.ObservedGeneration < deploy.Generation {
+		return false, "DeploymentProgressing", fmt.Sprintf("Deployment %q has not observed latest generation", deployName)
+	}
+	if deploy.Status.UpdatedReplicas < desiredReplicas {
+		return false, "DeploymentProgressing", fmt.Sprintf("Deployment %q updated replicas %d/%d", deployName, deploy.Status.UpdatedReplicas, desiredReplicas)
+	}
+	if deploy.Status.ReadyReplicas < desiredReplicas {
+		return false, "DeploymentNotReady", fmt.Sprintf("Deployment %q ready replicas %d/%d", deployName, deploy.Status.ReadyReplicas, desiredReplicas)
+	}
+	if deploy.Status.AvailableReplicas < desiredReplicas {
+		return false, "DeploymentNotAvailable", fmt.Sprintf("Deployment %q available replicas %d/%d", deployName, deploy.Status.AvailableReplicas, desiredReplicas)
+	}
+	return true, "", ""
+}
+
 func (r *LLMInstanceReconciler) evaluateInstanceReadiness(ctx context.Context, inst *llmv1alpha1.LLMInstance, svcName string) (bool, string, string, error) {
 	deployName := fmt.Sprintf("%s-llama", inst.Name)
 	var deploy appsv1.Deployment
@@ -914,22 +964,8 @@ func (r *LLMInstanceReconciler) evaluateInstanceReadiness(ctx context.Context, i
 		return false, "", "", err
 	}
 
-	desiredReplicas := int32(1)
-	if deploy.Spec.Replicas != nil && *deploy.Spec.Replicas > 0 {
-		desiredReplicas = *deploy.Spec.Replicas
-	}
-
-	if deploy.Status.ObservedGeneration < deploy.Generation {
-		return false, "DeploymentProgressing", fmt.Sprintf("Deployment %q has not observed latest generation", deployName), nil
-	}
-	if deploy.Status.UpdatedReplicas < desiredReplicas {
-		return false, "DeploymentProgressing", fmt.Sprintf("Deployment %q updated replicas %d/%d", deployName, deploy.Status.UpdatedReplicas, desiredReplicas), nil
-	}
-	if deploy.Status.ReadyReplicas < desiredReplicas {
-		return false, "DeploymentNotReady", fmt.Sprintf("Deployment %q ready replicas %d/%d", deployName, deploy.Status.ReadyReplicas, desiredReplicas), nil
-	}
-	if deploy.Status.AvailableReplicas < desiredReplicas {
-		return false, "DeploymentNotAvailable", fmt.Sprintf("Deployment %q available replicas %d/%d", deployName, deploy.Status.AvailableReplicas, desiredReplicas), nil
+	if ready, reason, message := deploymentReadiness(&deploy, deployName); !ready {
+		return false, reason, message, nil
 	}
 
 	endpointsReady, message, err := r.serviceHasReadyEndpoints(ctx, inst.Namespace, svcName, 8000)
@@ -1001,7 +1037,7 @@ func defaultServiceHealthChecker(ctx context.Context, targetURL string) error {
 	return nil
 }
 
-func (r *LLMInstanceReconciler) updateProvisioningStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug, reason, message string) error {
+func (r *LLMInstanceReconciler) updateProvisioningStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, endpoint, reason, message string) error {
 	notReadyCond := metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionFalse,
@@ -1011,12 +1047,12 @@ func (r *LLMInstanceReconciler) updateProvisioningStatus(ctx context.Context, in
 	}
 	meta.SetStatusCondition(&inst.Status.Conditions, notReadyCond)
 	inst.Status.Phase = "Provisioning"
-	inst.Status.Endpoint = r.instanceEndpoint(slug)
+	inst.Status.Endpoint = endpoint
 	inst.Status.ObservedGeneration = inst.Generation
 	return r.Status().Update(ctx, inst)
 }
 
-func (r *LLMInstanceReconciler) updateReadyStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) error {
+func (r *LLMInstanceReconciler) updateReadyStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, endpoint string) error {
 	readyCond := metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionTrue,
@@ -1027,7 +1063,7 @@ func (r *LLMInstanceReconciler) updateReadyStatus(ctx context.Context, inst *llm
 
 	meta.SetStatusCondition(&inst.Status.Conditions, readyCond)
 	inst.Status.Phase = "Ready"
-	inst.Status.Endpoint = r.instanceEndpoint(slug)
+	inst.Status.Endpoint = endpoint
 	inst.Status.ObservedGeneration = inst.Generation
 	return r.Status().Update(ctx, inst)
 }
@@ -1072,6 +1108,10 @@ func (r *LLMInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Owns(&networkingv1.Ingress{}).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.findInstancesForSecret),
+		).
 		Complete(r)
 }
 

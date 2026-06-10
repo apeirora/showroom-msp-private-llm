@@ -49,6 +49,24 @@ spec:
           spec:
             description: LLMInstanceSpec defines the desired state of LLMInstance
             properties:
+              clusterRef:
+                description: |-
+                  ClusterRef, when set, switches this instance to BYOC (Bring Your Own
+                  Cluster) mode: the LLM workload is deployed onto the external cluster
+                  whose kubeconfig is stored in the referenced Secret instead of the
+                  local cluster. When unset, the instance runs as-a-Service on the
+                  provider-managed cluster.
+                properties:
+                  kubeconfigSecretName:
+                    description: |-
+                      KubeconfigSecretName names a Secret in the same namespace holding the
+                      target cluster kubeconfig under the "kubeconfig" key. SimpleCluster's
+                      "<name>-kubeconfig" Secrets follow this contract.
+                    minLength: 1
+                    type: string
+                required:
+                - kubeconfigSecretName
+                type: object
               model:
                 default: tinyllama
                 description: Model is the desired model identifier (e.g., "TinyLlama/TinyLlama-1.1B-Chat-v1.0").

@@ -34,6 +34,23 @@ type LLMInstanceSpec struct {
 	// Defaults to 1 if omitted or set to 0.
 	// +kubebuilder:validation:Minimum=0
 	Replicas int32 `json:"replicas,omitempty"`
+
+	// ClusterRef, when set, switches this instance to BYOC (Bring Your Own
+	// Cluster) mode: the LLM workload is deployed onto the external cluster
+	// whose kubeconfig is stored in the referenced Secret instead of the
+	// local cluster. When unset, the instance runs as-a-Service on the
+	// provider-managed cluster.
+	// +optional
+	ClusterRef *ClusterRef `json:"clusterRef,omitempty"`
+}
+
+// ClusterRef identifies a user-supplied target cluster for BYOC mode.
+type ClusterRef struct {
+	// KubeconfigSecretName names a Secret in the same namespace holding the
+	// target cluster kubeconfig under the "kubeconfig" key. SimpleCluster's
+	// "<name>-kubeconfig" Secrets follow this contract.
+	// +kubebuilder:validation:MinLength=1
+	KubeconfigSecretName string `json:"kubeconfigSecretName"`
 }
 
 // LLMInstanceStatus defines the observed state of LLMInstance
