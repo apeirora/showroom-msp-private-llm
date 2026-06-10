@@ -44,14 +44,14 @@ import (
 // work across clusters, so remote objects are named after the instance slug
 // and removed explicitly by the finalizer.
 const (
-	byocNamespace             = "private-llm"
-	byocKubeconfigKey         = "kubeconfig"
-	byocAPIKeyFileKey         = "api-keys"
-	byocAPIKeyMountPath       = "/keys"
-	byocAPIKeysHashAnnotation = "llm.privatellms.msp/api-keys-hash"
-	byocBootstrapAnnotation   = "llm.privatellms.msp/bootstrap-key"
-	byocBootstrapTrue         = "true"
-	instanceLabelKey          = "llm.privatellms.msp/instance"
+	byocNamespace            = "private-llm"
+	byocKubeconfigKey        = "kubeconfig"
+	byocAPIKeyFileKey        = "api-keys"
+	byocAPIKeyMountPath      = "/keys"
+	byocAPIKeysRevAnnotation = "llm.privatellms.msp/api-keys-revision"
+	byocBootstrapAnnotation  = "llm.privatellms.msp/bootstrap-key"
+	byocBootstrapTrue        = "true"
+	instanceLabelKey         = "llm.privatellms.msp/instance"
 )
 
 // byocBaseName derives an RFC 1123/1035-safe object name from the slug.
@@ -136,12 +136,12 @@ func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1al
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.reconcileBYOCKeySecret(ctx, remote, inst, slug, keyFile, bootstrap); err != nil {
+	keysRevision, err := r.reconcileBYOCKeySecret(ctx, remote, inst, slug, keyFile, bootstrap)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-	keysHash := hashAPIKeyFile(keyFile)
 
-	if err := r.reconcileBYOCDeployment(ctx, remote, inst, slug, model, keysHash); err != nil {
+	if err := r.reconcileBYOCDeployment(ctx, remote, inst, slug, model, keysRevision); err != nil {
 		return ctrl.Result{}, err
 	}
 	if err := r.reconcileBYOCService(ctx, remote, inst, slug); err != nil {
@@ -221,12 +221,11 @@ func (r *LLMInstanceReconciler) desiredAPIKeyFile(ctx context.Context, remote cl
 	return token + "\n", true, nil
 }
 
-func hashAPIKeyFile(content string) string {
-	sum := sha256.Sum256([]byte(content))
-	return hex.EncodeToString(sum[:])
-}
-
-func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug, keyFile string, bootstrap bool) error {
+// reconcileBYOCKeySecret ensures the remote api-key Secret and returns its
+// resourceVersion, which the Deployment carries as a pod template annotation
+// so that key changes roll the pods without putting key-derived data into
+// object metadata.
+func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug, keyFile string, bootstrap bool) (string, error) {
 	logger := log.FromContext(ctx)
 	name := byocKeySecretName(slug)
 	desiredAnnotations := map[string]string{}
@@ -238,7 +237,7 @@ func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remo
 	err := remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: name}, &existing)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			return err
+			return "", err
 		}
 		secret := corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -251,10 +250,10 @@ func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remo
 			StringData: map[string]string{byocAPIKeyFileKey: keyFile},
 		}
 		if err := remote.Create(ctx, &secret); err != nil {
-			return err
+			return "", err
 		}
 		logger.Info("created BYOC api-key Secret", "name", name)
-		return nil
+		return secret.ResourceVersion, nil
 	}
 
 	updated := false
@@ -277,16 +276,16 @@ func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remo
 		updated = true
 	}
 	if !updated {
-		return nil
+		return existing.ResourceVersion, nil
 	}
 	if err := remote.Update(ctx, &existing); err != nil {
-		return err
+		return "", err
 	}
 	logger.Info("updated BYOC api-key Secret", "name", name)
-	return nil
+	return existing.ResourceVersion, nil
 }
 
-func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas int32, model modelSelection, keysHash string) appsv1.Deployment {
+func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas int32, model modelSelection, keysRevision string) appsv1.Deployment {
 	labels := byocLabels(inst.Name, slug)
 	container := llamaServerContainer(model, "--api-key-file", byocAPIKeyFilePath())
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
@@ -306,7 +305,7 @@ func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas in
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      copyStringMap(labels),
-					Annotations: map[string]string{byocAPIKeysHashAnnotation: keysHash},
+					Annotations: map[string]string{byocAPIKeysRevAnnotation: keysRevision},
 				},
 				Spec: corev1.PodSpec{
 					InitContainers: []corev1.Container{llamaInitContainer(model)},
@@ -326,7 +325,7 @@ func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas in
 	}
 }
 
-func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection, keysHash string) error {
+func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection, keysRevision string) error {
 	logger := log.FromContext(ctx)
 	name := byocBaseName(slug)
 	desiredReplicas := inst.Spec.Replicas
@@ -339,7 +338,7 @@ func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, rem
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		deploy := buildBYOCDeployment(inst, slug, desiredReplicas, model, keysHash)
+		deploy := buildBYOCDeployment(inst, slug, desiredReplicas, model, keysRevision)
 		if err := remote.Create(ctx, &deploy); err != nil {
 			return err
 		}
@@ -350,11 +349,11 @@ func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, rem
 	replicasChanged, _ := ensureDeploymentReplicas(&existing, desiredReplicas)
 	modelChanged := ensureDeploymentModel(&existing, model, "--api-key-file", byocAPIKeyFilePath())
 	hashChanged := false
-	if existing.Spec.Template.Annotations[byocAPIKeysHashAnnotation] != keysHash {
+	if existing.Spec.Template.Annotations[byocAPIKeysRevAnnotation] != keysRevision {
 		if existing.Spec.Template.Annotations == nil {
 			existing.Spec.Template.Annotations = map[string]string{}
 		}
-		existing.Spec.Template.Annotations[byocAPIKeysHashAnnotation] = keysHash
+		existing.Spec.Template.Annotations[byocAPIKeysRevAnnotation] = keysRevision
 		hashChanged = true
 	}
 	if !replicasChanged && !modelChanged && !hashChanged {

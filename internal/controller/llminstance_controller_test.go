@@ -251,8 +251,8 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(keys.Annotations[byocBootstrapAnnotation]).To(Equal("true"))
 		bootstrapKey := string(keys.Data[byocAPIKeyFileKey])
 		Expect(bootstrapKey).NotTo(BeEmpty())
-		initialHash := deploy.Spec.Template.Annotations[byocAPIKeysHashAnnotation]
-		Expect(initialHash).NotTo(BeEmpty())
+		initialRevision := deploy.Spec.Template.Annotations[byocAPIKeysRevAnnotation]
+		Expect(initialRevision).NotTo(BeEmpty())
 
 		_, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
@@ -305,7 +305,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(keys.Annotations).NotTo(HaveKey(byocBootstrapAnnotation))
 
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &deploy)).To(Succeed())
-		Expect(deploy.Spec.Template.Annotations[byocAPIKeysHashAnnotation]).NotTo(Equal(initialHash))
+		Expect(deploy.Spec.Template.Annotations[byocAPIKeysRevAnnotation]).NotTo(Equal(initialRevision))
 
 		By("cleaning up remote objects on deletion")
 		Expect(k8sClient.Delete(ctx, inst)).To(Succeed())
