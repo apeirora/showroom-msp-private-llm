@@ -131,7 +131,11 @@ func (r *APITokenRequestReconciler) finalizeTokenRequest(ctx context.Context, tr
 
 	logger := log.FromContext(ctx)
 	var secretList corev1.SecretList
-	if err := r.List(ctx, &secretList, client.InNamespace(tr.Namespace)); err == nil {
+	// Only this request's token Secrets (see createSecret); an unscoped list
+	// would delete every Secret in the namespace, including other instances'
+	// tokens and BYOC kubeconfig Secrets.
+	if err := r.List(ctx, &secretList, client.InNamespace(tr.Namespace),
+		client.MatchingLabels{"llm.privatellms.msp/apitokenrequest": tr.Name}); err == nil {
 		for i := range secretList.Items {
 			sec := secretList.Items[i]
 			if err := r.Delete(ctx, &sec); err != nil && !apierrors.IsNotFound(err) {

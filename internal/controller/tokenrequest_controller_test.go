@@ -338,6 +338,14 @@ var _ = Describe("APITokenRequest controller", func() {
 		secretKey := types.NamespacedName{Name: tokenName + "-token", Namespace: namespace}
 		Expect(k8sClient.Get(ctx, secretKey, &corev1.Secret{})).To(Succeed())
 
+		// an unrelated Secret in the same namespace (e.g. another instance's
+		// token or a BYOC kubeconfig) must survive the finalizer cleanup
+		unrelated := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "unrelated-" + utilrand.String(5), Namespace: namespace},
+			StringData: map[string]string{"kubeconfig": "not-a-token"},
+		}
+		Expect(k8sClient.Create(ctx, unrelated)).To(Succeed())
+
 		Expect(k8sClient.Get(ctx, req.NamespacedName, tr)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, tr)).To(Succeed())
 
@@ -348,6 +356,8 @@ var _ = Describe("APITokenRequest controller", func() {
 			err := k8sClient.Get(ctx, secretKey, &corev1.Secret{})
 			return apierrors.IsNotFound(err)
 		}).Should(BeTrue())
+
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: unrelated.Name, Namespace: namespace}, &corev1.Secret{})).To(Succeed())
 
 		Eventually(func() bool {
 			err := k8sClient.Get(ctx, req.NamespacedName, &llmv1alpha1.APITokenRequest{})
