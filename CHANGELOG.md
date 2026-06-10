@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.11.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.11.2...v2.11.3) (2026-06-10)
+
+
+### Bug Fixes
+
+* use cached credentials for BYOC cleanup instead of a Secret finalizer ([#149](https://github.com/apeirora/showroom-msp-private-llm/issues/149)) ([91b119b](https://github.com/apeirora/showroom-msp-private-llm/commit/91b119b385a2e19183ca3068339bf7afe90ece69))
+
 ## [2.11.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.11.1...v2.11.2) (2026-06-10)
 
 
