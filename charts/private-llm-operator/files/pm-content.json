@@ -50,6 +50,10 @@
                                             "property": "spec.replicas"
                                         },
                                         {
+                                            "label": "BYOC Cluster",
+                                            "property": "spec.clusterRef.kubeconfigSecretName"
+                                        },
+                                        {
                                             "label": "Status",
                                             "property": "status.phase",
                                             "labelDisplay": true
@@ -86,6 +90,17 @@
                                             "required": true,
                                             "values": ["1", "3", "6", "12"],
                                             "defaultValue": "1"
+                                        },
+                                        {
+                                            "label": "BYOC Cluster",
+                                            "property": "spec.clusterRef.kubeconfigSecretName",
+                                            "description": "Optional: pick a kubeconfig Secret to deploy onto your own cluster; leave empty for as-a-Service",
+                                            "dynamicValuesDefinition": {
+                                                "operation": "v1.Secrets.items",
+                                                "gqlQuery": "query ($namespace: String!) { v1 { Secrets(namespace: $namespace, labelselector: \"apeirora.eu/kubeconfig=true\") { items { metadata { name } } } } }",
+                                                "value": "metadata.name",
+                                                "key": "metadata.name"
+                                            }
                                         }
                                     ]
                                 }
