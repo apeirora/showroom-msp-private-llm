@@ -48,9 +48,19 @@ type LLMInstanceSpec struct {
 type ClusterRef struct {
 	// KubeconfigSecretName names a Secret in the same namespace holding the
 	// target cluster kubeconfig under the "kubeconfig" key. SimpleCluster's
-	// "<name>-kubeconfig" Secrets follow this contract.
-	// +kubebuilder:validation:MinLength=1
-	KubeconfigSecretName string `json:"kubeconfigSecretName"`
+	// "<name>-kubeconfig" Secrets follow this contract. An empty value is
+	// treated the same as an unset clusterRef: the instance runs
+	// as-a-Service.
+	// +optional
+	KubeconfigSecretName string `json:"kubeconfigSecretName,omitempty"`
+}
+
+// IsBYOC reports whether this instance targets a user-supplied cluster.
+// An unset clusterRef or an empty kubeconfigSecretName both mean
+// as-a-Service: form-based clients submit the empty string when the BYOC
+// field is left blank.
+func (i *LLMInstance) IsBYOC() bool {
+	return i.Spec.ClusterRef != nil && i.Spec.ClusterRef.KubeconfigSecretName != ""
 }
 
 // LLMInstanceStatus defines the observed state of LLMInstance

@@ -583,7 +583,7 @@ func (r *LLMInstanceReconciler) findInstancesForSecret(ctx context.Context, obj 
 	requests := make([]reconcile.Request, 0, 1)
 	for _, inst := range instances.Items {
 		matchesToken := labeledInstance == inst.Name
-		matchesKubeconfig := inst.Spec.ClusterRef != nil && inst.Spec.ClusterRef.KubeconfigSecretName == secret.GetName()
+		matchesKubeconfig := inst.IsBYOC() && inst.Spec.ClusterRef.KubeconfigSecretName == secret.GetName()
 		if !matchesToken && !matchesKubeconfig {
 			continue
 		}

@@ -334,6 +334,42 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{}))).To(BeTrue())
 	})
 
+	It("treats an empty kubeconfigSecretName as as-a-Service", func() {
+		// Form-based clients (the portal) submit clusterRef with an empty
+		// kubeconfigSecretName when the optional BYOC field is left blank.
+		name := "inst-" + utilrand.String(5)
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+			Spec: llmv1alpha1.LLMInstanceSpec{
+				Model:      "phi-2",
+				Replicas:   1,
+				ClusterRef: &llmv1alpha1.ClusterRef{KubeconfigSecretName: ""},
+			},
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
+		// finalizer, then slug, then as-a-Service provisioning
+		for i := 0; i < 2; i++ {
+			res, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Requeue).To(BeTrue())
+		}
+		res, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
+
+		// the workload lands on the local cluster, not a BYOC target
+		deployName := fmt.Sprintf("%s-llama", name)
+		var deploy appsv1.Deployment
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: namespace}, &deploy)).To(Succeed())
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		slug := inst.Annotations[slugAnnotationKey]
+		Expect(slug).NotTo(BeEmpty())
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: byocBaseName(slug), Namespace: byocNamespace}, &appsv1.Deployment{}))).To(BeTrue())
+	})
+
 	It("reports a missing BYOC kubeconfig Secret instead of erroring", func() {
 		reconciler.RemoteClientBuilder = func(_ []byte) (client.Client, error) {
 			return k8sClient, nil
