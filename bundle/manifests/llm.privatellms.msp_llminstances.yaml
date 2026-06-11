@@ -61,11 +61,10 @@ spec:
                     description: |-
                       KubeconfigSecretName names a Secret in the same namespace holding the
                       target cluster kubeconfig under the "kubeconfig" key. SimpleCluster's
-                      "<name>-kubeconfig" Secrets follow this contract.
-                    minLength: 1
+                      "<name>-kubeconfig" Secrets follow this contract. An empty value is
+                      treated the same as an unset clusterRef: the instance runs
+                      as-a-Service.
                     type: string
-                required:
-                - kubeconfigSecretName
                 type: object
               model:
                 default: tinyllama

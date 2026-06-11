@@ -119,7 +119,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if ctrlutil.ContainsFinalizer(inst, finalizerName) {
 			// BYOC objects live on a remote cluster where ownerRefs GC cannot
 			// reach; remove them explicitly (best-effort).
-			if inst.Spec.ClusterRef != nil {
+			if inst.IsBYOC() {
 				r.cleanupBYOC(ctx, inst)
 			}
 			// Attempt to remove owned resources via ownerRefs GC; nothing to do explicitly
@@ -166,7 +166,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	model := resolveModel(inst.Spec.Model)
 
-	if inst.Spec.ClusterRef != nil {
+	if inst.IsBYOC() {
 		return r.reconcileBYOC(ctx, inst, slug, model)
 	}
 
