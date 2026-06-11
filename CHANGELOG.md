@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.11.3...v2.12.0) (2026-06-11)
+
+
+### Features
+
+* **chart:** Surface BYOC cluster selection in the LLMInstance form ([#151](https://github.com/apeirora/showroom-msp-private-llm/issues/151)) ([4a88091](https://github.com/apeirora/showroom-msp-private-llm/commit/4a88091d9b8c34a115be14b4e4c64e9ae1f4b43c))
+
 ## [2.11.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.11.2...v2.11.3) (2026-06-10)
 
 
