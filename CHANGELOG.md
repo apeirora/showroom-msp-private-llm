@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.0...v2.12.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* **chart:** resolve BYOC kubeconfig relation via template, not reference ([#153](https://github.com/apeirora/showroom-msp-private-llm/issues/153)) ([8b8589b](https://github.com/apeirora/showroom-msp-private-llm/commit/8b8589bfbb4b29aee7b4086cc73e8e731b963889))
+
 ## [2.12.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.11.3...v2.12.0) (2026-06-11)
 
 
