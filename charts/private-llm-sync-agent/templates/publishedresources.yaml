@@ -18,12 +18,17 @@ spec:
   related:
     # BYOC mode: sync the user-supplied cluster kubeconfig Secret referenced
     # by spec.clusterRef from the kcp workspace down to the service cluster.
+    # Resolved via template, not reference: form clients submit
+    # clusterRef.kubeconfigSecretName="" for as-a-Service instances, and the
+    # empty string round-trips asymmetrically (dropped on the service-cluster
+    # copy), which makes reference resolution error out and block deletion.
+    # An empty template render skips the related resource cleanly instead.
     - identifier: byoc-kubeconfig
       origin: kcp
       kind: Secret
       object:
-        reference:
-          path: spec.clusterRef.kubeconfigSecretName
+        template:
+          template: "{{`{{ with .Object.spec.clusterRef }}{{ with .kubeconfigSecretName }}{{ . }}{{ end }}{{ end }}`}}"
 ---
 apiVersion: syncagent.kcp.io/v1alpha1
 kind: PublishedResource
