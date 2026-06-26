@@ -394,12 +394,20 @@ func llamaInitContainer(model modelSelection) corev1.Container {
 		Name:    "download-model",
 		Image:   "curlimages/curl:8.8.0",
 		Command: []string{"/bin/sh", "-c"},
-		Args:    []string{fmt.Sprintf("curl -fL -o %s %s", model.path(), model.url)},
+		Args:    []string{modelDownloadCommand(model)},
 		VolumeMounts: []corev1.VolumeMount{{
 			Name:      "models-volume",
 			MountPath: "/models",
 		}},
 	}
+}
+
+func modelDownloadCommand(model modelSelection) string {
+	return fmt.Sprintf(
+		"curl --fail --location --retry 10 --retry-all-errors --retry-delay 5 --retry-max-time 600 --connect-timeout 30 --continue-at - --output %s %s",
+		model.path(),
+		model.url,
+	)
 }
 
 func llamaServerContainer(model modelSelection, extraArgs ...string) corev1.Container {
@@ -466,7 +474,7 @@ func ensureDeploymentReplicas(deploy *appsv1.Deployment, desired int32) (bool, i
 func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection, extraArgs ...string) bool {
 	updated := false
 	modelPath := model.path()
-	desiredInitArg := fmt.Sprintf("curl -fL -o %s %s", modelPath, model.url)
+	desiredInitArg := modelDownloadCommand(model)
 	for i := range deploy.Spec.Template.Spec.InitContainers {
 		c := &deploy.Spec.Template.Spec.InitContainers[i]
 		if c.Name != "download-model" {
