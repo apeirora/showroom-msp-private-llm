@@ -14,6 +14,7 @@ The operator manages two custom resources in the `llm.privatellms.msp` API group
 |-------|-------------|---------|
 | `spec.model` | Model to deploy (`tinyllama`, `phi-2`, `gemma-3-1b-it`, `gemma-3-4b-it`, `gemma-3-12b-it`) | `tinyllama` |
 | `spec.replicas` | Number of inference pods | `1` |
+| `spec.clusterRef.kubeconfigSecretName` | Optional kubeconfig Secret for BYOC mode. When omitted, the instance runs as-a-Service on the provider-managed cluster. | unset |
 
 **What you read back:**
 
@@ -76,6 +77,26 @@ For each `LLMInstance`, the operator creates:
 | Ingress | `<name>-llama` | Routes `<PUBLIC_HOST>/llm/<slug>` to the service |
 | Middleware | `<name>-llama-strip` | Traefik StripPrefix to remove `/llm/<slug>` |
 | Middleware | `<name>-llama-auth` | Traefik ForwardAuth for bearer token validation |
+
+### BYOC Example
+
+In BYOC mode, the referenced Secret must live in the same namespace and contain
+the target cluster kubeconfig under the `kubeconfig` key. SimpleCluster's
+`<name>-kubeconfig` Secrets follow this contract.
+
+```yaml
+apiVersion: llm.privatellms.msp/v1alpha1
+kind: LLMInstance
+metadata:
+  name: my-byoc-llm
+spec:
+  model: tinyllama
+  clusterRef:
+    kubeconfigSecretName: sc-cf-kubeconfig
+```
+
+The remote workload uses a `LoadBalancer` Service with plain HTTP on port `443`
+and forwards traffic to the llama.cpp container on port `8000`.
 
 ---
 
