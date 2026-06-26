@@ -110,6 +110,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: namespace}, &deploy)).To(Succeed())
 		Expect(deploy.Spec.Replicas).NotTo(BeNil())
 		Expect(*deploy.Spec.Replicas).To(Equal(int32(2)))
+		Expect(deploy.Spec.Template.Spec.InitContainers[0].Args).To(Equal([]string{modelDownloadCommand(resolveModel("phi-2"))}))
 		Expect(deploy.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{Name: "MODEL_PATH", Value: "/models/phi-2.Q4_0.gguf"}))
 
 		var svc corev1.Service
@@ -197,6 +198,8 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: namespace}, &deploy)).To(Succeed())
 		Expect(*deploy.Spec.Replicas).To(Equal(int32(3)))
 		// ensure model path updated
+		initContainer := deploy.Spec.Template.Spec.InitContainers[0]
+		Expect(initContainer.Args).To(Equal([]string{modelDownloadCommand(resolveModel("tinyllama"))}))
 		container := deploy.Spec.Template.Spec.Containers[0]
 		Expect(container.Env).To(ContainElement(corev1.EnvVar{Name: "MODEL_PATH", Value: "/models/tinyllama.gguf"}))
 		Expect(container.Args).To(Equal([]string{"-m", "/models/tinyllama.gguf", "--port", "8000", "--host", "0.0.0.0"}))
