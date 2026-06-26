@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -202,6 +203,11 @@ var _ = Describe("LLMInstanceReconciler", func() {
 	})
 
 	It("deploys to the BYOC cluster and marks ready once the LoadBalancer is provisioned", func() {
+		var probedURL string
+		reconciler.ServiceHealthChecker = func(_ context.Context, targetURL string) error {
+			probedURL = targetURL
+			return nil
+		}
 		reconciler.RemoteClientBuilder = func(_ []byte) (client.Client, error) {
 			return k8sClient, nil
 		}
@@ -262,6 +268,9 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		var svc corev1.Service
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &svc)).To(Succeed())
 		Expect(svc.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
+		Expect(svc.Spec.Ports).To(HaveLen(1))
+		Expect(svc.Spec.Ports[0].Port).To(Equal(int32(443)))
+		Expect(svc.Spec.Ports[0].TargetPort.IntValue()).To(Equal(8000))
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
 		Expect(inst.Status.Phase).To(Equal("Provisioning"))
@@ -284,7 +293,8 @@ var _ = Describe("LLMInstanceReconciler", func() {
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
 		Expect(inst.Status.Phase).To(Equal("Ready"))
-		Expect(inst.Status.Endpoint).To(Equal("http://192.0.2.10:8000"))
+		Expect(inst.Status.Endpoint).To(Equal("http://192.0.2.10:443"))
+		Expect(probedURL).To(Equal("http://192.0.2.10:443/health"))
 
 		By("replacing the bootstrap key once a token Secret exists")
 		tokenSecret := &corev1.Secret{
@@ -332,6 +342,42 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &corev1.Service{}))).To(BeTrue())
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-keys", Namespace: byocNamespace}, &corev1.Secret{}))).To(BeTrue())
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{}))).To(BeTrue())
+	})
+
+	It("repairs legacy BYOC Services to the current port contract", func() {
+		name := "inst-" + utilrand.String(5)
+		slug := "legacy-slug"
+		remoteName := byocBaseName(slug)
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		}
+		legacySvc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{Name: remoteName, Namespace: byocNamespace},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeClusterIP,
+				Ports: []corev1.ServicePort{{
+					Name:       "legacy",
+					Port:       8000,
+					TargetPort: intstr.FromInt(8000),
+					Protocol:   corev1.ProtocolUDP,
+				}},
+			},
+		}
+		err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: byocNamespace}})
+		Expect(err == nil || apierrors.IsAlreadyExists(err)).To(BeTrue())
+		Expect(k8sClient.Create(ctx, legacySvc)).To(Succeed())
+
+		Expect(reconciler.reconcileBYOCService(ctx, k8sClient, inst, slug)).To(Succeed())
+
+		var repaired corev1.Service
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &repaired)).To(Succeed())
+		Expect(repaired.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
+		Expect(repaired.Spec.Selector).To(Equal(byocLabels(name, slug)))
+		Expect(repaired.Spec.Ports).To(HaveLen(1))
+		Expect(repaired.Spec.Ports[0].Name).To(Equal("http"))
+		Expect(repaired.Spec.Ports[0].Port).To(Equal(int32(443)))
+		Expect(repaired.Spec.Ports[0].TargetPort.IntValue()).To(Equal(8000))
+		Expect(repaired.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP))
 	})
 
 	It("treats an empty kubeconfigSecretName as as-a-Service", func() {

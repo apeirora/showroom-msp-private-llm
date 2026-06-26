@@ -48,6 +48,9 @@ const (
 	byocKubeconfigKey        = "kubeconfig"
 	byocAPIKeyFileKey        = "api-keys"
 	byocAPIKeyMountPath      = "/keys"
+	byocServicePortName      = "http"
+	byocServicePort          = int32(443)
+	byocTargetPort           = int32(8000)
 	byocAPIKeysRevAnnotation = "llm.privatellms.msp/api-keys-revision"
 	byocBootstrapAnnotation  = "llm.privatellms.msp/bootstrap-key"
 	byocBootstrapTrue        = "true"
@@ -461,9 +464,9 @@ func (r *LLMInstanceReconciler) reconcileBYOCService(ctx context.Context, remote
 				Type:     corev1.ServiceTypeLoadBalancer,
 				Selector: copyStringMap(labels),
 				Ports: []corev1.ServicePort{{
-					Name:       "http",
-					Port:       8000,
-					TargetPort: intstr.FromInt(8000),
+					Name:       byocServicePortName,
+					Port:       byocServicePort,
+					TargetPort: intstr.FromInt(int(byocTargetPort)),
 					Protocol:   corev1.ProtocolTCP,
 				}},
 			},
@@ -475,14 +478,78 @@ func (r *LLMInstanceReconciler) reconcileBYOCService(ctx context.Context, remote
 		return nil
 	}
 
+	updated := false
 	if existing.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		existing.Spec.Type = corev1.ServiceTypeLoadBalancer
-		if err := remote.Update(ctx, &existing); err != nil {
-			return err
-		}
-		logger.Info("updated BYOC Service type to LoadBalancer", "name", name)
+		updated = true
 	}
+	if !stringMapEqual(existing.Spec.Selector, labels) {
+		existing.Spec.Selector = copyStringMap(labels)
+		updated = true
+	}
+	if ensureBYOCServicePort(&existing) {
+		updated = true
+	}
+	if !updated {
+		return nil
+	}
+	if err := remote.Update(ctx, &existing); err != nil {
+		return err
+	}
+	logger.Info("updated BYOC LoadBalancer Service", "name", name)
 	return nil
+}
+
+func ensureBYOCServicePort(svc *corev1.Service) bool {
+	if len(svc.Spec.Ports) == 0 {
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:       byocServicePortName,
+			Port:       byocServicePort,
+			TargetPort: intstr.FromInt(int(byocTargetPort)),
+			Protocol:   corev1.ProtocolTCP,
+		}}
+		return true
+	}
+
+	idx := 0
+	for i := range svc.Spec.Ports {
+		if svc.Spec.Ports[i].Name == byocServicePortName {
+			idx = i
+			break
+		}
+	}
+
+	port := &svc.Spec.Ports[idx]
+	updated := false
+	if port.Name != byocServicePortName {
+		port.Name = byocServicePortName
+		updated = true
+	}
+	if port.Port != byocServicePort {
+		port.Port = byocServicePort
+		updated = true
+	}
+	if port.TargetPort.IntValue() != int(byocTargetPort) {
+		port.TargetPort = intstr.FromInt(int(byocTargetPort))
+		updated = true
+	}
+	if port.Protocol != corev1.ProtocolTCP {
+		port.Protocol = corev1.ProtocolTCP
+		updated = true
+	}
+	return updated
+}
+
+func stringMapEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, av := range a {
+		if b[k] != av {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *LLMInstanceReconciler) evaluateBYOCReadiness(ctx context.Context, remote client.Client, slug string) (bool, string, string, string, error) {
@@ -510,7 +577,7 @@ func (r *LLMInstanceReconciler) evaluateBYOCReadiness(ctx context.Context, remot
 	if addr == "" {
 		return false, "", "LoadBalancerPending", fmt.Sprintf("Service %q has no LoadBalancer address yet", name), nil
 	}
-	endpoint := fmt.Sprintf("http://%s:8000", addr)
+	endpoint := fmt.Sprintf("http://%s:%d", addr, byocServicePort)
 
 	// llama.cpp serves /health without an API key, so the gate works from outside.
 	probeURL := endpoint + "/health"
