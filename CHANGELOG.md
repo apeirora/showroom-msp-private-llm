@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.1...v2.12.2) (2026-06-26)
+
+
+### Bug Fixes
+
+* expose BYOC loadbalancers on port 443 ([ed0a866](https://github.com/apeirora/showroom-msp-private-llm/commit/ed0a866437dc5a024e1e3a40b9664214e4cdf2b4))
+
 ## [2.12.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.0...v2.12.1) (2026-06-12)
 
 
