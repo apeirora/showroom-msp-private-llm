@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.2...v2.12.3) (2026-06-26)
+
+
+### Bug Fixes
+
+* retry interrupted model downloads ([7868ca8](https://github.com/apeirora/showroom-msp-private-llm/commit/7868ca845b9895d6a32fee97eb6152cbab6bb9a3))
+
 ## [2.12.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.1...v2.12.2) (2026-06-26)
 
 
