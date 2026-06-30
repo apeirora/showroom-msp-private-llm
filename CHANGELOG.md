@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.3...v2.12.4) (2026-06-30)
+
+
+### Bug Fixes
+
+* **controller:** Clean up previous target on clusterRef changes ([8d0d398](https://github.com/apeirora/showroom-msp-private-llm/commit/8d0d3983755c3101b4de7d5738cf36b8469fc0e2))
+
 ## [2.12.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.2...v2.12.3) (2026-06-26)
 
 
