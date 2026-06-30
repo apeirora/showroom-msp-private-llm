@@ -34,10 +34,25 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
 )
+
+type createFailingClient struct {
+	client.Client
+	err error
+}
+
+const (
+	testClusterB           = "cluster-b"
+	testClusterBKubeconfig = "cluster-b-kubeconfig"
+)
+
+func (c createFailingClient) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	return c.err
+}
 
 var _ = Describe("LLMInstanceReconciler", func() {
 	var (
@@ -345,6 +360,294 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &corev1.Service{}))).To(BeTrue())
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-keys", Namespace: byocNamespace}, &corev1.Secret{}))).To(BeTrue())
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{}))).To(BeTrue())
+	})
+
+	It("keeps active BYOC status when the source kubeconfig Secret is temporarily missing", func() {
+		reconciler.RemoteClientBuilder = func(_ []byte) (client.Client, error) {
+			return k8sClient, nil
+		}
+
+		kubeconfigSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "customer-kubeconfig", Namespace: namespace},
+			StringData: map[string]string{byocKubeconfigKey: "apiVersion: v1\nkind: Config"},
+		}
+		Expect(k8sClient.Create(ctx, kubeconfigSecret)).To(Succeed())
+
+		name := "inst-" + utilrand.String(5)
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+			Spec: llmv1alpha1.LLMInstanceSpec{
+				Model:      "phi-2",
+				Replicas:   1,
+				ClusterRef: &llmv1alpha1.ClusterRef{KubeconfigSecretName: "customer-kubeconfig"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
+		for i := 0; i < 3; i++ {
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		slug := inst.Annotations[slugAnnotationKey]
+		remoteName := byocBaseName(slug)
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal("customer-kubeconfig"))
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{})).To(Succeed())
+
+		const readyEndpoint = "http://192.0.2.30:443"
+		Expect(reconciler.updateReadyStatus(ctx, inst, readyEndpoint)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, kubeconfigSecret)).To(Succeed())
+
+		res, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal("customer-kubeconfig"))
+		Expect(inst.Status.Phase).To(Equal("Ready"))
+		Expect(inst.Status.Endpoint).To(Equal(readyEndpoint))
+		ready := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Status).To(Equal(metav1.ConditionTrue))
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{})).To(Succeed())
+	})
+
+	It("cleans up the previous BYOC cluster when clusterRef changes", func() {
+		remoteA := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+		remoteB := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+		reconciler.RemoteClientBuilder = func(kubeconfig []byte) (client.Client, error) {
+			switch string(kubeconfig) {
+			case "cluster-a":
+				return remoteA, nil
+			case testClusterB:
+				return remoteB, nil
+			default:
+				return nil, fmt.Errorf("unexpected kubeconfig %q", string(kubeconfig))
+			}
+		}
+
+		for name, kubeconfig := range map[string]string{
+			"cluster-a-kubeconfig": "cluster-a",
+			testClusterBKubeconfig: testClusterB,
+		} {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+				StringData: map[string]string{
+					byocKubeconfigKey: kubeconfig,
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+		}
+
+		name := "inst-" + utilrand.String(5)
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+			Spec: llmv1alpha1.LLMInstanceSpec{
+				Model:      "phi-2",
+				Replicas:   1,
+				ClusterRef: &llmv1alpha1.ClusterRef{KubeconfigSecretName: "cluster-a-kubeconfig"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
+		for i := 0; i < 2; i++ {
+			res, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Requeue).To(BeTrue())
+		}
+		res, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		slug := inst.Annotations[slugAnnotationKey]
+		Expect(slug).NotTo(BeEmpty())
+		remoteName := byocBaseName(slug)
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal("cluster-a-kubeconfig"))
+
+		Expect(remoteA.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{})).To(Succeed())
+		Expect(remoteA.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &corev1.Service{})).To(Succeed())
+		Expect(remoteA.Get(ctx, types.NamespacedName{Name: remoteName + "-keys", Namespace: byocNamespace}, &corev1.Secret{})).To(Succeed())
+		Expect(apierrors.IsNotFound(remoteB.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{}))).To(BeTrue())
+
+		inst.Spec.ClusterRef.KubeconfigSecretName = testClusterBKubeconfig
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+
+		res, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
+
+		Expect(apierrors.IsNotFound(remoteA.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(remoteA.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &corev1.Service{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(remoteA.Get(ctx, types.NamespacedName{Name: remoteName + "-keys", Namespace: byocNamespace}, &corev1.Secret{}))).To(BeTrue())
+
+		Expect(remoteB.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{})).To(Succeed())
+		Expect(remoteB.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &corev1.Service{})).To(Succeed())
+		Expect(remoteB.Get(ctx, types.NamespacedName{Name: remoteName + "-keys", Namespace: byocNamespace}, &corev1.Secret{})).To(Succeed())
+
+		var cached corev1.Secret
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &cached)).To(Succeed())
+		Expect(string(cached.Data[byocKubeconfigKey])).To(Equal(testClusterB))
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal(testClusterBKubeconfig))
+	})
+
+	It("keeps target status durable when a BYOC move hits a remote error", func() {
+		remoteA := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+		remoteB := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+		failRemoteB := true
+		reconciler.RemoteClientBuilder = func(kubeconfig []byte) (client.Client, error) {
+			switch string(kubeconfig) {
+			case "cluster-a":
+				return remoteA, nil
+			case testClusterB:
+				if failRemoteB {
+					return createFailingClient{Client: remoteB, err: fmt.Errorf("remote create blocked")}, nil
+				}
+				return remoteB, nil
+			default:
+				return nil, fmt.Errorf("unexpected kubeconfig %q", string(kubeconfig))
+			}
+		}
+
+		for name, kubeconfig := range map[string]string{
+			"cluster-a-kubeconfig": "cluster-a",
+			testClusterBKubeconfig: testClusterB,
+		} {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+				StringData: map[string]string{
+					byocKubeconfigKey: kubeconfig,
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+		}
+
+		name := "inst-" + utilrand.String(5)
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+			Spec: llmv1alpha1.LLMInstanceSpec{
+				Model:      "phi-2",
+				Replicas:   1,
+				ClusterRef: &llmv1alpha1.ClusterRef{KubeconfigSecretName: "cluster-a-kubeconfig"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
+		for i := 0; i < 3; i++ {
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		slug := inst.Annotations[slugAnnotationKey]
+		remoteName := byocBaseName(slug)
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal("cluster-a-kubeconfig"))
+
+		Expect(reconciler.updateReadyStatus(ctx, inst, "http://192.0.2.20:443")).To(Succeed())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.Phase).To(Equal("Ready"))
+		Expect(inst.Status.Endpoint).To(Equal("http://192.0.2.20:443"))
+
+		inst.Spec.ClusterRef.KubeconfigSecretName = testClusterBKubeconfig
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+
+		_, err := reconciler.Reconcile(ctx, req)
+		Expect(err).To(MatchError("remote create blocked"))
+
+		Expect(apierrors.IsNotFound(remoteA.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(remoteA.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &corev1.Service{}))).To(BeTrue())
+		Expect(apierrors.IsNotFound(remoteA.Get(ctx, types.NamespacedName{Name: remoteName + "-keys", Namespace: byocNamespace}, &corev1.Secret{}))).To(BeTrue())
+
+		var cached corev1.Secret
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &cached)).To(Succeed())
+		Expect(string(cached.Data[byocKubeconfigKey])).To(Equal(testClusterB))
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal(testClusterBKubeconfig))
+		Expect(inst.Status.Phase).To(Equal("Provisioning"))
+		Expect(inst.Status.Endpoint).To(BeEmpty())
+		ready := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
+		Expect(ready.Reason).To(Equal("BYOCTargetChanging"))
+
+		failRemoteB = false
+		res, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
+		Expect(remoteB.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{})).To(Succeed())
+	})
+
+	It("does not mark invalid BYOC kubeconfigs as active targets", func() {
+		remoteB := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+		reconciler.RemoteClientBuilder = func(kubeconfig []byte) (client.Client, error) {
+			switch string(kubeconfig) {
+			case "invalid":
+				return nil, fmt.Errorf("invalid kubeconfig")
+			case testClusterB:
+				return remoteB, nil
+			default:
+				return nil, fmt.Errorf("unexpected kubeconfig %q", string(kubeconfig))
+			}
+		}
+
+		for name, kubeconfig := range map[string]string{
+			"invalid-kubeconfig":   "invalid",
+			testClusterBKubeconfig: testClusterB,
+		} {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+				StringData: map[string]string{
+					byocKubeconfigKey: kubeconfig,
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+		}
+
+		name := "inst-" + utilrand.String(5)
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+			Spec: llmv1alpha1.LLMInstanceSpec{
+				ClusterRef: &llmv1alpha1.ClusterRef{KubeconfigSecretName: "invalid-kubeconfig"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: name, Namespace: namespace}}
+		for i := 0; i < 2; i++ {
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		res, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
+
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		slug := inst.Annotations[slugAnnotationKey]
+		remoteName := byocBaseName(slug)
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(BeEmpty())
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{}))).To(BeTrue())
+		ready := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
+		Expect(ready).NotTo(BeNil())
+		Expect(ready.Reason).To(Equal("KubeconfigInvalid"))
+
+		inst.Spec.ClusterRef.KubeconfigSecretName = testClusterBKubeconfig
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+
+		res, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(provisioningRequeueAfter))
+
+		Expect(remoteB.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, &appsv1.Deployment{})).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: remoteName + "-credentials", Namespace: namespace}, &corev1.Secret{})).To(Succeed())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal(testClusterBKubeconfig))
 	})
 
 	It("repairs legacy BYOC Services to the current port contract", func() {

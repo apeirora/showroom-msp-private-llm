@@ -119,7 +119,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if ctrlutil.ContainsFinalizer(inst, finalizerName) {
 			// BYOC objects live on a remote cluster where ownerRefs GC cannot
 			// reach; remove them explicitly (best-effort).
-			if inst.IsBYOC() {
+			if inst.IsBYOC() || inst.Status.ActiveBYOCKubeconfigSecretName != "" {
 				r.cleanupBYOC(ctx, inst)
 			}
 			// Attempt to remove owned resources via ownerRefs GC; nothing to do explicitly
@@ -166,9 +166,15 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	model := resolveModel(inst.Spec.Model)
 
+	if err := r.cleanupChangedBYOCTarget(ctx, inst, slug); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if inst.IsBYOC() {
 		return r.reconcileBYOC(ctx, inst, slug, model)
 	}
+
+	inst.Status.ActiveBYOCKubeconfigSecretName = ""
 
 	labels := llamaLabels(inst.Name)
 
