@@ -71,6 +71,13 @@ type LLMInstanceStatus struct {
 	// Endpoint is the effective inference endpoint being used.
 	Endpoint string `json:"endpoint,omitempty"`
 
+	// ActiveBYOCKubeconfigSecretName is the kubeconfig Secret name for the
+	// BYOC target whose remote workload is currently managed by the operator.
+	// When this differs from spec.clusterRef.kubeconfigSecretName, the
+	// operator removes the workload from the previous target before managing
+	// the new one.
+	ActiveBYOCKubeconfigSecretName string `json:"activeBYOCKubeconfigSecretName,omitempty"`
+
 	// ObservedGeneration reflects the generation observed by the controller.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
