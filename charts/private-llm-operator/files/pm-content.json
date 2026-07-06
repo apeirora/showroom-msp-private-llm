@@ -261,28 +261,12 @@
                                             "property": "metadata.name"
                                         },
                                         {
-                                            "label": "Token",
-                                            "property": "data",
-                                            "propertyField": {
-                                                "key": "OPENAI_API_KEY",
-                                                "transform": [
-                                                    "decode"
-                                                ]
-                                            },
-                                            "uiSettings": {
-                                                "displayAs": "secret",
-                                                "withCopyButton": true
-                                            }
+                                            "label": "Type",
+                                            "property": "type"
                                         },
                                         {
-                                            "label": "OpenAI API URL",
-                                            "property": "data",
-                                            "propertyField": {
-                                                "key": "OPENAI_API_URL",
-                                                "transform": [
-                                                    "decode"
-                                                ]
-                                            }
+                                            "label": "Created",
+                                            "property": "metadata.creationTimestamp"
                                         }
                                     ]
                                 }
