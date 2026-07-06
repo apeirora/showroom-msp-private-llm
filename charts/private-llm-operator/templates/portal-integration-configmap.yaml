@@ -2,10 +2,9 @@
 {{- $sidebarTitle := .Values.branding.sidebar.title -}}
 {{- $secretDef := default (dict) .Values.portalIntegration.secretResourceDefinition -}}
 {{- $secretGroup := default "v1" $secretDef.group -}}
-{{- $secretPlural := default "secrets" $secretDef.plural -}}
-{{- $secretSingular := default "secret" $secretDef.singular -}}
+{{- $secretPlural := default "Secrets" $secretDef.plural -}}
 {{- $secretKind := default "Secret" $secretDef.kind -}}
-{{- $secretVersion := "v1" -}}
+{{- $secretVersion := "" -}}
 {{- if hasKey $secretDef "version" -}}
 {{- $secretVersion = printf "%v" (get $secretDef "version") -}}
 {{- end -}}
@@ -19,7 +18,6 @@
 {{- $pmContent = replace "__SECRET_GROUP__" $secretGroup $pmContent -}}
 {{- $pmContent = replace "__SECRET_VERSION__" $secretVersion $pmContent -}}
 {{- $pmContent = replace "__SECRET_PLURAL__" $secretPlural $pmContent -}}
-{{- $pmContent = replace "__SECRET_SINGULAR__" $secretSingular $pmContent -}}
 {{- $pmContent = replace "__SECRET_KIND__" $secretKind $pmContent -}}
 apiVersion: v1
 kind: ConfigMap

@@ -26,11 +26,10 @@
                     },
                     "context": {
                         "resourceDefinition": {
-                            "group": "llm.privatellms.msp",
+                            "apiGroup": "llm_privatellms_msp",
                             "version": "v1alpha1",
-                            "plural": "LLMInstances",
-                            "singular": "llminstance",
-                            "kind": "LLMInstance",
+                            "entityCollection": "LLMInstances",
+                            "entity": "LLMInstance",
                             "scope": "Namespaced",
                             "namespace": null,
                             "ui": {
@@ -150,11 +149,10 @@
                     },
                     "context": {
                         "resourceDefinition": {
-                            "group": "llm.privatellms.msp",
+                            "apiGroup": "llm_privatellms_msp",
                             "version": "v1alpha1",
-                            "plural": "APITokenRequests",
-                            "singular": "apitokenrequest",
-                            "kind": "APITokenRequest",
+                            "entityCollection": "APITokenRequests",
+                            "entity": "APITokenRequest",
                             "scope": "Namespaced",
                             "namespace": null,
                             "ui": {
@@ -249,11 +247,10 @@
                     },
                         "context": {
                             "resourceDefinition": {
-                                "group": "__SECRET_GROUP__",
+                                "apiGroup": "__SECRET_GROUP__",
                                 "version": "__SECRET_VERSION__",
-                                "plural": "__SECRET_PLURAL__",
-                                "singular": "__SECRET_SINGULAR__",
-                                "kind": "__SECRET_KIND__",
+                                "entityCollection": "__SECRET_PLURAL__",
+                                "entity": "__SECRET_KIND__",
                                 "scope": "Namespaced",
                                 "namespace": null,
                                 "ui": {
