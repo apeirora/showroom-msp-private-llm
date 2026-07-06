@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.4...v2.12.5) (2026-07-06)
+
+
+### Bug Fixes
+
+* **portal:** migrate pm-content to new portal-ui-lib resourceDefinition schema ([#163](https://github.com/apeirora/showroom-msp-private-llm/issues/163)) ([5cdf39d](https://github.com/apeirora/showroom-msp-private-llm/commit/5cdf39dbacc148640e9d7c7a7e321b88d2aeff1f))
+
 ## [2.12.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.3...v2.12.4) (2026-06-30)
 
 
