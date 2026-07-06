@@ -32,11 +32,15 @@ portalIntegration:
   enabled: false
   contentVariant: default
   contentPath: /pm-content.json
+  # Maps onto the portal-ui-lib >= 0.43.0 resourceDefinition schema:
+  # group -> apiGroup (GraphQL gateway root field), plural -> entityCollection
+  # (must match the gateway schema field, PascalCase), kind -> entity.
+  # version stays empty for core/v1 resources so the query nests as
+  # v1 { Secrets } instead of v1 { v1 { Secrets } }.
   secretResourceDefinition:
     group: v1
-    version: v1
-    plural: secrets
-    singular: secret
+    version: ""
+    plural: Secrets
     kind: Secret
   image:
     repository: nginx
