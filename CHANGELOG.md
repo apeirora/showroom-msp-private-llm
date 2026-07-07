@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.12.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.5...v2.12.6) (2026-07-07)
+
+
+### Bug Fixes
+
+* **chart:** restore edit and delete for LLM instances via detail view ([#166](https://github.com/apeirora/showroom-msp-private-llm/issues/166)) ([1d3f0be](https://github.com/apeirora/showroom-msp-private-llm/commit/1d3f0bec8769b02a8dc355b3cf126c0cba675007))
+
 ## [2.12.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.4...v2.12.5) (2026-07-06)
 
 
