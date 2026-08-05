@@ -75,6 +75,7 @@ spec:
                 - gemma-3-1b-it
                 - gemma-3-4b-it
                 - gemma-3-12b-it
+                - qwen3-4b
                 type: string
               replicas:
                 description: |-

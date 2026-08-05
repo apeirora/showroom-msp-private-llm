@@ -12,7 +12,7 @@ The operator manages two custom resources in the `llm.privatellms.msp` API group
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `spec.model` | Model to deploy (`tinyllama`, `phi-2`, `gemma-3-1b-it`, `gemma-3-4b-it`, `gemma-3-12b-it`) | `tinyllama` |
+| `spec.model` | Model to deploy (`tinyllama`, `phi-2`, `gemma-3-1b-it`, `gemma-3-4b-it`, `gemma-3-12b-it`, `qwen3-4b`) | `tinyllama` |
 | `spec.replicas` | Number of inference pods | `1` |
 | `spec.clusterRef.kubeconfigSecretName` | Optional kubeconfig Secret for BYOC mode. When omitted, the instance runs as-a-Service on the provider-managed cluster. | unset |
 

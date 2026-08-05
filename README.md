@@ -90,6 +90,7 @@ The operator handles everything: model download, Deployment, Service, Ingress ro
 | Gemma 3 1B IT | `gemma-3-1b-it` | ~0.8 GB | Q4_K_M | [HuggingFace](https://huggingface.co/ggml-org/gemma-3-1b-it-GGUF) |
 | Gemma 3 4B IT | `gemma-3-4b-it` | ~2.5 GB | Q4_K_M | [HuggingFace](https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF) |
 | Gemma 3 12B IT | `gemma-3-12b-it` | ~7.3 GB | Q4_K_M | [HuggingFace](https://huggingface.co/ggml-org/gemma-3-12b-it-GGUF) |
+| Qwen3 4B | `qwen3-4b` | ~2.4 GB | Q4_K_M | [HuggingFace](https://huggingface.co/Qwen/Qwen3-4B-GGUF) |
 
 ## Quick Start
 

@@ -28,8 +28,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	unstructured "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,6 +72,7 @@ type LLMInstanceReconciler struct {
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
 const provisioningRequeueAfter = 5 * time.Second
+const llamaServerImage = "ghcr.io/ggml-org/llama.cpp@sha256:51570a4f93c5ce81ac6f2b1ea16a58771cfded2adb34241df7e75329b24fe76e"
 
 type ServiceHealthChecker func(ctx context.Context, targetURL string) error
 
@@ -277,9 +280,17 @@ func llamaLabels(instanceName string) map[string]string {
 }
 
 type modelSelection struct {
-	name string
-	file string
-	url  string
+	name                    string
+	file                    string
+	url                     string
+	sha256                  string
+	serverArgs              []string
+	ephemeralStorageRequest string
+	ephemeralStorageLimit   string
+	memoryRequest           string
+	memoryLimit             string
+	cpuRequest              string
+	cpuLimit                string
 }
 
 func (m modelSelection) path() string {
@@ -289,6 +300,20 @@ func (m modelSelection) path() string {
 func resolveModel(requested string) modelSelection {
 	trimmed := strings.TrimSpace(requested)
 	switch strings.ToLower(trimmed) {
+	case "qwen3-4b", "qwen3-4b-q4_k_m", "qwen3-4b-q4_k_m.gguf":
+		return modelSelection{
+			name:                    "qwen3-4b",
+			file:                    "Qwen3-4B-Q4_K_M.gguf",
+			url:                     "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/34778e26c8fa5e8bc0daa2389a9f958cffb1aedd/Qwen3-4B-Q4_K_M.gguf",
+			sha256:                  "7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5",
+			serverArgs:              []string{"--ctx-size", "8192", "--jinja", "--reasoning-format", "deepseek", "--reasoning", "off", "--no-webui"},
+			ephemeralStorageRequest: "4Gi",
+			ephemeralStorageLimit:   "5Gi",
+			memoryRequest:           "4Gi",
+			memoryLimit:             "7Gi",
+			cpuRequest:              "500m",
+			cpuLimit:                "1800m",
+		}
 	case "gemma-3-1b-it", "gemma-3-1b-it-q4_k_m", "gemma-3-1b-it-q4_k_m.gguf":
 		name := trimmed
 		if name == "" {
@@ -396,7 +421,7 @@ func llamaModelVolume() corev1.Volume {
 }
 
 func llamaInitContainer(model modelSelection) corev1.Container {
-	return corev1.Container{
+	container := corev1.Container{
 		Name:    "download-model",
 		Image:   "curlimages/curl:8.8.0",
 		Command: []string{"/bin/sh", "-c"},
@@ -406,14 +431,34 @@ func llamaInitContainer(model modelSelection) corev1.Container {
 			MountPath: "/models",
 		}},
 	}
+	if model.ephemeralStorageRequest != "" {
+		container.Resources.Requests = corev1.ResourceList{corev1.ResourceEphemeralStorage: resource.MustParse(model.ephemeralStorageRequest)}
+	}
+	if model.ephemeralStorageLimit != "" {
+		container.Resources.Limits = corev1.ResourceList{corev1.ResourceEphemeralStorage: resource.MustParse(model.ephemeralStorageLimit)}
+	}
+	return container
 }
 
 func modelDownloadCommand(model modelSelection) string {
-	return fmt.Sprintf(
+	if model.sha256 != "" {
+		temporaryPath := model.path() + ".partial"
+		curlCommand := "curl --fail --location --retry 10 --retry-all-errors --retry-delay 5 --retry-max-time 600 --connect-timeout 30"
+		return fmt.Sprintf(
+			"if [ -f %s ] && printf '%s  %s\\n' | sha256sum -c -; then exit 0; fi; "+
+				"rm -f %s; (%s --continue-at - --output %s %s || (rm -f %s && %s --output %s %s)) && "+
+				"if printf '%s  %s\\n' | sha256sum -c -; then mv %s %s; else rm -f %s; exit 1; fi",
+			model.path(), model.sha256, model.path(), model.path(), curlCommand, temporaryPath, model.url,
+			temporaryPath, curlCommand, temporaryPath, model.url,
+			model.sha256, temporaryPath, temporaryPath, model.path(), temporaryPath,
+		)
+	}
+	command := fmt.Sprintf(
 		"curl --fail --location --retry 10 --retry-all-errors --retry-delay 5 --retry-max-time 600 --connect-timeout 30 --continue-at - --output %s %s",
 		model.path(),
 		model.url,
 	)
+	return command
 }
 
 func llamaServerContainer(model modelSelection, extraArgs ...string) corev1.Container {
@@ -422,10 +467,11 @@ func llamaServerContainer(model modelSelection, extraArgs ...string) corev1.Cont
 		"-m", modelPath,
 		"--port", "8000",
 		"--host", "0.0.0.0",
-	}, extraArgs...)
-	return corev1.Container{
+	}, model.serverArgs...)
+	args = append(args, extraArgs...)
+	container := corev1.Container{
 		Name:           "llama-cpp-server",
-		Image:          "ghcr.io/ggml-org/llama.cpp:server-b7045",
+		Image:          llamaServerImage,
 		Command:        []string{"/app/llama-server"},
 		Args:           args,
 		Env:            []corev1.EnvVar{{Name: "MODEL_PATH", Value: modelPath}},
@@ -437,6 +483,25 @@ func llamaServerContainer(model modelSelection, extraArgs ...string) corev1.Cont
 			MountPath: "/models",
 		}},
 	}
+	if model.cpuRequest != "" || model.memoryRequest != "" {
+		container.Resources.Requests = corev1.ResourceList{}
+		if model.cpuRequest != "" {
+			container.Resources.Requests[corev1.ResourceCPU] = resource.MustParse(model.cpuRequest)
+		}
+		if model.memoryRequest != "" {
+			container.Resources.Requests[corev1.ResourceMemory] = resource.MustParse(model.memoryRequest)
+		}
+	}
+	if model.cpuLimit != "" || model.memoryLimit != "" {
+		container.Resources.Limits = corev1.ResourceList{}
+		if model.cpuLimit != "" {
+			container.Resources.Limits[corev1.ResourceCPU] = resource.MustParse(model.cpuLimit)
+		}
+		if model.memoryLimit != "" {
+			container.Resources.Limits[corev1.ResourceMemory] = resource.MustParse(model.memoryLimit)
+		}
+	}
+	return container
 }
 
 func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, replicas int32, model modelSelection) appsv1.Deployment {
@@ -481,6 +546,7 @@ func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection, extr
 	updated := false
 	modelPath := model.path()
 	desiredInitArg := modelDownloadCommand(model)
+	desiredInit := llamaInitContainer(model)
 	for i := range deploy.Spec.Template.Spec.InitContainers {
 		c := &deploy.Spec.Template.Spec.InitContainers[i]
 		if c.Name != "download-model" {
@@ -490,13 +556,23 @@ func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection, extr
 			c.Args = []string{desiredInitArg}
 			updated = true
 		}
+		if !apiequality.Semantic.DeepEqual(c.Resources, desiredInit.Resources) {
+			c.Resources = desiredInit.Resources
+			updated = true
+		}
 	}
 
-	desiredArgs := append([]string{"-m", modelPath, "--port", "8000", "--host", "0.0.0.0"}, extraArgs...)
+	desiredArgs := append([]string{"-m", modelPath, "--port", "8000", "--host", "0.0.0.0"}, model.serverArgs...)
+	desiredArgs = append(desiredArgs, extraArgs...)
+	desiredServer := llamaServerContainer(model, extraArgs...)
 	for i := range deploy.Spec.Template.Spec.Containers {
 		c := &deploy.Spec.Template.Spec.Containers[i]
 		if c.Name != "llama-cpp-server" {
 			continue
+		}
+		if c.Image != desiredServer.Image {
+			c.Image = desiredServer.Image
+			updated = true
 		}
 		hasEnv := false
 		for j := range c.Env {
@@ -516,6 +592,10 @@ func ensureDeploymentModel(deploy *appsv1.Deployment, model modelSelection, extr
 		}
 		if !stringSliceEqual(c.Args, desiredArgs) {
 			c.Args = desiredArgs
+			updated = true
+		}
+		if !apiequality.Semantic.DeepEqual(c.Resources, desiredServer.Resources) {
+			c.Resources = desiredServer.Resources
 			updated = true
 		}
 		if ensureLLMContainerProbes(c) {
