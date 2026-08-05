@@ -41,7 +41,7 @@ graph LR
 3. Click **Create**
 4. Fill in:
    - **Name**: A unique name for your instance (e.g., `my-chatbot-backend`)
-   - **Model**: Select from the dropdown (`tinyllama`, `phi-2`, `gemma-3-1b-it`, `gemma-3-4b-it`, `gemma-3-12b-it`)
+   - **Model**: Select from the dropdown (`tinyllama`, `phi-2`, `gemma-3-1b-it`, `gemma-3-4b-it`, `gemma-3-12b-it`, `qwen3-4b`)
    - **Replicas**: Number of inference pods (`1`, `3`, `6`, or `12`)
 5. Click **Create**
 
@@ -168,6 +168,7 @@ Choose a model based on your use case:
 | `gemma-3-1b-it` | Lightweight production, edge | Low (~1 GB) | Fast |
 | `gemma-3-4b-it` | Balanced quality/performance | Medium (~3 GB) | Medium |
 | `gemma-3-12b-it` | High quality, complex reasoning | High (~8 GB) | Slower |
+| `qwen3-4b` | Tool calling and agent workflows | High (~7 GB) | Medium |
 
 > **Tip:** Start with `tinyllama` for quick testing. For production workloads, `gemma-3-4b-it` offers a good balance. Use `gemma-3-12b-it` when response quality is critical.
 

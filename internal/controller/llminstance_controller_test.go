@@ -216,8 +216,65 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		initContainer := deploy.Spec.Template.Spec.InitContainers[0]
 		Expect(initContainer.Args).To(Equal([]string{modelDownloadCommand(resolveModel("tinyllama"))}))
 		container := deploy.Spec.Template.Spec.Containers[0]
+		Expect(container.Image).To(Equal(llamaServerImage))
 		Expect(container.Env).To(ContainElement(corev1.EnvVar{Name: "MODEL_PATH", Value: "/models/tinyllama.gguf"}))
 		Expect(container.Args).To(Equal([]string{"-m", "/models/tinyllama.gguf", "--port", "8000", "--host", "0.0.0.0"}))
+	})
+
+	It("configures Qwen for OpenAI-compatible tool calls with bounded resources", func() {
+		model := resolveModel("qwen3-4b")
+		Expect(model.url).To(ContainSubstring("/resolve/34778e26c8fa5e8bc0daa2389a9f958cffb1aedd/"))
+		downloadCommand := modelDownloadCommand(model)
+		Expect(downloadCommand).To(ContainSubstring("sha256sum -c -"))
+		Expect(downloadCommand).To(ContainSubstring("Qwen3-4B-Q4_K_M.gguf.partial"))
+		Expect(downloadCommand).To(ContainSubstring("else rm -f /models/Qwen3-4B-Q4_K_M.gguf.partial; exit 1"))
+
+		initContainer := llamaInitContainer(model)
+		Expect(initContainer.Resources.Requests.StorageEphemeral().String()).To(Equal("4Gi"))
+		Expect(initContainer.Resources.Limits.StorageEphemeral().String()).To(Equal("5Gi"))
+
+		container := llamaServerContainer(model)
+		Expect(container.Args).To(Equal([]string{
+			"-m", "/models/Qwen3-4B-Q4_K_M.gguf", "--port", "8000", "--host", "0.0.0.0",
+			"--ctx-size", "8192", "--jinja", "--reasoning-format", "deepseek", "--reasoning", "off", "--no-webui",
+		}))
+		Expect(container.Image).To(Equal(llamaServerImage))
+		Expect(container.Resources.Requests.Memory().String()).To(Equal("4Gi"))
+		Expect(container.Resources.Limits.Memory().String()).To(Equal("7Gi"))
+	})
+
+	It("reconciles an existing deployment to and from Qwen", func() {
+		legacy := resolveModel("tinyllama")
+		qwen := resolveModel("qwen3-4b")
+		instance := &llmv1alpha1.LLMInstance{ObjectMeta: metav1.ObjectMeta{Name: "migration", Namespace: namespace}}
+		deployment := buildDeployment(instance, llamaLabels(instance.Name), 1, legacy)
+		deployment.Spec.Template.Spec.Containers[0].Image = "ghcr.io/ggml-org/llama.cpp:server-b7045"
+
+		Expect(ensureDeploymentModel(&deployment, qwen)).To(BeTrue())
+		container := deployment.Spec.Template.Spec.Containers[0]
+		Expect(container.Image).To(Equal(llamaServerImage))
+		Expect(container.Args).To(ContainElements("--jinja", "--reasoning-format", "deepseek"))
+		Expect(container.Resources.Requests.Memory().String()).To(Equal("4Gi"))
+		Expect(deployment.Spec.Template.Spec.InitContainers[0].Args[0]).To(ContainSubstring(qwen.sha256))
+
+		Expect(ensureDeploymentModel(&deployment, legacy)).To(BeTrue())
+		container = deployment.Spec.Template.Spec.Containers[0]
+		Expect(container.Args).To(Equal([]string{"-m", legacy.path(), "--port", "8000", "--host", "0.0.0.0"}))
+		Expect(container.Resources.Requests).To(BeEmpty())
+		Expect(container.Resources.Limits).To(BeEmpty())
+	})
+
+	It("preserves BYOC authentication arguments while reconciling Qwen", func() {
+		instance := &llmv1alpha1.LLMInstance{ObjectMeta: metav1.ObjectMeta{Name: "byoc-migration", Namespace: namespace}}
+		deployment := buildDeployment(instance, llamaLabels(instance.Name), 1, resolveModel("tinyllama"))
+		keyArguments := []string{"--api-key-file", byocAPIKeyFilePath()}
+
+		Expect(ensureDeploymentModel(&deployment, resolveModel("qwen3-4b"), keyArguments...)).To(BeTrue())
+		Expect(deployment.Spec.Template.Spec.Containers[0].Args).To(Equal([]string{
+			"-m", "/models/Qwen3-4B-Q4_K_M.gguf", "--port", "8000", "--host", "0.0.0.0",
+			"--ctx-size", "8192", "--jinja", "--reasoning-format", "deepseek", "--reasoning", "off", "--no-webui",
+			"--api-key-file", byocAPIKeyFilePath(),
+		}))
 	})
 
 	It("deploys to the BYOC cluster and marks ready once the LoadBalancer is provisioned", func() {
