@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.6...v2.13.0) (2026-08-05)
+
+
+### Features
+
+* **llm:** add Qwen tool-calling backend ([#169](https://github.com/apeirora/showroom-msp-private-llm/issues/169)) ([0738ebe](https://github.com/apeirora/showroom-msp-private-llm/commit/0738ebe22744d9f4c72b560b2f3704d7cc8cf6a2))
+
 ## [2.12.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.5...v2.12.6) (2026-07-07)
 
 
