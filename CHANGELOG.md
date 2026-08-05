@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.13.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.13.0...v2.13.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **controller:** allow node DNS for model pods ([#171](https://github.com/apeirora/showroom-msp-private-llm/issues/171)) ([19a1960](https://github.com/apeirora/showroom-msp-private-llm/commit/19a196017126c056186ae874c8a8d1698974099d))
+
 ## [2.13.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.12.6...v2.13.0) (2026-08-05)
 
 
