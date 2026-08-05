@@ -446,6 +446,7 @@ func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas in
 					Annotations: map[string]string{byocAPIKeysRevAnnotation: keysRevision},
 				},
 				Spec: corev1.PodSpec{
+					DNSPolicy:      effectiveDNSPolicy(inst),
 					InitContainers: []corev1.Container{llamaInitContainer(model)},
 					Containers:     []corev1.Container{container},
 					Volumes: []corev1.Volume{
@@ -486,6 +487,7 @@ func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, rem
 
 	replicasChanged, _ := ensureDeploymentReplicas(&existing, desiredReplicas)
 	modelChanged := ensureDeploymentModel(&existing, model, "--api-key-file", byocAPIKeyFilePath())
+	dnsPolicyChanged := ensureDeploymentDNSPolicy(&existing, effectiveDNSPolicy(inst))
 	hashChanged := false
 	if existing.Spec.Template.Annotations[byocAPIKeysRevAnnotation] != keysRevision {
 		if existing.Spec.Template.Annotations == nil {
@@ -494,14 +496,15 @@ func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, rem
 		existing.Spec.Template.Annotations[byocAPIKeysRevAnnotation] = keysRevision
 		hashChanged = true
 	}
-	if !replicasChanged && !modelChanged && !hashChanged {
+	if !replicasChanged && !modelChanged && !dnsPolicyChanged && !hashChanged {
 		return nil
 	}
 	if err := remote.Update(ctx, &existing); err != nil {
 		return err
 	}
 	logger.Info("updated BYOC llama.cpp Deployment", "name", name,
-		"replicasChanged", replicasChanged, "modelChanged", modelChanged, "apiKeysChanged", hashChanged)
+		"replicasChanged", replicasChanged, "modelChanged", modelChanged,
+		"dnsPolicyChanged", dnsPolicyChanged, "apiKeysChanged", hashChanged)
 	return nil
 }
 

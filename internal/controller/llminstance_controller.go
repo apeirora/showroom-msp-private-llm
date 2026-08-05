@@ -396,7 +396,8 @@ func (r *LLMInstanceReconciler) reconcileDeployment(ctx context.Context, inst *l
 
 	replicasChanged, previousReplicas := ensureDeploymentReplicas(&existing, desiredReplicas)
 	modelChanged := ensureDeploymentModel(&existing, model)
-	if !replicasChanged && !modelChanged {
+	dnsPolicyChanged := ensureDeploymentDNSPolicy(&existing, effectiveDNSPolicy(inst))
+	if !replicasChanged && !modelChanged && !dnsPolicyChanged {
 		return nil
 	}
 	if err := r.Update(ctx, &existing); err != nil {
@@ -407,6 +408,9 @@ func (r *LLMInstanceReconciler) reconcileDeployment(ctx context.Context, inst *l
 	}
 	if modelChanged {
 		logger.Info("updated Deployment model configuration", "name", deployName, "model", model.name, "path", model.path())
+	}
+	if dnsPolicyChanged {
+		logger.Info("updated Deployment DNS policy", "name", deployName, "dnsPolicy", effectiveDNSPolicy(inst))
 	}
 	return nil
 }
@@ -521,6 +525,7 @@ func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, re
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Labels: copyStringMap(labels)},
 				Spec: corev1.PodSpec{
+					DNSPolicy:      effectiveDNSPolicy(inst),
 					InitContainers: []corev1.Container{initContainer},
 					Containers:     []corev1.Container{container},
 					Volumes:        []corev1.Volume{volume},
@@ -528,6 +533,21 @@ func buildDeployment(inst *llmv1alpha1.LLMInstance, labels map[string]string, re
 			},
 		},
 	}
+}
+
+func effectiveDNSPolicy(inst *llmv1alpha1.LLMInstance) corev1.DNSPolicy {
+	if inst.Spec.DNSPolicy == corev1.DNSDefault {
+		return corev1.DNSDefault
+	}
+	return corev1.DNSClusterFirst
+}
+
+func ensureDeploymentDNSPolicy(deploy *appsv1.Deployment, desired corev1.DNSPolicy) bool {
+	if deploy.Spec.Template.Spec.DNSPolicy == desired {
+		return false
+	}
+	deploy.Spec.Template.Spec.DNSPolicy = desired
+	return true
 }
 
 func ensureDeploymentReplicas(deploy *appsv1.Deployment, desired int32) (bool, int32) {

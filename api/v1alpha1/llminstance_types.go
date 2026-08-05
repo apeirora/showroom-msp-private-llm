@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -34,6 +35,13 @@ type LLMInstanceSpec struct {
 	// Defaults to 1 if omitted or set to 0.
 	// +kubebuilder:validation:Minimum=0
 	Replicas int32 `json:"replicas,omitempty"`
+
+	// DNSPolicy controls DNS resolution for the model pod. ClusterFirst is
+	// suitable for normal clusters. Default uses the node resolver for
+	// environments where cluster DNS is intentionally unavailable.
+	// +kubebuilder:validation:Enum=ClusterFirst;Default
+	// +kubebuilder:default=ClusterFirst
+	DNSPolicy corev1.DNSPolicy `json:"dnsPolicy,omitempty"`
 
 	// ClusterRef, when set, switches this instance to BYOC (Bring Your Own
 	// Cluster) mode: the LLM workload is deployed onto the external cluster
