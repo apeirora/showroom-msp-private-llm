@@ -66,6 +66,16 @@ spec:
                       as-a-Service.
                     type: string
                 type: object
+              dnsPolicy:
+                default: ClusterFirst
+                description: |-
+                  DNSPolicy controls DNS resolution for the model pod. ClusterFirst is
+                  suitable for normal clusters. Default uses the node resolver for
+                  environments where cluster DNS is intentionally unavailable.
+                enum:
+                - ClusterFirst
+                - Default
+                type: string
               model:
                 default: tinyllama
                 description: Model is the desired model identifier (e.g., "TinyLlama/TinyLlama-1.1B-Chat-v1.0").

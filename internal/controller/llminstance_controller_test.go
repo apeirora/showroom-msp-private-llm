@@ -243,6 +243,23 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(container.Resources.Limits.Memory().String()).To(Equal("7Gi"))
 	})
 
+	It("defaults model pods to cluster DNS and reconciles an explicit node resolver", func() {
+		instance := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: "dns-policy", Namespace: namespace},
+		}
+		deployment := buildDeployment(instance, llamaLabels(instance.Name), 1, resolveModel("tinyllama"))
+		Expect(deployment.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSClusterFirst))
+
+		instance.Spec.DNSPolicy = corev1.DNSDefault
+		Expect(ensureDeploymentDNSPolicy(&deployment, effectiveDNSPolicy(instance))).To(BeTrue())
+		Expect(deployment.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSDefault))
+		Expect(ensureDeploymentDNSPolicy(&deployment, effectiveDNSPolicy(instance))).To(BeFalse())
+
+		instance.Spec.DNSPolicy = ""
+		Expect(ensureDeploymentDNSPolicy(&deployment, effectiveDNSPolicy(instance))).To(BeTrue())
+		Expect(deployment.Spec.Template.Spec.DNSPolicy).To(Equal(corev1.DNSClusterFirst))
+	})
+
 	It("reconciles an existing deployment to and from Qwen", func() {
 		legacy := resolveModel("tinyllama")
 		qwen := resolveModel("qwen3-4b")
