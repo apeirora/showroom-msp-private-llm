@@ -1,0 +1,12 @@
+{
+  "$schema": "https://open-resource-discovery.org/spec-v1/interfaces/Configuration.schema.json",
+  "openResourceDiscoveryV1": {
+    "documents": [
+      {
+        "url": "/ord/documents/private-llm.json",
+        "perspective": "system-version",
+        "accessStrategies": [{ "type": "open" }]
+      }
+    ]
+  }
+}

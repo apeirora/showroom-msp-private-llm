@@ -5,3 +5,5 @@ branding:
   marketplace:
     title: "LLM Service"
     description: "LLM services provided by MODEL Corp."
+ord:
+  configPath: /.well-known/open-resource-discovery
