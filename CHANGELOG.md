@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.14.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.13.1...v2.14.0) (2026-08-13)
+
+
+### Features
+
+* **ord:** Publish Private LLM discovery metadata ([#173](https://github.com/apeirora/showroom-msp-private-llm/issues/173)) ([c7f93e8](https://github.com/apeirora/showroom-msp-private-llm/commit/c7f93e8367d387eb530a04e30d799749b73db82d))
+
+
+### Bug Fixes
+
+* **chart:** force ORD JSON media type ([#176](https://github.com/apeirora/showroom-msp-private-llm/issues/176)) ([1565505](https://github.com/apeirora/showroom-msp-private-llm/commit/156550557c7a39fbbd64658ba78cc09c0d17575b))
+* **ord:** Enforce provider transport contract ([#175](https://github.com/apeirora/showroom-msp-private-llm/issues/175)) ([1436c45](https://github.com/apeirora/showroom-msp-private-llm/commit/1436c45efa1ad3eebe8ba946955961e382099387))
+
 ## [2.13.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.13.0...v2.13.1) (2026-08-05)
 
 

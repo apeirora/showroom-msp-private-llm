@@ -2,7 +2,9 @@
   "$schema": "https://open-resource-discovery.org/spec-v1/interfaces/Document.schema.json",
   "openResourceDiscovery": "1.16",
   "perspective": "system-version",
-  "describedSystemVersion": { "version": "2.13.1" },
+  "describedSystemVersion": {
+    "version": "2.14.0"
+  },
   "vendors": [
     {
       "ordId": "apeirora:vendor:apeirora:",
@@ -25,12 +27,24 @@
       "description": "Self-hosted model inference with an OpenAI-compatible Chat Completions API.",
       "version": "1.0.0",
       "vendor": "apeirora:vendor:apeirora:",
-      "partOfProducts": ["apeirora.eu:product:private-llm:"],
-      "tags": ["ai", "llm", "showroom"],
+      "partOfProducts": [
+        "apeirora.eu:product:private-llm:"
+      ],
+      "tags": [
+        "ai",
+        "llm",
+        "showroom"
+      ],
       "labels": {
-        "apeirora.eu:showroom-sla-availability-percent:v1": ["95"],
-        "apeirora.eu:showroom-cost-model:v1": ["flat-monthly"],
-        "apeirora.eu:showroom-cost-eur-per-month:v1": ["500"]
+        "apeirora.eu:showroom-sla-availability-percent:v1": [
+          "95"
+        ],
+        "apeirora.eu:showroom-cost-model:v1": [
+          "flat-monthly"
+        ],
+        "apeirora.eu:showroom-cost-eur-per-month:v1": [
+          "500"
+        ]
       }
     }
   ],
@@ -58,7 +72,11 @@
           "type": "openapi-v3",
           "mediaType": "application/json",
           "url": "/ord/definitions/private-llm.oas3.json",
-          "accessStrategies": [{ "type": "open" }]
+          "accessStrategies": [
+            {
+              "type": "open"
+            }
+          ]
         }
       ]
     }
