@@ -33,6 +33,20 @@ spec:
                 name: {{ .Release.Name }}-portal-integration
                 port:
                   number: 80
+          - path: "/.well-known/open-resource-discovery"
+            pathType: Exact
+            backend:
+              service:
+                name: {{ .Release.Name }}-portal-integration
+                port:
+                  number: 80
+          - path: "/ord/"
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-portal-integration
+                port:
+                  number: 80
   {{- if .Values.tls.secretName }}
   tls:
     - hosts:
@@ -40,5 +54,4 @@ spec:
       secretName: {{ .Values.tls.secretName }}
   {{- end }}
 {{- end }}
-
 

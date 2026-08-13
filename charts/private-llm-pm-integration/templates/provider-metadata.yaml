@@ -14,6 +14,12 @@ spec:
   preferredSupportChannels:
     - displayName: ApeiroRA Help Desk
       url: https://help.privatellms.msp
+  documentation:
+    - displayName: ORD
+      url: {{ printf "%s://%s%s" .Values.publicScheme .Values.publicHost .Values.ord.configPath | quote }}
+  data:
+    ord:
+      configUrl: {{ printf "%s://%s%s" .Values.publicScheme .Values.publicHost .Values.ord.configPath | quote }}
   icon:
     light:
       data: 'data:image/png;base64,{{ (.Files.Get "files/icon.png") | b64enc }}'

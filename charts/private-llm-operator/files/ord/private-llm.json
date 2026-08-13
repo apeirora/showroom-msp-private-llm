@@ -1,0 +1,66 @@
+{
+  "$schema": "https://open-resource-discovery.org/spec-v1/interfaces/Document.schema.json",
+  "openResourceDiscovery": "1.16",
+  "perspective": "system-version",
+  "describedSystemVersion": { "version": "2.13.1" },
+  "vendors": [
+    {
+      "ordId": "apeirora:vendor:apeirora:",
+      "title": "ApeiroRA"
+    }
+  ],
+  "products": [
+    {
+      "ordId": "apeirora.eu:product:private-llm:",
+      "title": "Private LLM",
+      "shortDescription": "Managed private LLM inference",
+      "vendor": "apeirora:vendor:apeirora:"
+    }
+  ],
+  "packages": [
+    {
+      "ordId": "apeirora.eu:package:private-llm:v1",
+      "title": "Private LLM Service",
+      "shortDescription": "Private LLM instances provisioned through Platform Mesh",
+      "description": "Self-hosted model inference with an OpenAI-compatible Chat Completions API.",
+      "version": "1.0.0",
+      "vendor": "apeirora:vendor:apeirora:",
+      "partOfProducts": ["apeirora.eu:product:private-llm:"],
+      "tags": ["ai", "llm", "showroom"],
+      "labels": {
+        "apeirora.eu:showroom-sla-availability-percent:v1": ["95"],
+        "apeirora.eu:showroom-cost-model:v1": ["flat-monthly"],
+        "apeirora.eu:showroom-cost-eur-per-month:v1": ["500"]
+      }
+    }
+  ],
+  "apiResources": [
+    {
+      "ordId": "apeirora.eu:apiResource:private-llm-chat-completions:v1",
+      "title": "Chat Completions API",
+      "shortDescription": "OpenAI-compatible private model inference",
+      "description": "A concrete implementation of the shared OpenAI-compatible Chat Completions contract.",
+      "version": "1.0.0",
+      "visibility": "public",
+      "releaseStatus": "active",
+      "partOfPackage": "apeirora.eu:package:private-llm:v1",
+      "apiProtocol": "rest",
+      "implementationStandard": "custom",
+      "customImplementationStandard": "apeirora.eu:openai-chat-completions:v1",
+      "compatibleWith": [
+        {
+          "ordId": "apeirora.eu:apiResource:openai-chat-completions:v1",
+          "maxVersion": "1.0"
+        }
+      ],
+      "resourceDefinitions": [
+        {
+          "type": "openapi-v3",
+          "mediaType": "application/json",
+          "url": "/ord/definitions/private-llm.oas3.json",
+          "accessStrategies": [{ "type": "open" }]
+        }
+      ]
+    }
+  ]
+}

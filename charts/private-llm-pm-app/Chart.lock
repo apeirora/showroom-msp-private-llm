@@ -1,6 +1,6 @@
 dependencies:
 - name: private-llm-pm-integration
   repository: file://../private-llm-pm-integration
-  version: 2.9.1
-digest: sha256:8287e7b8ed7356eacf6510f0cfd3ff9e5b8241439735ea6a23db47c5c9e48409
-generated: "2026-04-21T11:22:07.843567+02:00"
+  version: 2.13.1
+digest: sha256:1ebd069739623fc6e0ee175798036df9e6d5667c7c4f4bd5229760ee689e0a0c
+generated: "2026-08-13T14:15:03.33298+02:00"
