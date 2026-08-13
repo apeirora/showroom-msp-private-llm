@@ -62,6 +62,11 @@
           "type": "yaml",
           "path": "charts/private-llm-pm-app/Chart.yaml",
           "jsonpath": "$.appVersion"
+        },
+        {
+          "type": "json",
+          "path": "charts/private-llm-operator/files/ord/private-llm.json",
+          "jsonpath": "$.describedSystemVersion.version"
         }
       ]
     }

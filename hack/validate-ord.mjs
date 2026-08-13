@@ -9,6 +9,10 @@ import {
 } from "@open-resource-discovery/specification";
 
 const root = resolve(process.argv[2] ?? ".");
+const releaseManifest = JSON.parse(
+  await readFile(resolve(".release-please-manifest.json"), "utf8"),
+);
+const releaseVersion = releaseManifest["."];
 const entries = (await readdir(root)).filter((name) => name.endsWith(".json"));
 const ajv = new Ajv({ allErrors: true, strict: false });
 addFormats(ajv);
@@ -32,6 +36,14 @@ for (const name of entries) {
   if (name !== "configuration.json" && value.openResourceDiscovery !== "1.16") {
     throw new Error(`${name} uses unsupported ORD version ${value.openResourceDiscovery}`);
   }
+  if (
+    value.describedSystemVersion?.version &&
+    value.describedSystemVersion.version !== releaseVersion
+  ) {
+    throw new Error(
+      `${name} describes system version ${value.describedSystemVersion.version}, expected ${releaseVersion}`,
+    );
+  }
 
   for (const resource of value.apiResources ?? []) {
     for (const definition of resource.resourceDefinitions ?? []) {
@@ -43,4 +55,3 @@ for (const name of entries) {
   }
   console.log(`validated ORD: ${name}`);
 }
-
