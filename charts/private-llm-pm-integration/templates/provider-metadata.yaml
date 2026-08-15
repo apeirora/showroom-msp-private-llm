@@ -20,6 +20,8 @@ spec:
   data:
     ord:
       configUrl: {{ printf "%s://%s%s" .Values.publicScheme .Values.publicHost .Values.ord.configPath | quote }}
+  uiExtensions:
+    - url: {{ printf "%s://%s%s" .Values.publicScheme .Values.publicHost .Values.uiExtension.path | quote }}
   icon:
     light:
       data: 'data:image/png;base64,{{ (.Files.Get "files/icon.png") | b64enc }}'

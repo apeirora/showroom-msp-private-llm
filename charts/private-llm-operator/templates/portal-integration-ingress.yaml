@@ -47,6 +47,13 @@ spec:
                 name: {{ .Release.Name }}-portal-integration
                 port:
                   number: 80
+          - path: "/ui-extensions/"
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-portal-integration
+                port:
+                  number: 80
   {{- if .Values.tls.secretName }}
   tls:
     - hosts:
@@ -54,4 +61,3 @@ spec:
       secretName: {{ .Values.tls.secretName }}
   {{- end }}
 {{- end }}
-
