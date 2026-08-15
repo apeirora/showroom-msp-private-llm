@@ -2,8 +2,8 @@ apiVersion: v2
 name: private-llm-operator
 description: Helm chart for private-llm operator
 type: application
-version: 2.14.0
-appVersion: 2.14.0
+version: 2.15.0-rc
+appVersion: 2.15.0-rc
 dependencies:
   - name: traefik
     version: 25.x.x
