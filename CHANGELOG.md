@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.14.0...v2.15.0) (2026-08-15)
+
+
+### Features
+
+* add ORD provider details extension ([#177](https://github.com/apeirora/showroom-msp-private-llm/issues/177)) ([42a7a58](https://github.com/apeirora/showroom-msp-private-llm/commit/42a7a58d6f3376209dd6b9038f3aea0e65610d43))
+
 ## [2.14.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.13.1...v2.14.0) (2026-08-13)
 
 
