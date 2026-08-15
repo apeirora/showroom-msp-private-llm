@@ -24,11 +24,14 @@ helm template private-llm "$repo_root/charts/private-llm-operator" \
   > "$operator_render"
 assert_contains "$operator_render" 'path: "/.well-known/open-resource-discovery"'
 assert_contains "$operator_render" 'path: "/ord/"'
+assert_contains "$operator_render" 'path: "/ui-extensions/"'
 assert_contains "$operator_render" 'mountPath: /usr/share/nginx/html/ord/documents/private-llm.json'
 assert_contains "$operator_render" 'add_header Access-Control-Allow-Origin "*" always;'
 assert_contains "$operator_render" 'types { }'
 assert_contains "$operator_render" 'default_type "application/json;charset=UTF-8";'
 assert_contains "$operator_render" 'add_header Cache-Control "public, max-age=300" always;'
+assert_contains "$operator_render" 'mountPath: /usr/share/nginx/html/ui-extensions/ord/index.html'
+assert_contains "$operator_render" 'platform-mesh.provider-details.resize.v1'
 
 metadata_render="$tmpdir/provider-metadata.yaml"
 helm template private-llm-pm "$repo_root/charts/private-llm-pm-integration" \
@@ -37,3 +40,4 @@ helm template private-llm-pm "$repo_root/charts/private-llm-pm-integration" \
   > "$metadata_render"
 assert_contains "$metadata_render" 'displayName: ORD'
 assert_contains "$metadata_render" 'configUrl: "https://llm.example.com/.well-known/open-resource-discovery"'
+assert_contains "$metadata_render" 'url: "https://llm.example.com/ui-extensions/ord/"'

@@ -41,6 +41,7 @@ jobs:
             ajv@8.20.0 \
             ajv-formats@3.0.1
           node hack/validate-ord.mjs charts/private-llm-operator/files/ord
+          node hack/test-ord-renderer.mjs
 
   lint-and-test:
     runs-on: ubuntu-latest
