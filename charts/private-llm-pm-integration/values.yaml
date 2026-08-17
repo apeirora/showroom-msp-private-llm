@@ -7,5 +7,5 @@ branding:
     description: "LLM services provided by MODEL Corp."
 ord:
   configPath: /.well-known/open-resource-discovery
-uiExtension:
+detailViewExtension:
   path: /ui-extensions/ord/

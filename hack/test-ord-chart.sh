@@ -40,4 +40,5 @@ helm template private-llm-pm "$repo_root/charts/private-llm-pm-integration" \
   > "$metadata_render"
 assert_contains "$metadata_render" 'displayName: ORD'
 assert_contains "$metadata_render" 'configUrl: "https://llm.example.com/.well-known/open-resource-discovery"'
+assert_contains "$metadata_render" 'detailViewExtensions:'
 assert_contains "$metadata_render" 'url: "https://llm.example.com/ui-extensions/ord/"'
