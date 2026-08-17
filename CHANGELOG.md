@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.1-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.0-rc...v2.15.1-rc) (2026-08-17)
+
+
+### Bug Fixes
+
+* rename provider detail view extension field ([#182](https://github.com/apeirora/showroom-msp-private-llm/issues/182)) ([6e72b40](https://github.com/apeirora/showroom-msp-private-llm/commit/6e72b40223534f1e35eeec28258c881628e52d44))
+
 ## [2.15.0-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.14.0...v2.15.0-rc) (2026-08-15)
 
 
