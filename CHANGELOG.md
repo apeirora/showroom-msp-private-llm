@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.3-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.2-rc...v2.15.3-rc) (2026-08-24)
+
+
+### Bug Fixes
+
+* **metadata:** track provider chart revision ([#187](https://github.com/apeirora/showroom-msp-private-llm/issues/187)) ([ff2139d](https://github.com/apeirora/showroom-msp-private-llm/commit/ff2139d462a25b6a4378444dcce0e91dd31b436d))
+
 ## [2.15.2-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.1-rc...v2.15.2-rc) (2026-08-24)
 
 
