@@ -4,6 +4,8 @@ apiVersion: ui.platform-mesh.io/v1alpha1
 kind: ProviderMetadata
 metadata:
   name: llm.privatellms.msp
+  labels:
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name (.Chart.Version | replace "+" "_") | trunc 63 | trimSuffix "-" | quote }}
 spec:
   displayName: {{ $marketplaceTitle | quote }}
   description: |
