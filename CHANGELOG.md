@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.0-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.5-rc...v2.16.0-rc) (2026-08-24)
+
+
+### Features
+
+* **marketplace:** Link provider ORD document ([#193](https://github.com/apeirora/showroom-msp-private-llm/issues/193)) ([359c33b](https://github.com/apeirora/showroom-msp-private-llm/commit/359c33b8062b874966145d3a81cda000f9be174d))
+
 ## [2.15.5-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.4-rc...v2.15.5-rc) (2026-08-24)
 
 
