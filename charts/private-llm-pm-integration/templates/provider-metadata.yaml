@@ -23,7 +23,7 @@ spec:
     ord:
       configUrl: {{ printf "%s://%s%s" .Values.publicScheme .Values.publicHost .Values.ord.configPath | quote }}
   detailViewExtensions:
-    - url: {{ printf "%s://%s%s" .Values.publicScheme .Values.publicHost .Values.detailViewExtension.path | quote }}
+    - url: {{ printf "%s://%s%s?v=%s" .Values.publicScheme .Values.publicHost .Values.detailViewExtension.path .Chart.Version | quote }}
   icon:
     light:
       data: 'data:image/png;base64,{{ (.Files.Get "files/icon.png") | b64enc }}'

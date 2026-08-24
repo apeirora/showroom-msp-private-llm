@@ -34,6 +34,7 @@ assert_contains "$operator_render" 'mountPath: /usr/share/nginx/html/ui-extensio
 assert_contains "$operator_render" 'platform-mesh.provider-details.resize.v1'
 
 metadata_render="$tmpdir/provider-metadata.yaml"
+metadata_chart_version="$(awk '/^version:/ {print $2; exit}' "$repo_root/charts/private-llm-pm-integration/Chart.yaml")"
 helm template private-llm-pm "$repo_root/charts/private-llm-pm-integration" \
   --set publicHost=llm.example.com \
   --set publicScheme=https \
@@ -41,4 +42,4 @@ helm template private-llm-pm "$repo_root/charts/private-llm-pm-integration" \
 assert_contains "$metadata_render" 'displayName: ORD'
 assert_contains "$metadata_render" 'configUrl: "https://llm.example.com/.well-known/open-resource-discovery"'
 assert_contains "$metadata_render" 'detailViewExtensions:'
-assert_contains "$metadata_render" 'url: "https://llm.example.com/ui-extensions/ord/"'
+assert_contains "$metadata_render" "url: \"https://llm.example.com/ui-extensions/ord/?v=$metadata_chart_version\""
