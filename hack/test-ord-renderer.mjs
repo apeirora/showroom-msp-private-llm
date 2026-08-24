@@ -8,8 +8,13 @@ const source = await readFile(
   ),
   "utf8",
 );
-const { configUrlFor, loadProviderDocuments, parseProviderData, render } =
-  await import(
+const {
+  configUrlFor,
+  loadProviderDocuments,
+  parseProviderData,
+  render,
+  resolveMetadataReference,
+} = await import(
     `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
   );
 
@@ -44,7 +49,7 @@ const fetchJSON = async (url) => {
       openResourceDiscoveryV1: {
         documents: [
           {
-            url: "./private-llm.json",
+            url: "/ord/documents/private-llm.json",
             accessStrategies: [{ type: "open" }],
           },
           {
@@ -61,9 +66,42 @@ const fetchJSON = async (url) => {
 const result = await loadProviderDocuments(provider, fetchJSON);
 assert.deepEqual(requested, [
   "https://llm.example/ord/configuration.json",
-  "https://llm.example/ord/private-llm.json",
+  "https://llm.example/ord/documents/private-llm.json",
 ]);
 assert.equal(result.documents.length, 1);
+
+const prefixedProvider = {
+  providerMetadata: {
+    spec: {
+      data: {
+        ord: {
+          configUrl:
+            "https://provider.test/api/v1/.well-known/open-resource-discovery",
+        },
+      },
+    },
+  },
+};
+const prefixedRequests = [];
+await loadProviderDocuments(prefixedProvider, async (url) => {
+  prefixedRequests.push(url);
+  return url.endsWith("open-resource-discovery")
+    ? {
+        openResourceDiscoveryV1: {
+          documents: [
+            {
+              url: "/documents/system.json",
+              accessStrategies: [{ type: "open" }],
+            },
+          ],
+        },
+      }
+    : { openResourceDiscovery: "1.16" };
+});
+assert.deepEqual(prefixedRequests, [
+  "https://provider.test/api/v1/.well-known/open-resource-discovery",
+  "https://provider.test/api/v1/documents/system.json",
+]);
 
 await assert.rejects(
   loadProviderDocuments(provider, async (url) =>
@@ -78,6 +116,39 @@ await assert.rejects(
       : { openResourceDiscovery: "1.17" },
   ),
   /Unsupported ORD version/,
+);
+
+await assert.rejects(
+  loadProviderDocuments(provider, async () => ({
+    openResourceDiscoveryV1: {
+      documents: [
+        {
+          url: "data:application/json,e30=",
+          accessStrategies: [{ type: "open" }],
+        },
+      ],
+    },
+  })),
+  /Invalid ORD document URL/,
+);
+
+assert.equal(
+  resolveMetadataReference(
+    "/schemas/chat.oas3.json?version=2#operations",
+    { baseUrl: "https://provider.example/api/v1" },
+    "https://provider.example/ord/documents/private-llm.json",
+    "https://provider.example/.well-known/open-resource-discovery",
+  ),
+  "https://provider.example/api/v1/schemas/chat.oas3.json?version=2#operations",
+);
+assert.equal(
+  resolveMetadataReference(
+    "../schemas/chat.oas3.json",
+    { baseUrl: "https://provider.example/api/v1" },
+    "https://provider.example/ord/documents/private-llm.json",
+    "https://provider.example/.well-known/open-resource-discovery",
+  ),
+  "https://provider.example/ord/schemas/chat.oas3.json",
 );
 
 class FakeElement {
@@ -122,6 +193,7 @@ globalThis.fetch = async (url) => {
     : {
         openResourceDiscovery: "1.16",
         perspective: "system-version",
+        baseUrl: "https://metadata.example/api/v1",
         describedSystemVersion: { version: "2.15.5" },
         products: [{ title: "Private LLM", vendor: "vendor:one" }],
         vendors: [{ ordId: "vendor:one", title: "ApeiroRA" }],
@@ -132,7 +204,7 @@ globalThis.fetch = async (url) => {
             apiProtocol: "rest",
             version: "2.0.0",
             resourceDefinitions: [
-              { type: "openapi-v3", url: "./second-openapi.json" },
+              { type: "openapi-v3", url: "/schemas/second-openapi.json" },
             ],
           },
           { title: "Private API", visibility: "internal" },
@@ -156,12 +228,16 @@ assert.deepEqual(
 );
 assert.deepEqual(
   flattened.filter(({ tagName }) => tagName === "dt").map(textOf),
-  ["Product", "Provider", "System version"],
+  ["Product", "Provider", "System version", "ORD"],
 );
-assert.equal(
-  flattened.find(({ tagName }) => tagName === "a").href,
-  "https://llm.example/ord/second-openapi.json",
+assert.deepEqual(
+  flattened.filter(({ tagName }) => tagName === "a").map(({ href }) => href),
+  [
+    "https://llm.example/ord/document.json",
+    "https://metadata.example/api/v1/schemas/second-openapi.json",
+  ],
 );
+assert.equal(textOf(app).includes("ORDDocument ↗"), true);
 assert.equal(textOf(app).includes("Private API"), false);
 assert.equal(textOf(app).includes("Public APIs2"), true);
 
