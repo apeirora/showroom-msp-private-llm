@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.4-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.3-rc...v2.15.4-rc) (2026-08-24)
+
+
+### Bug Fixes
+
+* version provider detail extension URL ([#189](https://github.com/apeirora/showroom-msp-private-llm/issues/189)) ([b7b68a2](https://github.com/apeirora/showroom-msp-private-llm/commit/b7b68a2933c9d17d509a54220b5419de500bcd7c))
+
 ## [2.15.3-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.2-rc...v2.15.3-rc) (2026-08-24)
 
 
