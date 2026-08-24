@@ -108,7 +108,7 @@ function definitionLabel(type) {
   return "API specification";
 }
 
-function render(context) {
+export async function render(context) {
   const app = document.querySelector("#app");
   if (!app) return;
   if (context?.protocolVersion !== PROTOCOL) {
@@ -118,7 +118,7 @@ function render(context) {
     return;
   }
 
-  loadProviderDocuments(context.currentProvider)
+  return loadProviderDocuments(context.currentProvider)
     .then(({ configUrl, documents }) => {
       const payloads = documents.map(({ document }) => document);
       const system = payloads.find(
@@ -133,7 +133,6 @@ function render(context) {
         (entry) => entry.ordId === vendorId,
       );
       app.replaceChildren();
-      app.append(element("h2", "", "Service information"));
       const identity = element("dl", "identity");
       addIdentity(identity, "Product", product?.title ?? packageInfo?.title);
       addIdentity(identity, "Provider", vendor?.title);
@@ -142,29 +141,39 @@ function render(context) {
         "System version",
         system.describedSystemVersion?.version,
       );
-      addIdentity(identity, "Perspective", "System version");
       app.append(identity);
 
       const apis = (system.apiResources ?? []).filter(
         (api) => api.visibility === "public",
       );
-      if (apis.length) app.append(element("h2", "", "API specifications"));
+      if (apis.length) {
+        const heading = element("div", "section-heading");
+        heading.append(
+          element("h2", "", "Public APIs"),
+          element("span", "count", String(apis.length)),
+        );
+        app.append(heading);
+      }
+      const apiList = element("section", "api-list");
+      apiList.setAttribute("aria-label", "Public API specifications");
       for (const api of apis) {
         const card = element("article", "api");
-        card.append(
-          element("h3", "", api.title || api.ordId),
-          element("p", "description", api.shortDescription || api.description),
-        );
+        const content = element("div", "api__content");
+        content.append(element("h3", "", api.title || api.ordId));
+        const description = api.shortDescription || api.description;
+        if (description) {
+          content.append(element("p", "description", description));
+        }
         const badges = element("div", "badges");
         for (const value of [
           api.apiProtocol?.toUpperCase(),
           api.version,
           api.releaseStatus,
-          api.visibility,
         ].filter(Boolean)) {
           badges.append(element("span", "badge", value));
         }
-        card.append(badges);
+        const actions = element("div", "api__actions");
+        actions.append(badges);
         for (const definition of api.resourceDefinitions ?? []) {
           const definitionUrl = safeHttpUrl(definition.url, configUrl);
           if (!definitionUrl) continue;
@@ -176,10 +185,12 @@ function render(context) {
           link.href = definitionUrl;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
-          card.append(link);
+          actions.append(link);
         }
-        app.append(card);
+        card.append(content, actions);
+        apiList.append(card);
       }
+      if (apis.length) app.append(apiList);
     })
     .catch(() => {
       app.replaceChildren(
