@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.5-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.4-rc...v2.15.5-rc) (2026-08-24)
+
+
+### Bug Fixes
+
+* compact ORD service details ([#191](https://github.com/apeirora/showroom-msp-private-llm/issues/191)) ([32d5651](https://github.com/apeirora/showroom-msp-private-llm/commit/32d5651bcf7c2f29c72d7f06c24bd5e083b16665))
+
 ## [2.15.4-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.3-rc...v2.15.4-rc) (2026-08-24)
 
 
