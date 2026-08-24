@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.15.2-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.1-rc...v2.15.2-rc) (2026-08-24)
+
+
+### Bug Fixes
+
+* **release:** roll provider metadata after schema update ([#185](https://github.com/apeirora/showroom-msp-private-llm/issues/185)) ([c42c6e3](https://github.com/apeirora/showroom-msp-private-llm/commit/c42c6e3c8844a26d85b647b7dc7b7d866cfbed29))
+
 ## [2.15.1-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.0-rc...v2.15.1-rc) (2026-08-17)
 
 
