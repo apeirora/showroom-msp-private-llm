@@ -43,9 +43,15 @@ export async function loadProviderDocuments(provider, fetchJSON = fetchJson) {
       ),
     )
     .slice(0, MAX_DOCUMENTS);
+  const configurationBaseUrl = safeHttpUrl(configuration.baseUrl, configUrl);
   const documents = await Promise.all(
     openDocuments.map(async (document) => {
-      const sourceUrl = new URL(document.url, configUrl).href;
+      const sourceUrl = resolveConfigurationReference(
+        document.url,
+        configUrl,
+        configurationBaseUrl,
+      );
+      if (!sourceUrl) throw new Error("Invalid ORD document URL");
       const payload = await fetchJSON(sourceUrl, MAX_BYTES);
       if (payload?.openResourceDiscovery !== "1.16") {
         throw new Error("Unsupported ORD version");
@@ -102,6 +108,25 @@ function addIdentity(list, label, value) {
   list.append(item);
 }
 
+function externalLink(label, url) {
+  const link = element("a", "", `${label} ↗`);
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  link.title = `${label} — opens in a new tab`;
+  link.setAttribute("aria-label", `${label} — opens in a new tab`);
+  return link;
+}
+
+function addIdentityLink(list, label, linkLabel, url) {
+  if (!url) return;
+  const item = element("div");
+  const value = element("dd");
+  value.append(externalLink(linkLabel, url));
+  item.append(element("dt", "", label), value);
+  list.append(item);
+}
+
 function definitionLabel(type) {
   if (type === "openapi-v3") return "OpenAPI 3 specification";
   if (type === "asyncapi-v2") return "AsyncAPI specification";
@@ -120,10 +145,10 @@ export async function render(context) {
 
   return loadProviderDocuments(context.currentProvider)
     .then(({ configUrl, documents }) => {
-      const payloads = documents.map(({ document }) => document);
-      const system = payloads.find(
-        (document) => document.perspective === "system-version",
+      const systemEntry = documents.find(
+        ({ document }) => document.perspective === "system-version",
       );
+      const system = systemEntry?.document;
       if (!system) throw new Error("System document is missing");
 
       const product = first(system.products ?? []);
@@ -141,6 +166,7 @@ export async function render(context) {
         "System version",
         system.describedSystemVersion?.version,
       );
+      addIdentityLink(identity, "ORD", "Document", systemEntry.sourceUrl);
       app.append(identity);
 
       const apis = (system.apiResources ?? []).filter(
@@ -175,17 +201,16 @@ export async function render(context) {
         const actions = element("div", "api__actions");
         actions.append(badges);
         for (const definition of api.resourceDefinitions ?? []) {
-          const definitionUrl = safeHttpUrl(definition.url, configUrl);
-          if (!definitionUrl) continue;
-          const link = element(
-            "a",
-            "",
-            `${definitionLabel(definition.type)} ↗`,
+          const definitionUrl = resolveMetadataReference(
+            definition.url,
+            system,
+            systemEntry.sourceUrl,
+            configUrl,
           );
-          link.href = definitionUrl;
-          link.target = "_blank";
-          link.rel = "noopener noreferrer";
-          actions.append(link);
+          if (!definitionUrl) continue;
+          actions.append(
+            externalLink(definitionLabel(definition.type), definitionUrl),
+          );
         }
         card.append(content, actions);
         apiList.append(card);
@@ -200,12 +225,89 @@ export async function render(context) {
 }
 
 function safeHttpUrl(value, baseUrl) {
+  if (typeof value !== "string") return undefined;
   try {
     const url = new URL(value, baseUrl);
     return ["http:", "https:"].includes(url.protocol) ? url.href : undefined;
   } catch {
     return undefined;
   }
+}
+
+function resolveConfigurationReference(value, configUrl, explicitBaseUrl) {
+  if (safeHttpUrl(value)) return safeHttpUrl(value);
+  if (typeof value !== "string") return undefined;
+  if (explicitBaseUrl) {
+    return value.startsWith("/")
+      ? appendToBaseUrl(explicitBaseUrl, value)
+      : safeHttpUrl(value, `${explicitBaseUrl.replace(/\/$/, "")}/`);
+  }
+  if (value.startsWith("/")) {
+    const implicitBaseUrl = implicitConfigurationBaseUrl(configUrl);
+    return implicitBaseUrl
+      ? appendToBaseUrl(implicitBaseUrl, value)
+      : safeHttpUrl(value, configUrl);
+  }
+  return safeHttpUrl(value, configUrl);
+}
+
+export function resolveMetadataReference(
+  value,
+  document,
+  documentUrl,
+  configUrl,
+) {
+  const absolute = safeHttpUrl(value);
+  if (absolute) return absolute;
+  if (typeof value !== "string" || !documentUrl) return undefined;
+  if (!value.startsWith("/")) return safeHttpUrl(value, documentUrl);
+
+  const documentBaseUrl = safeHttpUrl(document?.baseUrl, documentUrl);
+  if (documentBaseUrl) return appendToBaseUrl(documentBaseUrl, value);
+
+  const fetchContextUrl = safeHttpUrl(documentUrl);
+  if (fetchContextUrl) return safeHttpUrl(value, fetchContextUrl);
+
+  const legacyBaseUrl = safeHttpUrl(
+    document?.describedSystemInstance?.baseUrl,
+    documentUrl,
+  );
+  if (legacyBaseUrl) return appendToBaseUrl(legacyBaseUrl, value);
+
+  const configBaseUrl = implicitConfigurationBaseUrl(configUrl);
+  return configBaseUrl ? appendToBaseUrl(configBaseUrl, value) : undefined;
+}
+
+function appendToBaseUrl(baseUrl, reference) {
+  const base = safeHttpUrl(baseUrl);
+  if (!base) return undefined;
+  try {
+    const url = new URL(base);
+    const parsedReference = new URL(reference, "https://relative.invalid");
+    url.pathname = `${url.pathname.replace(
+      /\/$/,
+      "",
+    )}/${parsedReference.pathname.replace(/^\/+/u, "")}`;
+    url.search = parsedReference.search;
+    url.hash = parsedReference.hash;
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
+
+function implicitConfigurationBaseUrl(configUrl) {
+  const url = safeHttpUrl(configUrl);
+  if (!url) return undefined;
+  const parsed = new URL(url);
+  const suffix = "/.well-known/open-resource-discovery";
+  if (parsed.pathname.endsWith(suffix)) {
+    parsed.pathname = parsed.pathname.slice(0, -suffix.length) || "/";
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.href.replace(/\/$/, "");
+  }
+  return undefined;
 }
 
 let targetOrigin = "*";
