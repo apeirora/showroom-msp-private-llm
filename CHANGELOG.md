@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.1-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.0-rc...v2.16.1-rc) (2026-08-25)
+
+
+### Bug Fixes
+
+* **chart:** add top spacing to ORD details ([#195](https://github.com/apeirora/showroom-msp-private-llm/issues/195)) ([398ffe0](https://github.com/apeirora/showroom-msp-private-llm/commit/398ffe0d9f71515f841177f677ed22efdf6cc6d3))
+
 ## [2.16.0-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.15.5-rc...v2.16.0-rc) (2026-08-24)
 
 
