@@ -31,6 +31,7 @@ assert_contains "$operator_render" 'types { }'
 assert_contains "$operator_render" 'default_type "application/json;charset=UTF-8";'
 assert_contains "$operator_render" 'add_header Cache-Control "public, max-age=300" always;'
 assert_contains "$operator_render" 'mountPath: /usr/share/nginx/html/ui-extensions/ord/index.html'
+assert_contains "$operator_render" 'padding: 1rem 0 0.75rem;'
 assert_contains "$operator_render" 'platform-mesh.provider-details.resize.v1'
 
 metadata_render="$tmpdir/provider-metadata.yaml"
