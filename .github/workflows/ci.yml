@@ -14,6 +14,7 @@ on:
       - 'charts/**'
       - '.github/workflows/ci.yml'
       - 'hack/test-ord-chart.sh'
+      - 'hack/test-token-secret-cleanup.py'
       - 'hack/validate-ord.mjs'
 
 permissions:
@@ -163,6 +164,10 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      - name: Install chart test dependency
+        if: matrix.chart == 'private-llm-sync-agent'
+        run: python3 -m pip install PyYAML==6.0.3
+
       - name: Lint, template, and package chart
         id: build
         shell: bash
@@ -176,6 +181,9 @@ jobs:
           helm dependency update "$chart_dir"
           helm lint "$chart_dir"
           helm template "ci-${chart_name}" "$chart_dir" --namespace default >/dev/null
+          if [ "$chart" = "private-llm-sync-agent" ]; then
+            python3 hack/test-token-secret-cleanup.py
+          fi
           if [ "$chart" = "private-llm-operator" ]; then
             bash hack/test-ord-chart.sh
           fi

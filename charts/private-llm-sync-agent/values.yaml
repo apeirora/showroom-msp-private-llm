@@ -4,6 +4,8 @@ syncAgentOperator:
   apiExportEndpointSliceName: llm.privatellms.msp
   agentName: llm-agent
   kcpKubeconfig: pm-kubeconfig
+  image:
+    tag: v0.7.0
   extraFlags: []
   crds:
     enabled: false
@@ -19,5 +21,7 @@ syncAgentOperator:
 
 publishedResources:
   enabled: true
+  # Delete the token Secret copy in KCP when its APITokenRequest is deleted.
+  tokenSecretCleanup: false
   namespace: api-syncagent
   serviceAccountName: private-llm-sync-agent
