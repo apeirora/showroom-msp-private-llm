@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.2-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.1-rc...v2.16.2-rc) (2026-09-06)
+
+
+### Bug Fixes
+
+* **sync-agent:** Add opt-in token Secret cleanup ([#198](https://github.com/apeirora/showroom-msp-private-llm/issues/198)) ([32b085b](https://github.com/apeirora/showroom-msp-private-llm/commit/32b085b49e75192a98b4d01cc3cf1232a8401e31))
+
 ## [2.16.1-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.0-rc...v2.16.1-rc) (2026-08-25)
 
 
