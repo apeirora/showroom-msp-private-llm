@@ -1,9 +1,9 @@
 dependencies:
 - name: private-llm-operator
   repository: file://../private-llm-operator
-  version: 2.15.0-rc
+  version: 2.16.1-rc
 - name: private-llm-sync-agent
   repository: file://../private-llm-sync-agent
-  version: 2.15.0-rc
-digest: sha256:b365174a1e977f2963f49ca51b130effc9599cf42bcf08228370c62fb6ac9448
-generated: "2026-08-16T00:55:36.59907+02:00"
+  version: 2.16.1-rc
+digest: sha256:bd0d9da595ae84a373aa58d162abcd1a30f9b0a9e84216d117b3e729545b4be9
+generated: "2026-09-06T22:51:23.064407+02:00"

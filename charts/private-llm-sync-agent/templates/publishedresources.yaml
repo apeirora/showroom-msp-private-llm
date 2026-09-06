@@ -50,8 +50,10 @@ spec:
     - identifier: token-secret
       origin: service
       kind: Secret
+      {{- if .Values.publishedResources.tokenSecretCleanup }}
+      cleanup: true
+      {{- end }}
       object:
         reference:
           path: status.secretName
 {{- end }}
-
