@@ -28,9 +28,18 @@ class TokenRequestUITest(unittest.TestCase):
         self.assertTrue(detail["webcomponent"]["selfRegistered"])
 
     def test_edit_form_reads_spec_fields_and_excludes_status_and_secret_data(self):
-        ui = self.token["context"]["resourceDefinition"]["ui"]
+        list_definition = self.token["context"]["resourceDefinition"]
+        create_fields = {f["property"] for f in list_definition["ui"]["createView"]["fields"]}
+        self.assertEqual(create_fields, {"metadata.name", "spec.instanceName", "spec.description"})
+        child, = self.token["children"]
+        entity_type = self.token["entityType"] + "." + child["defineEntity"]["id"]
+        detail, = [n for n in self.nodes if n.get("entityType") == entity_type]
+        detail_definition = detail["context"]["resourceDefinition"]
+        for key in ("apiGroup", "version", "entity", "entityCollection", "scope", "namespace"):
+            self.assertEqual(detail_definition[key], list_definition[key])
+        ui = detail_definition["ui"]
         edit_fields = {f["property"] for f in ui["createView"]["fields"]}
-        self.assertEqual(edit_fields, {"metadata.name", "spec.instanceName", "spec.description"})
+        self.assertEqual(edit_fields, {"metadata.name", "spec.description"})
         # Portal 0.51.0 reads createView fields for both the detail page and edit form.
         display_fields = {f["property"] for f in ui["detailView"]["fields"]}
         self.assertTrue(display_fields <= edit_fields)

@@ -334,6 +334,43 @@
                     "defineEntity": {
                         "id": "dashboard"
                     },
+                    "context": {
+                        "resourceDefinition": {
+                            "apiGroup": "llm_privatellms_msp",
+                            "version": "v1alpha1",
+                            "entityCollection": "APITokenRequests",
+                            "entity": "APITokenRequest",
+                            "scope": "Namespaced",
+                            "namespace": null,
+                            "ui": {
+                                "detailView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Description",
+                                            "property": "spec.description"
+                                        }
+                                    ]
+                                },
+                                "createView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name",
+                                            "required": true
+                                        },
+                                        {
+                                            "label": "Description",
+                                            "property": "spec.description"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
                     "compound": {
                         "children": []
                     }
