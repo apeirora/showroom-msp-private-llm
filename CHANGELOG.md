@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.3-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.2-rc...v2.16.3-rc) (2026-09-07)
+
+
+### Bug Fixes
+
+* **chart:** Restore token request detail actions ([#200](https://github.com/apeirora/showroom-msp-private-llm/issues/200)) ([6a29523](https://github.com/apeirora/showroom-msp-private-llm/commit/6a29523c318dd5df80a9dc7313d3407ccd8923fd))
+
 ## [2.16.2-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.1-rc...v2.16.2-rc) (2026-09-06)
 
 
