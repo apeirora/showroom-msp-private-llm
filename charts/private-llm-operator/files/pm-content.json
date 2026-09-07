@@ -22,7 +22,8 @@
                     "keepSelectedForChildren": true,
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                     "context": {
                         "resourceDefinition": {
@@ -188,7 +189,8 @@
                     "label": "Dashboard",
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-detail-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                     "defineEntity": {
                         "id": "dashboard"
@@ -215,7 +217,8 @@
                     "keepSelectedForChildren": true,
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                     "context": {
                         "resourceDefinition": {
@@ -329,7 +332,8 @@
                     "label": "Dashboard",
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-detail-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                     "defineEntity": {
                         "id": "dashboard"
@@ -393,7 +397,8 @@
                     "keepSelectedForChildren": true,
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                         "context": {
                             "resourceDefinition": {
