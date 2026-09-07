@@ -15,6 +15,14 @@ class TokenRequestUITest(unittest.TestCase):
         cls.nodes = json.loads(CONTENT.read_text())["luigiConfigFragment"]["data"]["nodes"]
         cls.token = next(n for n in cls.nodes if n.get("label") == "Token Requests")
 
+    def test_components_load_as_modules_without_prior_navigation(self):
+        components = [n for n in self.nodes if "webcomponent" in n]
+        self.assertTrue(components)
+        for node in components:
+            with self.subTest(url=node["url"]):
+                # Luigi uses a classic script unless the module type is explicit.
+                self.assertEqual(node["webcomponent"].get("type"), "module")
+
     def test_token_row_reaches_detail_actions_for_selected_resource(self):
         definition = self.token["context"]["resourceDefinition"]
         self.assertTrue(definition["ui"].get("detailView"), "The portal ignores row clicks without detailView")
