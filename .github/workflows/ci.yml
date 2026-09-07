@@ -15,6 +15,7 @@ on:
       - '.github/workflows/ci.yml'
       - 'hack/test-ord-chart.sh'
       - 'hack/test-token-secret-cleanup.py'
+      - 'hack/test-token-request-ui.py'
       - 'hack/validate-ord.mjs'
 
 permissions:
@@ -185,6 +186,7 @@ jobs:
             python3 hack/test-token-secret-cleanup.py
           fi
           if [ "$chart" = "private-llm-operator" ]; then
+            python3 hack/test-token-request-ui.py
             bash hack/test-ord-chart.sh
           fi
           mkdir -p "$out_dir"
