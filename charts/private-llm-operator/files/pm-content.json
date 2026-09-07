@@ -244,6 +244,33 @@
                                         {
                                             "label": "Secret",
                                             "property": "status.secretName"
+                                        },
+                                        {
+                                            "property": "metadata.name",
+                                            "uiSettings": {
+                                                "displayAs": "button",
+                                                "buttonSettings": {
+                                                    "action": "navigate",
+                                                    "text": "Details",
+                                                    "design": "Transparent"
+                                                }
+                                            }
+                                        }
+                                    ]
+                                },
+                                "detailView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Instance",
+                                            "property": "spec.instanceName"
+                                        },
+                                        {
+                                            "label": "Description",
+                                            "property": "spec.description"
                                         }
                                     ]
                                 },
@@ -290,10 +317,63 @@
                                 }
                             },
                             "context": {
-                                "tokenrequestId": ":tokenrequestId"
+                                "tokenrequestId": ":tokenrequestId",
+                                "resourceId": ":tokenrequestId"
                             }
                         }
                     ]
+                },
+                {
+                    "entityType": "main.core_platform-mesh_io_account.namespace.llm_privatellms_msp_tokenrequest",
+                    "pathSegment": "dashboard",
+                    "label": "Dashboard",
+                    "url": "/assets/platform-mesh-portal-ui-wc.js#generic-detail-view",
+                    "webcomponent": {
+                        "selfRegistered": true
+                    },
+                    "defineEntity": {
+                        "id": "dashboard"
+                    },
+                    "context": {
+                        "resourceDefinition": {
+                            "apiGroup": "llm_privatellms_msp",
+                            "version": "v1alpha1",
+                            "entityCollection": "APITokenRequests",
+                            "entity": "APITokenRequest",
+                            "scope": "Namespaced",
+                            "namespace": null,
+                            "ui": {
+                                "detailView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Description",
+                                            "property": "spec.description"
+                                        }
+                                    ]
+                                },
+                                "createView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name",
+                                            "required": true
+                                        },
+                                        {
+                                            "label": "Description",
+                                            "property": "spec.description"
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    },
+                    "compound": {
+                        "children": []
+                    }
                 },
                 {
                     "pathSegment": "llm_privatellms_msp_secrets",
