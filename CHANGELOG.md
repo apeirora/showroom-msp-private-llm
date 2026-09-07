@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.4-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.3-rc...v2.16.4-rc) (2026-09-07)
+
+
+### Bug Fixes
+
+* **portal:** Load components as JavaScript modules ([#202](https://github.com/apeirora/showroom-msp-private-llm/issues/202)) ([b7a6142](https://github.com/apeirora/showroom-msp-private-llm/commit/b7a614225deffc1d091fe62f217759e6adec89e8))
+
 ## [2.16.3-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.2-rc...v2.16.3-rc) (2026-09-07)
 
 
