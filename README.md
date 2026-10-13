@@ -212,3 +212,5 @@ This project is licensed under the [Apache License 2.0](LICENSE).
     <img src="docs/assets/eu-funded.svg" alt="Funded by the European Union -- NextGenerationEU. Supported by the Federal Ministry for Economic Affairs and Energy on the basis of a decision by the German Bundestag." width="400" />
   </a>
 </p>
+
+Stable patch releases use a final `Release-As` footer to remove an inherited `-rc` suffix.
