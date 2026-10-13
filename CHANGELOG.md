@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.16.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.4-rc...v2.16.5) (2026-10-13)
+
+
+### Bug Fixes
+
+* **chart:** Remove the shared API Sync Agent CRD ([#209](https://github.com/apeirora/showroom-msp-private-llm/issues/209)) ([d67e926](https://github.com/apeirora/showroom-msp-private-llm/commit/d67e926e047446d7ca8bc42670a62d428eb75d42))
+
+
+### Documentation
+
+* **chart:** Document stable patch releases ([#211](https://github.com/apeirora/showroom-msp-private-llm/issues/211)) ([3a74b33](https://github.com/apeirora/showroom-msp-private-llm/commit/3a74b334581acdee4b11de0966c1b5c8f9428519))
+
 ## [2.16.4-rc](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.3-rc...v2.16.4-rc) (2026-09-07)
 
 
