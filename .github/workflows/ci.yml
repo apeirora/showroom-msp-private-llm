@@ -183,6 +183,9 @@ jobs:
           helm lint "$chart_dir"
           helm template "ci-${chart_name}" "$chart_dir" --namespace default >/dev/null
           if [ "$chart" = "private-llm-sync-agent" ]; then
+            bash hack/test-shared-syncagent-crd.sh "$chart_dir"
+          fi
+          if [ "$chart" = "private-llm-sync-agent" ]; then
             python3 hack/test-token-secret-cleanup.py
           fi
           if [ "$chart" = "private-llm-operator" ]; then
