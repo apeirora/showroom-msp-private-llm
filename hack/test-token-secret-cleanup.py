@@ -56,14 +56,11 @@ class TokenSecretCleanupTest(unittest.TestCase):
         self.assertEqual(resource(default, "PublishedResource", name),
                          resource(enabled, "PublishedResource", name))
 
-    def test_bundled_schema_accepts_cleanup(self):
+    def test_shared_schema_is_not_bundled(self):
         documents = render("publishedResources.tokenSecretCleanup=true")
-        crd = resource(documents, "CustomResourceDefinition",
-                       "publishedresources.syncagent.kcp.io")
-        version = next(v for v in crd["spec"]["versions"] if v["name"] == "v1alpha1")
-        spec = version["schema"]["openAPIV3Schema"]["properties"]["spec"]
-        cleanup = spec["properties"]["related"]["items"]["properties"]["cleanup"]
-        self.assertEqual(cleanup["type"], "boolean")
+        self.assertFalse(any(doc["kind"] == "CustomResourceDefinition" and
+                             doc["metadata"]["name"] == "publishedresources.syncagent.kcp.io"
+                             for doc in documents))
 
 
 if __name__ == "__main__":
