@@ -64,18 +64,6 @@
                                         {
                                             "label": "Endpoint",
                                             "property": "status.endpoint"
-                                        },
-                                        {
-                                            "label": "Actions",
-                                            "property": "metadata.name",
-                                            "uiSettings": {
-                                                "displayAs": "button",
-                                                "buttonSettings": {
-                                                    "action": "navigate",
-                                                    "text": "Details",
-                                                    "design": "Transparent"
-                                                }
-                                            }
                                         }
                                     ]
                                 },
@@ -240,17 +228,6 @@
                                         {
                                             "label": "Secret",
                                             "property": "status.secretName"
-                                        },
-                                        {
-                                            "property": "metadata.name",
-                                            "uiSettings": {
-                                                "displayAs": "button",
-                                                "buttonSettings": {
-                                                    "action": "navigate",
-                                                    "text": "Details",
-                                                    "design": "Transparent"
-                                                }
-                                            }
                                         }
                                     ]
                                 },

@@ -17,7 +17,8 @@ const gatewayPath = 'projects/lib/services/resource/gateway.service.ts';
 const utilRoot = 'projects/lib/utils/utils/';
 const utilNames = ['build-graphql-input-type-name', 'build-resource-list-operation', 'columns-to-gql-fields', 'flatten-field-tree', 'get-value-by-path', 'instance-permission-key', 'is-namespaced-resource', 'merge-list-with-subscription-result', 'resource-action-allowed', 'resource-sanitizer', 'resource-field-by-path'];
 const detailPath = 'projects/wc/src/app/components/generic-ui/detail-view/detail-view.component.ts';
-const paths = [detailPath, tablePath, servicePath, gatewayPath, ...utilNames.map(n => utilRoot + n + '.ts')];
+const actionPath = 'projects/wc/src/app/utils/field-definition.utils.ts';
+const paths = [actionPath, detailPath, tablePath, servicePath, gatewayPath, ...utilNames.map(n => utilRoot + n + '.ts')];
 const sources = new Map();
 for (const path of paths) {
   const local = resolve(cache, path);
@@ -87,7 +88,7 @@ export function callerHarness() {
       if (name.endsWith('create-resource-modal.consts')) return {ResourceFieldNames: {MetadataName: 'metadata.name', MetadataNamespace: 'metadata.namespace'}};
       if (name.endsWith('url-params')) return {addSearchParams: params => {search = {...search, ...params}; calls.push({kind: 'route', params});}};
       if (name.endsWith('to-form-fields')) return {toFormFields: fields => fields, expandCollectionEntries: value => value};
-      if (name.endsWith('field-definition.utils')) return {};
+      if (name.endsWith('field-definition.utils')) return load(actionPath);
       if (name === './apollo-factory') return {ApolloFactory};
       if (name.startsWith('.')) return load(posix.normalize(posix.join(posix.dirname(path), name + '.ts')));
       return external(name);
