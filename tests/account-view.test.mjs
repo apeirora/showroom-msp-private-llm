@@ -128,3 +128,26 @@ test('known upstream gap: direct list delete omits the row namespace (expected f
     assert.throws(() => assert.equal(last(h,'mutate').variables.namespace,'beta'), {name:'AssertionError'});
   }
 });
+
+
+test('core Secrets use v1.Secrets for legacy and explicit empty API group values', () => {
+  const configurations = [
+    ['portalIntegration.secretResourceDefinition.group=v1', 'portalIntegration.secretResourceDefinition.version='],
+    ['portalIntegration.secretResourceDefinition.group=', 'portalIntegration.secretResourceDefinition.version=v1'],
+  ];
+  for (const values of configurations) {
+    const args = ['template','caller-test',resolve(repo,config.chart),...config.args];
+    if (process.env.PROVIDER_HELM_SET) args.push('--set',process.env.PROVIDER_HELM_SET);
+    for (const value of values) args.push('--set-string',value);
+    const documents = parseAllDocuments(execFileSync('helm',args,{encoding:'utf8'})).map(doc => doc.toJSON());
+    const content = documents.find(doc => doc?.kind === 'ConfigMap' && doc.data?.['pm-content.json']);
+    const secret = JSON.parse(content.data['pm-content.json']).luigiConfigFragment.data.nodes.find(node => node.label === 'Secrets');
+    const h = callerHarness(); h.mount(secret);
+    assert.equal(secret.context.resourceDefinition.apiGroup,'');
+    assert.equal(secret.context.resourceDefinition.version,'v1');
+    const request = last(h,'list');
+    assert.equal((request.query.match(/\bv1\s*\{/g) || []).length,1);
+    assert.ok(request.query.includes('Secrets'));
+    assert.equal(request.variables.namespace,undefined);
+  }
+});

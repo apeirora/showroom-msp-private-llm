@@ -1,7 +1,10 @@
 {{- if .Values.portalIntegration.enabled }}
 {{- $sidebarTitle := .Values.branding.sidebar.title -}}
 {{- $secretDef := default (dict) .Values.portalIntegration.secretResourceDefinition -}}
-{{- $secretGroup := default "v1" $secretDef.group -}}
+{{- $secretGroup := "v1" -}}
+{{- if hasKey $secretDef "group" -}}
+{{- $secretGroup = printf "%v" (get $secretDef "group") -}}
+{{- end -}}
 {{- $secretPlural := default "Secrets" $secretDef.plural -}}
 {{- $secretKind := default "Secret" $secretDef.kind -}}
 {{- $secretVersion := "" -}}
