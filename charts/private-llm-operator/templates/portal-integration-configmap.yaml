@@ -1,12 +1,19 @@
 {{- if .Values.portalIntegration.enabled }}
 {{- $sidebarTitle := .Values.branding.sidebar.title -}}
 {{- $secretDef := default (dict) .Values.portalIntegration.secretResourceDefinition -}}
-{{- $secretGroup := default "v1" $secretDef.group -}}
+{{- $secretGroup := "v1" -}}
+{{- if hasKey $secretDef "group" -}}
+{{- $secretGroup = printf "%v" (get $secretDef "group") -}}
+{{- end -}}
 {{- $secretPlural := default "Secrets" $secretDef.plural -}}
 {{- $secretKind := default "Secret" $secretDef.kind -}}
 {{- $secretVersion := "" -}}
 {{- if hasKey $secretDef "version" -}}
 {{- $secretVersion = printf "%v" (get $secretDef "version") -}}
+{{- end -}}
+{{- if and (eq $secretGroup "v1") (eq $secretVersion "") -}}
+{{- $secretGroup = "" -}}
+{{- $secretVersion = "v1" -}}
 {{- end -}}
 {{- $contentVariant := default "default" .Values.portalIntegration.contentVariant -}}
 {{- $pmContentFile := "files/pm-content.json" -}}

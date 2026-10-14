@@ -17,6 +17,7 @@ class TokenRequestUITest(unittest.TestCase):
 
     def test_components_load_as_modules_without_prior_navigation(self):
         components = [n for n in self.nodes if "webcomponent" in n]
+        components.extend(c for n in self.nodes for c in n.get("children", []) if "webcomponent" in c)
         self.assertTrue(components)
         for node in components:
             with self.subTest(url=node["url"]):
@@ -30,8 +31,8 @@ class TokenRequestUITest(unittest.TestCase):
         self.assertTrue(self.token["navigationContext"], "Delete must return to the token list")
         child, = self.token["children"]
         self.assertEqual(child["context"]["resourceId"], child["pathSegment"])
-        entity_type = self.token["entityType"] + "." + child["defineEntity"]["id"]
-        detail, = [n for n in self.nodes if n.get("entityType") == entity_type]
+        detail = child
+        self.assertTrue(detail["hideFromNav"])
         self.assertTrue(detail["url"].endswith("#generic-detail-view"))
         self.assertTrue(detail["webcomponent"]["selfRegistered"])
 
@@ -40,11 +41,13 @@ class TokenRequestUITest(unittest.TestCase):
         create_fields = {f["property"] for f in list_definition["ui"]["createView"]["fields"]}
         self.assertEqual(create_fields, {"metadata.name", "spec.instanceName", "spec.description"})
         child, = self.token["children"]
-        entity_type = self.token["entityType"] + "." + child["defineEntity"]["id"]
-        detail, = [n for n in self.nodes if n.get("entityType") == entity_type]
+        detail = child
+        self.assertTrue(detail["hideFromNav"])
         detail_definition = detail["context"]["resourceDefinition"]
-        for key in ("apiGroup", "version", "entity", "entityCollection", "scope", "namespace"):
+        for key in ("apiGroup", "version", "entity", "entityCollection", "scope"):
             self.assertEqual(detail_definition[key], list_definition[key])
+        self.assertNotIn("namespace", detail_definition)
+        self.assertNotIn("namespace", list_definition)
         ui = detail_definition["ui"]
         edit_fields = {f["property"] for f in ui["createView"]["fields"]}
         self.assertEqual(edit_fields, {"metadata.name", "spec.description"})

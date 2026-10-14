@@ -44,3 +44,11 @@ assert_contains "$metadata_render" 'displayName: ORD'
 assert_contains "$metadata_render" 'configUrl: "https://llm.example.com/.well-known/open-resource-discovery"'
 assert_contains "$metadata_render" 'detailViewExtensions:'
 assert_contains "$metadata_render" "url: \"https://llm.example.com/ui-extensions/ord/?v=$metadata_chart_version\""
+
+# Execute both served content variants through the pinned portal callers.
+(
+  cd "$repo_root/tests"
+  npm ci --ignore-scripts
+  npm test
+  PROVIDER_HELM_SET=portalIntegration.contentVariant=legacy npm test
+)
