@@ -31,3 +31,6 @@ dist
 .tmp
 charts/**/*.tgz
 token
+# Provider caller test dependencies and pinned source cache
+tests/node_modules/
+tests/.portal-source/

@@ -15,23 +15,19 @@
                         "collapsible": true,
                         "order": 5
                     },
-                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "entityType": "main.core_platform-mesh_io_account",
                     "loadingIndicator": {
                         "enabled": false
                     },
                     "keepSelectedForChildren": true,
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                     "context": {
                         "resourceDefinition": {
-                            "group": "llm.privatellms.msp",
-                            "plural": "llminstances",
-                            "singular": "llminstance",
-                            "kind": "LLMInstance",
                             "scope": "Namespaced",
-                            "namespace": null,
                             "ui": {
                                 "logoUrl": "https://cdn.jsdelivr.net/gh/ifdotpy/db@master/ai-128.png",
                                 "listView": {
@@ -39,6 +35,10 @@
                                         {
                                             "label": "Name",
                                             "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Namespace",
+                                            "property": "metadata.namespace"
                                         },
                                         {
                                             "label": "Model",
@@ -59,7 +59,6 @@
                                         }
                                     ]
                                 },
-
                                 "createView": {
                                     "fields": [
                                         {
@@ -85,8 +84,41 @@
                                             "property": "spec.replicas"
                                         }
                                     ]
+                                },
+                                "detailView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Namespace",
+                                            "property": "metadata.namespace"
+                                        },
+                                        {
+                                            "label": "Model",
+                                            "property": "spec.model"
+                                        },
+                                        {
+                                            "label": "Replicas",
+                                            "property": "spec.replicas"
+                                        },
+                                        {
+                                            "label": "Status",
+                                            "property": "status.phase",
+                                            "labelDisplay": true
+                                        },
+                                        {
+                                            "label": "Endpoint",
+                                            "property": "status.endpoint"
+                                        }
+                                    ]
                                 }
-                            }
+                            },
+                            "apiGroup": "llm_privatellms_msp",
+                            "entityCollection": "LLMInstances",
+                            "entity": "LLMInstance",
+                            "version": "v1alpha1"
                         }
                     },
                     "children": [
@@ -94,17 +126,14 @@
                             "pathSegment": ":llminstanceId",
                             "hideFromNav": true,
                             "keepSelectedForChildren": false,
-                            "defineEntity": {
-                                "id": "llm_privatellms_msp_llminstance",
-                                "contextKey": "llminstanceId",
-                                "graphqlEntity": {
-                                    "group": "llm.privatellms.msp",
-                                    "kind": "LLMInstance",
-                                    "query": "{ metadata { name annotations } }"
-                                }
-                            },
                             "context": {
-                                "llminstanceId": ":llminstanceId"
+                                "llminstanceId": ":llminstanceId",
+                                "resourceId": ":llminstanceId"
+                            },
+                            "url": "/assets/platform-mesh-portal-ui-wc.js#generic-detail-view",
+                            "webcomponent": {
+                                "selfRegistered": true,
+                                "type": "module"
                             }
                         }
                     ]
@@ -120,29 +149,29 @@
                         "collapsible": true,
                         "order": 5
                     },
-                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "entityType": "main.core_platform-mesh_io_account",
                     "loadingIndicator": {
                         "enabled": false
                     },
                     "keepSelectedForChildren": true,
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                     "context": {
                         "resourceDefinition": {
-                            "group": "llm.privatellms.msp",
-                            "plural": "apitokenrequests",
-                            "singular": "apitokenrequest",
-                            "kind": "APITokenRequest",
                             "scope": "Namespaced",
-                            "namespace": null,
                             "ui": {
                                 "listView": {
                                     "fields": [
                                         {
                                             "label": "Name",
                                             "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Namespace",
+                                            "property": "metadata.namespace"
                                         },
                                         {
                                             "label": "Instance",
@@ -182,8 +211,37 @@
                                             "property": "spec.description"
                                         }
                                     ]
+                                },
+                                "detailView": {
+                                    "fields": [
+                                        {
+                                            "label": "Name",
+                                            "property": "metadata.name"
+                                        },
+                                        {
+                                            "label": "Namespace",
+                                            "property": "metadata.namespace"
+                                        },
+                                        {
+                                            "label": "Instance",
+                                            "property": "spec.instanceName"
+                                        },
+                                        {
+                                            "label": "Status",
+                                            "property": "status.phase",
+                                            "labelDisplay": true
+                                        },
+                                        {
+                                            "label": "Secret",
+                                            "property": "status.secretName"
+                                        }
+                                    ]
                                 }
-                            }
+                            },
+                            "apiGroup": "llm_privatellms_msp",
+                            "entityCollection": "APITokenRequests",
+                            "entity": "APITokenRequest",
+                            "version": "v1alpha1"
                         }
                     },
                     "children": [
@@ -191,17 +249,14 @@
                             "pathSegment": ":tokenrequestId",
                             "hideFromNav": true,
                             "keepSelectedForChildren": false,
-                            "defineEntity": {
-                                "id": "llm_privatellms_msp_tokenrequest",
-                                "contextKey": "tokenrequestId",
-                                "graphqlEntity": {
-                                    "group": "llm.privatellms.msp",
-                                    "kind": "TokenRequest",
-                                    "query": "{ metadata { name annotations } }"
-                                }
-                            },
                             "context": {
-                                "tokenrequestId": ":tokenrequestId"
+                                "tokenrequestId": ":tokenrequestId",
+                                "resourceId": ":tokenrequestId"
+                            },
+                            "url": "/assets/platform-mesh-portal-ui-wc.js#generic-detail-view",
+                            "webcomponent": {
+                                "selfRegistered": true,
+                                "type": "module"
                             }
                         }
                     ]
@@ -217,24 +272,20 @@
                         "collapsible": true,
                         "order": 5
                     },
-                    "entityType": "main.core_platform-mesh_io_account.core_namespace",
+                    "entityType": "main.core_platform-mesh_io_account",
                     "loadingIndicator": {
                         "enabled": false
                     },
                     "keepSelectedForChildren": true,
                     "url": "/assets/platform-mesh-portal-ui-wc.js#generic-list-view",
                     "webcomponent": {
-                        "selfRegistered": true
+                        "selfRegistered": true,
+                        "type": "module"
                     },
                     "context": {
                         "resourceDefinition": {
-                            "group": "__SECRET_GROUP__",
                             "version": "__SECRET_VERSION__",
-                            "plural": "__SECRET_PLURAL__",
-                            "singular": "__SECRET_SINGULAR__",
-                            "kind": "__SECRET_KIND__",
                             "scope": "Namespaced",
-                            "namespace": null,
                             "ui": {
                                 "listView": {
                                     "fields": [
@@ -243,28 +294,39 @@
                                             "property": "metadata.name"
                                         },
                                         {
+                                            "label": "Namespace",
+                                            "property": "metadata.namespace"
+                                        },
+                                        {
                                             "label": "Token",
                                             "property": "data",
                                             "propertyField": {
-                                              "key": "OPENAI_API_KEY",
-                                              "transform": ["decode"]
+                                                "key": "OPENAI_API_KEY",
+                                                "transform": [
+                                                    "decode"
+                                                ]
                                             },
                                             "uiSettings": {
-                                              "displayAs": "secret",
-                                              "withCopyButton": true
+                                                "displayAs": "secret",
+                                                "withCopyButton": true
                                             }
                                         },
                                         {
                                             "label": "OpenAI API URL",
                                             "property": "data",
                                             "propertyField": {
-                                              "key": "OPENAI_API_URL",
-                                              "transform": ["decode"]
+                                                "key": "OPENAI_API_URL",
+                                                "transform": [
+                                                    "decode"
+                                                ]
                                             }
                                         }
                                     ]
                                 }
-                            }
+                            },
+                            "apiGroup": "__SECRET_GROUP__",
+                            "entityCollection": "__SECRET_PLURAL__",
+                            "entity": "__SECRET_KIND__"
                         }
                     }
                 }

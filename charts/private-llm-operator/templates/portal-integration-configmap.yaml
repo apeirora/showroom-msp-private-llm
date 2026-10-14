@@ -8,6 +8,10 @@
 {{- if hasKey $secretDef "version" -}}
 {{- $secretVersion = printf "%v" (get $secretDef "version") -}}
 {{- end -}}
+{{- if and (eq $secretGroup "v1") (eq $secretVersion "") -}}
+{{- $secretGroup = "" -}}
+{{- $secretVersion = "v1" -}}
+{{- end -}}
 {{- $contentVariant := default "default" .Values.portalIntegration.contentVariant -}}
 {{- $pmContentFile := "files/pm-content.json" -}}
 {{- if eq $contentVariant "legacy" -}}

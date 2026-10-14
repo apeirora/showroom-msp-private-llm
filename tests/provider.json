@@ -1,0 +1,10 @@
+{
+  "chart": "charts/private-llm-operator",
+  "lists": 3,
+  "args": [
+    "--set",
+    "portalIntegration.enabled=true",
+    "--set",
+    "traefik.enabled=false"
+  ]
+}
