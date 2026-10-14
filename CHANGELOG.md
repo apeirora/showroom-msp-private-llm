@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.16.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.5...v2.16.6) (2026-10-14)
+
+
+### Bug Fixes
+
+* **chart:** attach Private LLM UI to the account ([#212](https://github.com/apeirora/showroom-msp-private-llm/issues/212)) ([568a457](https://github.com/apeirora/showroom-msp-private-llm/commit/568a45736f404dbf9400e7f66646de79c6e0c6cc))
+* **chart:** preserve the row namespace for LLM details ([#214](https://github.com/apeirora/showroom-msp-private-llm/issues/214)) ([de1e1c7](https://github.com/apeirora/showroom-msp-private-llm/commit/de1e1c76b7d18a5ad81bd6b8e56f423af2df9471))
+
 ## [2.16.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.4-rc...v2.16.5) (2026-10-13)
 
 
