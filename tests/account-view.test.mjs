@@ -151,3 +151,19 @@ test('core Secrets use v1.Secrets for legacy and explicit empty API group values
     assert.equal(request.variables.namespace,undefined);
   }
 });
+
+
+test('every visible detail control preserves the selected row namespace', () => {
+  for (const node of nodes) {
+    if (!node.context.resourceDefinition.ui.detailView) continue;
+    const h = callerHarness(); h.mount(node);
+    const controls = node.context.resourceDefinition.ui.listView.fields.filter(field => field.uiSettings?.buttonSettings?.action === 'navigate');
+    if (controls.length) {
+      for (const field of controls) h.table.executeAction({field,resource:row('beta')});
+    } else {
+      h.table.navigateToResource(row('beta'));
+    }
+    assert.equal(h.search().namespace,'beta');
+    assert.equal(last(h,'navigate').name,'same');
+  }
+});
