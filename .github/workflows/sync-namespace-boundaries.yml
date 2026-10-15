@@ -23,5 +23,6 @@ jobs:
         with:
           version: v3.17.3
       - run: python3 -m pip install PyYAML==6.0.3
+      - run: helm repo add kcp https://kcp-dev.github.io/helm-charts
       - run: helm dependency build charts/private-llm-sync-agent
       - run: python3 hack/namespace-boundaries/check.py --chart charts/private-llm-sync-agent
