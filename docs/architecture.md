@@ -235,3 +235,13 @@ The operator integrates OpenTelemetry for distributed tracing:
 
 - [Release Flow](release-flow.md) -- how releases are cut and delivered
 - [Versioning](versioning.md) -- version numbering and compatibility policy
+
+## Runtime namespace identity
+
+The sync agent uses a bounded `llm-` namespace derived from the account and the KCP source namespace.
+The readable part is at most 36 characters. A 20-character SHA3 hash covers the full account/source-namespace tuple.
+LLMInstances and APITokenRequests keep their original names in the same runtime namespace.
+BYOC and token Secrets follow their primary object's namespace.
+Chat UI uses a separate `chat-` namespace and receives its own credential replica through KCP.
+The public endpoint uses the operator's status URL and slug, not an assumed runtime namespace.
+Do not change this mapping after workloads exist without an explicit migration.

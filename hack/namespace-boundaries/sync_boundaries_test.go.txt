@@ -1,0 +1,235 @@
+package sync
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"strings"
+	"testing"
+
+	"github.com/kcp-dev/api-syncagent/internal/sync/templating"
+	syncagentv1alpha1 "github.com/kcp-dev/api-syncagent/sdk/apis/syncagent/v1alpha1"
+	"github.com/kcp-dev/logicalcluster/v3"
+	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
+	validation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/tools/record"
+)
+
+func mspSource(pub syncagentv1alpha1.PublishedResource, namespace, name string) *unstructured.Unstructured {
+	version := pub.Spec.Resource.Version
+	if pub.Spec.Resource.APIGroup != "" {
+		version = pub.Spec.Resource.APIGroup + "/" + version
+	}
+	return &unstructured.Unstructured{Object: map[string]any{"apiVersion": version, "kind": pub.Spec.Resource.Kind,
+		"metadata": map[string]any{"namespace": namespace, "name": name, "annotations": map[string]any{"kcp.io/cluster": "account-a"}}, "spec": map[string]any{}}}
+}
+
+func mspLocal(t *testing.T, pub syncagentv1alpha1.PublishedResource, source *unstructured.Unstructured, cluster string) *unstructured.Unstructured {
+	t.Helper()
+	name, err := templating.GenerateLocalObjectName(&pub, source, logicalcluster.Name(cluster), logicalcluster.NewPath("root:accounts:test"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if failures := validation.IsDNS1123Label(name.Namespace); len(failures) > 0 {
+		t.Fatalf("invalid runtime namespace %q: %v", name.Namespace, failures)
+	}
+	if failures := validation.IsDNS1123Subdomain(name.Name); len(failures) > 0 {
+		t.Fatalf("invalid runtime name %q: %v", name.Name, failures)
+	}
+	result := source.DeepCopy()
+	result.SetNamespace(name.Namespace)
+	result.SetName(name.Name)
+	return result
+}
+
+func TestMSPNamespaceBoundaries(t *testing.T) {
+	data, err := os.ReadFile(os.Getenv("MSP_BOUNDARY_INPUT"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pubs []syncagentv1alpha1.PublishedResource
+	if err := json.Unmarshal(data, &pubs); err != nil {
+		t.Fatal(err)
+	}
+	if len(pubs) == 0 {
+		t.Fatal("missing actual PublishedResources")
+	}
+	for _, pub := range pubs {
+		t.Run(pub.Name, func(t *testing.T) {
+			cluster := "account-a"
+			a := mspSource(pub, "team-a", "same-name")
+			b := mspSource(pub, "team-b", "same-name")
+			la := mspLocal(t, pub, a, cluster)
+			lb := mspLocal(t, pub, b, cluster)
+			if la.GetNamespace() == lb.GetNamespace() && la.GetName() == lb.GetName() {
+				t.Fatal("two KCP namespaces collide on one runtime object")
+			}
+			// Verify adoption cannot reach team-a's object at team-b's distinct coordinates.
+			local := buildFakeClient(la)
+			syncer := &objectSyncer{agentName: "boundary-test"}
+			err := syncer.adoptExistingDestinationObject(context.Background(), zap.NewNop().Sugar(), syncSide{client: local}, lb.DeepCopy(), newObjectKey(b, logicalcluster.Name(cluster), logicalcluster.NewPath("root:accounts:test")))
+			if !apierrors.IsNotFound(err) {
+				t.Fatalf("expected missing team-b destination, got %v", err)
+			}
+			for _, ns := range []string{"default", "team-a", "a-b-c", strings.Repeat("n", 63)} {
+				original := mspSource(pub, ns, "resource-name")
+				runtime := mspLocal(t, pub, original, cluster)
+				key := newObjectKey(original, logicalcluster.Name(cluster), logicalcluster.NewPath("root:accounts:test"))
+				ensureLabels(runtime, key.Labels())
+				ensureAnnotations(runtime, key.Annotations())
+				reverse := RemoteNameForLocalObject(runtime)
+				if reverse == nil || reverse.Namespace != ns || reverse.Name != original.GetName() || string(reverse.ClusterName) != cluster {
+					t.Fatalf("reverse routing changed: %+v", reverse)
+				}
+			}
+			first := mspLocal(t, pub, mspSource(pub, "c", "same-name"), "a-b")
+			second := mspLocal(t, pub, mspSource(pub, "b-c", "same-name"), "a")
+			if first.GetNamespace() == second.GetNamespace() && first.GetName() == second.GetName() {
+				t.Fatal("ambiguous hyphen-separated tuples collide")
+			}
+			long := mspSource(pub, strings.Repeat("n", 63), strings.Repeat("x", 253))
+			one := mspLocal(t, pub, long, strings.Repeat("a", 63))
+			long.SetNamespace(strings.Repeat("n", 62) + "b")
+			two := mspLocal(t, pub, long, strings.Repeat("a", 63))
+			if one.GetNamespace() == two.GetNamespace() && one.GetName() == two.GetName() {
+				t.Fatal("truncation removed namespace identity")
+			}
+			// The Group A contracts preserve object names and isolate all related Secrets by namespace.
+			if strings.HasPrefix(pub.Name, "publish-llm-") || pub.Name == "publish-chat-ui-instances" || strings.HasPrefix(pub.Name, "publish-cnpg-") {
+				if la.GetName() != a.GetName() || la.GetNamespace() == lb.GetNamespace() {
+					t.Fatal("Group A must preserve names inside distinct source namespaces")
+				}
+				for _, rel := range pub.Spec.Related {
+					switch rel.Identifier {
+					case "byoc-kubeconfig", "credentials-secret", "token-secret":
+						mspRelatedBoundary(t, pub, rel, cluster)
+					}
+				}
+			}
+		})
+	}
+	mspProviderLinks(t, pubs)
+}
+
+func mspRelatedBoundary(t *testing.T, pub syncagentv1alpha1.PublishedResource, rel syncagentv1alpha1.RelatedResourceSpec, cluster string) {
+	t.Helper()
+	var destinations []types.NamespacedName
+	for _, ns := range []string{"team-a", "team-b"} {
+		primary := mspSource(pub, ns, "request")
+		_ = unstructured.SetNestedField(primary.Object, "same-secret", "spec", "credentialsSecretRef", "name")
+		_ = unstructured.SetNestedField(primary.Object, "same-secret", "spec", "clusterRef", "kubeconfigSecretName")
+		_ = unstructured.SetNestedField(primary.Object, "same-secret", "status", "secretName")
+		runtime := mspLocal(t, pub, primary, cluster)
+		origin, dest := primary, runtime
+		if rel.Origin == "service" {
+			origin, dest = runtime, primary
+		}
+		secret := newUnstructured(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "same-secret", Namespace: origin.GetNamespace()}})
+		related, err := resolveRelatedResourceObjects(context.Background(), syncSide{client: buildFakeClient(origin, secret), object: origin, clusterName: logicalcluster.Name(cluster)}, syncSide{client: buildFakeClient(dest), object: dest, clusterName: logicalcluster.Name(cluster)}, rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(related) != 1 {
+			t.Fatalf("missing actual related Secret %s: %+v", rel.Identifier, related)
+		}
+		if related[0].original.GetNamespace() != origin.GetNamespace() || related[0].destination.Namespace != dest.GetNamespace() {
+			t.Fatal("related Secret escaped its primary namespace")
+		}
+		destinations = append(destinations, related[0].destination)
+	}
+	if destinations[0] == destinations[1] {
+		t.Fatalf("related Secret %s collides across source namespaces", rel.Identifier)
+	}
+}
+
+// State persistence has separate permission tests. This fixture isolates the native copy path.
+type mspBoundaryState struct{}
+
+func (mspBoundaryState) Get(context.Context, syncSide) (*unstructured.Unstructured, error) {
+	return nil, nil
+}
+func (mspBoundaryState) Put(context.Context, *unstructured.Unstructured, logicalcluster.Name, []string) error {
+	return nil
+}
+
+func mspProviderLinks(t *testing.T, pubs []syncagentv1alpha1.PublishedResource) {
+	byName := map[string]syncagentv1alpha1.PublishedResource{}
+	for _, pub := range pubs {
+		byName[pub.Name] = pub
+	}
+	llm, llmOK := byName["publish-llm-llminstances"]
+	token, tokenOK := byName["publish-llm-apitokenrequests"]
+	if llmOK && tokenOK {
+		instance := mspLocal(t, llm, mspSource(llm, "team-a", "model"), "account-a")
+		request := mspLocal(t, token, mspSource(token, "team-a", "token"), "account-a")
+		if instance.GetNamespace() != request.GetNamespace() {
+			t.Fatal("LLM instanceName reference no longer shares its namespace")
+		}
+	}
+	cluster, clusterOK := byName["publish-cnpg-clusters"]
+	if clusterOK {
+		expected := mspLocal(t, cluster, mspSource(cluster, "team-a", "db"), "account-a")
+		for _, name := range []string{"publish-cnpg-databases", "publish-cnpg-app-secrets"} {
+			if pub, ok := byName[name]; ok {
+				object := mspLocal(t, pub, mspSource(pub, "team-a", "db"), "account-a")
+				if object.GetNamespace() != expected.GetNamespace() {
+					t.Fatal("CNPG cluster reference or Secret left its source namespace")
+				}
+			}
+		}
+	}
+	chat, chatOK := byName["publish-chat-ui-instances"]
+	if !chatOK || !tokenOK {
+		return
+	}
+	for _, namespace := range []string{"team-a", "team-b"} {
+		cluster := logicalcluster.Name("account-a")
+		remoteToken := mspSource(token, namespace, "token")
+		_ = unstructured.SetNestedField(remoteToken.Object, "token-secret", "status", "secretName")
+		localToken := mspLocal(t, token, remoteToken, string(cluster))
+		unstructured.RemoveNestedField(remoteToken.Object, "status")
+		remoteChat := mspSource(chat, namespace, "chat")
+		_ = unstructured.SetNestedField(remoteChat.Object, "token-secret", "spec", "credentialsSecretRef", "name")
+		localChat := mspLocal(t, chat, remoteChat, string(cluster))
+		if localToken.GetNamespace() == localChat.GetNamespace() {
+			t.Fatal("H10: Chat and LLM must not share one physical Secret")
+		}
+		secret := newUnstructured(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "token-secret", Namespace: localToken.GetNamespace()},
+			Data: map[string][]byte{"OPENAI_API_URL": []byte("https://llm.example/llm/opaque-slug"), "OPENAI_API_KEY": []byte("synthetic-test-key")}})
+		local := buildFakeClient(localToken, localChat, secret)
+		remote := buildFakeClientWithStatus(remoteToken, remoteChat)
+		context := WithEventRecorder(context.Background(), record.NewFakeRecorder(100))
+		statusSync := &objectSyncer{syncStatusBack: true, subresources: []string{"status"}}
+		if _, err := statusSync.syncObjectStatus(context, zap.NewNop().Sugar(), syncSide{client: remote, object: remoteToken}, syncSide{client: local, object: localToken}); err != nil {
+			t.Fatal(err)
+		}
+		for _, pair := range []struct {
+			pub            syncagentv1alpha1.PublishedResource
+			source, target *unstructured.Unstructured
+		}{{token, remoteToken, localToken}, {chat, remoteChat, localChat}} {
+			syncer := &ResourceSyncer{pubRes: &pair.pub}
+			for attempt := 0; attempt < 5; attempt++ {
+				_, err := syncer.processRelatedResources(context, zap.NewNop().Sugar(), mspBoundaryState{},
+					syncSide{client: remote, object: pair.source, clusterName: cluster}, syncSide{client: local, object: pair.target}, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := remote.Get(context, types.NamespacedName{Namespace: pair.source.GetNamespace(), Name: pair.source.GetName()}, pair.source); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		copied := &corev1.Secret{}
+		if err := local.Get(context, types.NamespacedName{Namespace: localChat.GetNamespace(), Name: "token-secret"}, copied); err != nil {
+			t.Fatal(err)
+		}
+		if string(copied.Data["OPENAI_API_URL"]) != "https://llm.example/llm/opaque-slug" || string(copied.Data["OPENAI_API_KEY"]) != "synthetic-test-key" {
+			t.Fatal("token endpoint/key changed across the native LLM -> KCP -> Chat copy")
+		}
+	}
+}
