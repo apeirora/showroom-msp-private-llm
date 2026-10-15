@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.16.7](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.6...v2.16.7) (2026-10-15)
+
+
+### Bug Fixes
+
+* **chart:** isolate runtime namespaces by account and source namespace ([#215](https://github.com/apeirora/showroom-msp-private-llm/issues/215)) ([71404ca](https://github.com/apeirora/showroom-msp-private-llm/commit/71404cae5a848aebe89c8fb73f98188f690657d7))
+
 ## [2.16.6](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.5...v2.16.6) (2026-10-14)
 
 
