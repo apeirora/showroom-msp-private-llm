@@ -47,3 +47,11 @@ portalIntegration:
 branding:
   sidebar:
     title: LLM by MODEL Corp
+
+# Provider ceilings. Zero keeps each model's existing explicit budget.
+# A model without an explicit budget cannot gain an override until this is set.
+modelServerCeilings:
+  cpuMilli: 0
+  memoryMiB: 0
+  contextSize: 0
+  parallelSlots: 0

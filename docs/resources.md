@@ -60,7 +60,39 @@ The model download container keeps its existing resource settings.
 Omit CPU or memory to keep that model's existing request and limit.
 Remove an override to restore the model defaults. Updates change existing deployments.
 
-For example, request six CPUs for Qwen:
+The provider controls ceilings through the operator flags below.
+Tenants cannot raise these values through LLMInstance.
+An excessive setting produces phase `Rejected` and `Ready=False`, with reason `ModelSettingsRejected`.
+The operator does not apply the rejected workload change.
+An existing deployment retains its previous settings until an allowed update replaces them.
+Correct the instance settings or ask the provider to raise the ceiling.
+
+| Operator flag | Helm value under `modelServerCeilings` | Default policy (`0`) |
+| --- | --- | --- |
+| `--max-model-cpu-milli` | `cpuMilli` | Existing CPU request/limit; Qwen: 500m/1800m |
+| `--max-model-memory-mib` | `memoryMiB` | Existing memory request/limit; Qwen: 4096/7168 MiB |
+| `--max-context-size` | `contextSize` | Existing explicit model context; Qwen: 8192 |
+| `--max-parallel-slots` | `parallelSlots` | Existing model slot setting, or the pinned server default of 4 |
+
+Zero is not an unlimited ceiling.
+Models without an explicit CPU, memory, or context budget cannot receive an override for that budget until the provider sets a ceiling.
+Their existing settings remain unchanged when the new instance fields are omitted.
+Positive ceilings restrict both explicit settings and effective model defaults.
+All four provider values must be nonnegative integers within the corresponding API maximum.
+They set ceilings, not new workload defaults.
+Provider policy applies before local and BYOC workload changes.
+
+For example, the provider can permit six CPUs through Helm:
+
+```yaml
+modelServerCeilings:
+  cpuMilli: 6000
+  memoryMiB: 0
+  contextSize: 0
+  parallelSlots: 0
+```
+
+After the provider permits this budget, request six CPUs for Qwen:
 
 ```yaml
 apiVersion: llm.privatellms.msp/v1alpha1
@@ -81,7 +113,7 @@ spec:
 ```
 
 Without overrides, Qwen keeps its 500m CPU request, 1800m CPU limit, 4Gi memory request, and 7Gi memory limit.
-Other models keep their existing settings. No new API field has a default.
+Other models keep their existing settings. No new API field has a default. The provider ceilings must also permit an override.
 
 Check node capacity and namespace quotas before you increase resources.
 API bounds do not reserve cluster capacity or guarantee that the model can start.

@@ -34,7 +34,7 @@ Omission preserves existing model defaults.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status.phase` | `string` | High-level lifecycle state: `Provisioning` or `Ready` |
+| `status.phase` | `string` | High-level lifecycle state: `Provisioning`, `Ready`, or `Rejected` |
 | `status.endpoint` | `string` | Public URL for the inference endpoint (e.g., `https://host/llm/abc123`) |
 | `status.observedGeneration` | `int64` | Last generation processed by the controller |
 | `status.conditions` | `[]Condition` | Standard Kubernetes conditions (see below) |

@@ -159,6 +159,23 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var modelCeilings controller.ModelServerCeilings
+	flag.IntVar(
+		&modelCeilings.CPUMilli, "max-model-cpu-milli", 0,
+		"Provider CPU ceiling per model pod; 0 keeps the model budget",
+	)
+	flag.IntVar(
+		&modelCeilings.MemoryMiB, "max-model-memory-mib", 0,
+		"Provider memory ceiling per model pod; 0 keeps the model budget",
+	)
+	flag.IntVar(
+		&modelCeilings.ContextSize, "max-context-size", 0,
+		"Provider context ceiling; 0 keeps the explicit model budget",
+	)
+	flag.IntVar(
+		&modelCeilings.ParallelSlots, "max-parallel-slots", 0,
+		"Provider parallel slot ceiling; 0 keeps the model budget",
+	)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -201,6 +218,10 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	if err := modelCeilings.Validate(); err != nil {
+		setupLog.Error(err, "invalid model server ceilings")
+		os.Exit(1)
+	}
 
 	if shutdown, err := initOpenTelemetry(context.Background()); err != nil {
 		setupLog.Error(err, "opentelemetry init failed")
@@ -289,8 +310,9 @@ func main() {
 	}()
 
 	if err = (&controller.LLMInstanceReconciler{
-		Client: labeledClient,
-		Scheme: mgr.GetScheme(),
+		Client:              labeledClient,
+		ModelServerCeilings: modelCeilings,
+		Scheme:              mgr.GetScheme(),
 		PublicHost: func() string {
 			if v := os.Getenv("PUBLIC_HOST"); v != "" {
 				return v

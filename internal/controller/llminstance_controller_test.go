@@ -222,6 +222,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 	})
 
 	DescribeTable("applies runtime settings through the actual reconcile path", func(byoc bool) {
+		reconciler.ModelServerCeilings = ModelServerCeilings{CPUMilli: 6000, MemoryMiB: 8192, ContextSize: 16384, ParallelSlots: 4}
 		inst := &llmv1alpha1.LLMInstance{
 			ObjectMeta: metav1.ObjectMeta{Name: "runtime", Namespace: namespace},
 			Spec: llmv1alpha1.LLMInstanceSpec{
@@ -292,6 +293,57 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		if byoc {
 			Expect(c.Args).To(ContainElements("--api-key-file", byocAPIKeyFilePath()))
 		}
+	}, Entry("local", false), Entry("BYOC", true))
+
+	DescribeTable("rejects tenant budgets before local or BYOC workload writes", func(byoc bool) {
+		inst := &llmv1alpha1.LLMInstance{ObjectMeta: metav1.ObjectMeta{Name: "ceiling", Namespace: namespace}, Spec: llmv1alpha1.LLMInstanceSpec{Model: "qwen3-4b", Resources: &llmv1alpha1.ModelServerResources{CPU: &llmv1alpha1.ModelCPUResources{RequestMilli: 6000, LimitMilli: 6000}}}}
+		remoteReads := 0
+		if byoc {
+			reconciler.RemoteClientBuilder = func(_ []byte) (client.Client, error) { remoteReads++; return k8sClient, nil }
+			Expect(k8sClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ceiling-cluster", Namespace: namespace}, Data: map[string][]byte{"kubeconfig": []byte("test")}})).To(Succeed())
+			inst.Spec.ClusterRef = &llmv1alpha1.ClusterRef{KubeconfigSecretName: "ceiling-cluster"}
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: inst.Name, Namespace: namespace}}
+		_, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.Phase).To(Equal("Rejected"))
+		condition := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal("ModelSettingsRejected"))
+		Expect(condition.Message).To(ContainSubstring("provider ceiling 500"))
+		Expect(inst.Status.Endpoint).To(BeEmpty())
+		Expect(inst.Finalizers).To(BeEmpty())
+		Expect(remoteReads).To(BeZero())
+		version := inst.ResourceVersion
+		_, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.ResourceVersion).To(Equal(version))
+
+		reconciler.ModelServerCeilings.CPUMilli = 6000
+		for i := 0; i < 3; i++ {
+			_, err = reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		key := types.NamespacedName{Name: inst.Name + "-llama", Namespace: namespace}
+		if byoc {
+			key = types.NamespacedName{Name: byocBaseName(inst.Annotations[slugAnnotationKey]), Namespace: byocNamespace}
+		}
+		var deploy appsv1.Deployment
+		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
+		Expect(deploy.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().MilliValue()).To(Equal(int64(6000)))
+		version = deploy.ResourceVersion
+		inst.Spec.Resources.CPU.LimitMilli = 7000
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+		_, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.Phase).To(Equal("Rejected"))
+		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
+		Expect(deploy.ResourceVersion).To(Equal(version))
 	}, Entry("local", false), Entry("BYOC", true))
 
 	It("keeps model defaults and independent resource pairs", func() {

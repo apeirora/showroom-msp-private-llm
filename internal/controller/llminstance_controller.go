@@ -53,9 +53,10 @@ import (
 // LLMInstanceReconciler reconciles a LLMInstance object
 type LLMInstanceReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	PublicHost     string
-	AuthServiceURL string
+	Scheme              *runtime.Scheme
+	ModelServerCeilings ModelServerCeilings
+	PublicHost          string
+	AuthServiceURL      string
 	// PublicScheme controls the URL scheme published in status.endpoint (e.g., "http" or "https").
 	PublicScheme string
 	// ExtraIngressAnnotations are merged into managed Ingress annotations.
@@ -69,6 +70,8 @@ type LLMInstanceReconciler struct {
 	// bytes. If nil, a default clientcmd-based builder is used.
 	RemoteClientBuilder func(kubeconfig []byte) (client.Client, error)
 }
+
+const tinyLlamaModel = "tinyllama"
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
 const provisioningRequeueAfter = 5 * time.Second
@@ -147,6 +150,11 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 		}
 		return ctrl.Result{}, nil
+	}
+
+	// Reject tenant settings before any local or remote workload changes.
+	if err := r.ModelServerCeilings.check(inst); err != nil {
+		return ctrl.Result{}, r.rejectModelSettings(ctx, inst, err.Error())
 	}
 
 	// Ensure finalizer is present (best-effort)
@@ -387,7 +395,7 @@ func resolveModel(requested string) modelSelection {
 			file: "phi-2.Q4_0.gguf",
 			url:  "https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_0.gguf?download=true",
 		}
-	case "tinyllama-1.1b-chat-v1.0", "tinyllama", "", "default":
+	case "tinyllama-1.1b-chat-v1.0", tinyLlamaModel, "", "default":
 		return modelSelection{
 			name: trimmed,
 			file: "tinyllama.gguf",
@@ -1182,6 +1190,21 @@ func defaultServiceHealthChecker(ctx context.Context, targetURL string) error {
 		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (r *LLMInstanceReconciler) rejectModelSettings(ctx context.Context, inst *llmv1alpha1.LLMInstance, message string) error {
+	previous := inst.Status.DeepCopy()
+	meta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
+		Type: "Ready", Status: metav1.ConditionFalse, Reason: "ModelSettingsRejected",
+		Message: message, ObservedGeneration: inst.Generation,
+	})
+	inst.Status.Phase = "Rejected"
+	inst.Status.Endpoint = ""
+	inst.Status.ObservedGeneration = inst.Generation
+	if apiequality.Semantic.DeepEqual(*previous, inst.Status) {
+		return nil
+	}
+	return r.Status().Update(ctx, inst)
 }
 
 func (r *LLMInstanceReconciler) updateProvisioningStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, endpoint, reason, message string) error {
