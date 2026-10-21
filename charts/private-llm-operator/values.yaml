@@ -8,7 +8,7 @@ auth:
   externalURL: ''
 image:
   repository: ghcr.io/apeirora/private-llm-controller
-  tag: 2.16.7
+  tag: 2.17.0
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 extraEnv: []
@@ -47,9 +47,6 @@ portalIntegration:
 branding:
   sidebar:
     title: LLM by MODEL Corp
-
-# Provider ceilings. Zero keeps each model's existing explicit budget.
-# A model without an explicit budget cannot gain an override until this is set.
 modelServerCeilings:
   cpuMilli: 0
   memoryMiB: 0
