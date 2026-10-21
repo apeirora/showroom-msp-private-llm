@@ -17,6 +17,11 @@ The operator manages two custom resources in the `llm.privatellms.msp` API group
 | `spec.dnsPolicy` | Pod resolver policy. Set `Default` only when the cluster DNS service cannot resolve the external model source. | `ClusterFirst` |
 | `spec.clusterRef.kubeconfigSecretName` | Optional kubeconfig Secret for BYOC mode. When omitted, the instance runs as-a-Service on the provider-managed cluster. | unset |
 
+| `spec.resources.cpu.requestMilli` / `limitMilli` | CPU request and limit in millicores. Supply both; each must be 100 to 16000, and request must not exceed limit. | Model defaults |
+| `spec.resources.memory.requestMiB` / `limitMiB` | Memory request and limit in MiB. Supply both; each must be 128 to 65536, and request must not exceed limit. | Model defaults |
+| `spec.contextSize` | Integer from 1024 to 131072, passed as `--ctx-size`. The model can impose a lower limit. | Model/server default |
+| `spec.parallelSlots` | Integer from 1 to 16, passed as `--parallel`. | Server default |
+
 **What you read back:**
 
 | Field | Description |
@@ -47,6 +52,46 @@ spec:
   model: gemma-3-4b-it
   replicas: 3
 ```
+
+### Model server resources and context
+
+These settings apply to each inference pod in both provider and BYOC mode.
+The model download container keeps its existing resource settings.
+Omit CPU or memory to keep that model's existing request and limit.
+Remove an override to restore the model defaults. Updates change existing deployments.
+
+For example, request six CPUs for Qwen:
+
+```yaml
+apiVersion: llm.privatellms.msp/v1alpha1
+kind: LLMInstance
+metadata:
+  name: agentic-model
+spec:
+  model: qwen3-4b
+  resources:
+    cpu:
+      requestMilli: 6000
+      limitMilli: 6000
+    memory:
+      requestMiB: 4096
+      limitMiB: 7168
+  contextSize: 8192
+  parallelSlots: 1
+```
+
+Without overrides, Qwen keeps its 500m CPU request, 1800m CPU limit, 4Gi memory request, and 7Gi memory limit.
+Other models keep their existing settings. No new API field has a default.
+
+Check node capacity and namespace quotas before you increase resources.
+API bounds do not reserve cluster capacity or guarantee that the model can start.
+A larger context can increase memory use. It does not extend the model's trained context or add tool support.
+Measure startup slot size and prompt evaluation tokens per second.
+Verify a complete chat and tool call within the caller's timeout before you claim acceptance.
+The six-CPU example is an experiment, not a measured performance result.
+
+These optional fields are available through the Kubernetes API and its published schema.
+The Portal form does not supply them automatically.
 
 ### Common Operations
 

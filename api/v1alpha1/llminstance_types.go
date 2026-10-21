@@ -36,6 +36,23 @@ type LLMInstanceSpec struct {
 	// +kubebuilder:validation:Minimum=0
 	Replicas int32 `json:"replicas,omitempty"`
 
+	// Resources overrides model server resources. Omitted CPU or memory pairs keep model defaults.
+	// +optional
+	Resources *ModelServerResources `json:"resources,omitempty"`
+
+	// ContextSize sets --ctx-size. Omission keeps the model server default.
+	// The model can impose a lower context limit.
+	// +kubebuilder:validation:Minimum=1024
+	// +kubebuilder:validation:Maximum=131072
+	// +optional
+	ContextSize *int32 `json:"contextSize,omitempty"`
+
+	// ParallelSlots sets --parallel. Omission keeps the model server default.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=16
+	// +optional
+	ParallelSlots *int32 `json:"parallelSlots,omitempty"`
+
 	// DNSPolicy controls DNS resolution for the model pod. ClusterFirst is
 	// suitable for normal clusters. Default uses the node resolver for
 	// environments where cluster DNS is intentionally unavailable.
@@ -50,6 +67,42 @@ type LLMInstanceSpec struct {
 	// provider-managed cluster.
 	// +optional
 	ClusterRef *ClusterRef `json:"clusterRef,omitempty"`
+}
+
+// ModelServerResources sets resources for the inference container, not the model download.
+type ModelServerResources struct {
+	// CPU sets both the CPU request and limit in millicores.
+	// +optional
+	CPU *ModelCPUResources `json:"cpu,omitempty"`
+	// Memory sets both the memory request and limit in MiB.
+	// +optional
+	Memory *ModelMemoryResources `json:"memory,omitempty"`
+}
+
+// ModelCPUResources bounds CPU use per inference pod.
+// +kubebuilder:validation:XValidation:rule="self.requestMilli <= self.limitMilli",message="CPU request must not exceed the limit"
+type ModelCPUResources struct {
+	// RequestMilli is the CPU request in millicores.
+	// +kubebuilder:validation:Minimum=100
+	// +kubebuilder:validation:Maximum=16000
+	RequestMilli int32 `json:"requestMilli"`
+	// LimitMilli is the CPU limit in millicores.
+	// +kubebuilder:validation:Minimum=100
+	// +kubebuilder:validation:Maximum=16000
+	LimitMilli int32 `json:"limitMilli"`
+}
+
+// ModelMemoryResources bounds memory use per inference pod.
+// +kubebuilder:validation:XValidation:rule="self.requestMiB <= self.limitMiB",message="memory request must not exceed the limit"
+type ModelMemoryResources struct {
+	// RequestMiB is the memory request in MiB.
+	// +kubebuilder:validation:Minimum=128
+	// +kubebuilder:validation:Maximum=65536
+	RequestMiB int32 `json:"requestMiB"`
+	// LimitMiB is the memory limit in MiB.
+	// +kubebuilder:validation:Minimum=128
+	// +kubebuilder:validation:Maximum=65536
+	LimitMiB int32 `json:"limitMiB"`
 }
 
 // ClusterRef identifies a user-supplied target cluster for BYOC mode.

@@ -167,7 +167,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	model := resolveModel(inst.Spec.Model)
+	model := modelForInstance(inst)
 
 	if err := r.cleanupChangedBYOCTarget(ctx, inst, slug); err != nil {
 		return ctrl.Result{}, err
@@ -291,6 +291,39 @@ type modelSelection struct {
 	memoryLimit             string
 	cpuRequest              string
 	cpuLimit                string
+}
+
+// modelForInstance resolves defaults once for both local and BYOC create/update paths.
+func modelForInstance(inst *llmv1alpha1.LLMInstance) modelSelection {
+	model := resolveModel(inst.Spec.Model)
+	if resources := inst.Spec.Resources; resources != nil {
+		if cpu := resources.CPU; cpu != nil {
+			model.cpuRequest = fmt.Sprintf("%dm", cpu.RequestMilli)
+			model.cpuLimit = fmt.Sprintf("%dm", cpu.LimitMilli)
+		}
+		if memory := resources.Memory; memory != nil {
+			model.memoryRequest = fmt.Sprintf("%dMi", memory.RequestMiB)
+			model.memoryLimit = fmt.Sprintf("%dMi", memory.LimitMiB)
+		}
+	}
+	if inst.Spec.ContextSize != nil {
+		model.serverArgs = setServerIntFlag(model.serverArgs, "--ctx-size", *inst.Spec.ContextSize)
+	}
+	if inst.Spec.ParallelSlots != nil {
+		model.serverArgs = setServerIntFlag(model.serverArgs, "--parallel", *inst.Spec.ParallelSlots)
+	}
+	return model
+}
+
+func setServerIntFlag(args []string, flag string, value int32) []string {
+	result := append([]string(nil), args...)
+	for i := 0; i+1 < len(result); i++ {
+		if result[i] == flag {
+			result[i+1] = fmt.Sprint(value)
+			return result
+		}
+	}
+	return append(result, flag, fmt.Sprint(value))
 }
 
 func (m modelSelection) path() string {

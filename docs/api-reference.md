@@ -24,6 +24,12 @@ Requests a private llama.cpp inference endpoint. The operator reconciles it into
 | `spec.replicas` | `int32` | `1` | Number of llama.cpp server pods. Minimum: 0 (treated as 1) |
 | `spec.dnsPolicy` | `string` | `ClusterFirst` | Pod DNS policy. Use `Default` only when the target cluster requires its node resolver for external model downloads. |
 
+#### Model server settings
+
+See [resource settings and bounds](resources.md#model-server-resources-and-context) for the optional `spec.resources`, `spec.contextSize`, and `spec.parallelSlots` fields.
+They apply to creation and updates in both provider and BYOC mode.
+Omission preserves existing model defaults.
+
 #### Status
 
 | Field | Type | Description |
