@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.7...v2.17.0) (2026-10-21)
+
+
+### Features
+
+* configure model server resources and context per instance ([#218](https://github.com/apeirora/showroom-msp-private-llm/issues/218)) ([a94968e](https://github.com/apeirora/showroom-msp-private-llm/commit/a94968e4437d207d0dbf1dd567a4fe090811785f))
+
 ## [2.16.7](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.6...v2.16.7) (2026-10-15)
 
 
