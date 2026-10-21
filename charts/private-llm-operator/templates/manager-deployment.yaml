@@ -34,6 +34,10 @@ spec:
             - --leader-elect
             - --auth-bind-address=:8090
             - --auth-external-url=$(AUTH_EXTERNAL_URL)
+            - --max-model-cpu-milli={{ .Values.modelServerCeilings.cpuMilli }}
+            - --max-model-memory-mib={{ .Values.modelServerCeilings.memoryMiB }}
+            - --max-context-size={{ .Values.modelServerCeilings.contextSize }}
+            - --max-parallel-slots={{ .Values.modelServerCeilings.parallelSlots }}
           command:
             - /manager
           env:

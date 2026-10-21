@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "modelServerCeilings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpuMilli",
+        "memoryMiB",
+        "contextSize",
+        "parallelSlots"
+      ],
+      "properties": {
+        "cpuMilli": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16000
+        },
+        "memoryMiB": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "contextSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 131072
+        },
+        "parallelSlots": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        }
+      }
+    }
+  }
+}

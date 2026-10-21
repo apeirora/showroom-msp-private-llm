@@ -24,11 +24,17 @@ Requests a private llama.cpp inference endpoint. The operator reconciles it into
 | `spec.replicas` | `int32` | `1` | Number of llama.cpp server pods. Minimum: 0 (treated as 1) |
 | `spec.dnsPolicy` | `string` | `ClusterFirst` | Pod DNS policy. Use `Default` only when the target cluster requires its node resolver for external model downloads. |
 
+#### Model server settings
+
+See [resource settings and bounds](resources.md#model-server-resources-and-context) for the optional `spec.resources`, `spec.contextSize`, and `spec.parallelSlots` fields.
+They apply to creation and updates in both provider and BYOC mode.
+Omission preserves existing model defaults.
+
 #### Status
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status.phase` | `string` | High-level lifecycle state: `Provisioning` or `Ready` |
+| `status.phase` | `string` | High-level lifecycle state: `Provisioning`, `Ready`, or `Rejected` |
 | `status.endpoint` | `string` | Public URL for the inference endpoint (e.g., `https://host/llm/abc123`) |
 | `status.observedGeneration` | `int64` | Last generation processed by the controller |
 | `status.conditions` | `[]Condition` | Standard Kubernetes conditions (see below) |

@@ -53,9 +53,10 @@ import (
 // LLMInstanceReconciler reconciles a LLMInstance object
 type LLMInstanceReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	PublicHost     string
-	AuthServiceURL string
+	Scheme              *runtime.Scheme
+	ModelServerCeilings ModelServerCeilings
+	PublicHost          string
+	AuthServiceURL      string
 	// PublicScheme controls the URL scheme published in status.endpoint (e.g., "http" or "https").
 	PublicScheme string
 	// ExtraIngressAnnotations are merged into managed Ingress annotations.
@@ -69,6 +70,8 @@ type LLMInstanceReconciler struct {
 	// bytes. If nil, a default clientcmd-based builder is used.
 	RemoteClientBuilder func(kubeconfig []byte) (client.Client, error)
 }
+
+const tinyLlamaModel = "tinyllama"
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
 const provisioningRequeueAfter = 5 * time.Second
@@ -149,6 +152,11 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
+	// Reject tenant settings before any local or remote workload changes.
+	if err := r.ModelServerCeilings.check(inst); err != nil {
+		return ctrl.Result{}, r.rejectModelSettings(ctx, inst, err.Error())
+	}
+
 	// Ensure finalizer is present (best-effort)
 	if !ctrlutil.ContainsFinalizer(inst, finalizerName) {
 		ctrlutil.AddFinalizer(inst, finalizerName)
@@ -167,7 +175,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	model := resolveModel(inst.Spec.Model)
+	model := modelForInstance(inst)
 
 	if err := r.cleanupChangedBYOCTarget(ctx, inst, slug); err != nil {
 		return ctrl.Result{}, err
@@ -293,6 +301,39 @@ type modelSelection struct {
 	cpuLimit                string
 }
 
+// modelForInstance resolves defaults once for both local and BYOC create/update paths.
+func modelForInstance(inst *llmv1alpha1.LLMInstance) modelSelection {
+	model := resolveModel(inst.Spec.Model)
+	if resources := inst.Spec.Resources; resources != nil {
+		if cpu := resources.CPU; cpu != nil {
+			model.cpuRequest = fmt.Sprintf("%dm", cpu.RequestMilli)
+			model.cpuLimit = fmt.Sprintf("%dm", cpu.LimitMilli)
+		}
+		if memory := resources.Memory; memory != nil {
+			model.memoryRequest = fmt.Sprintf("%dMi", memory.RequestMiB)
+			model.memoryLimit = fmt.Sprintf("%dMi", memory.LimitMiB)
+		}
+	}
+	if inst.Spec.ContextSize != nil {
+		model.serverArgs = setServerIntFlag(model.serverArgs, "--ctx-size", *inst.Spec.ContextSize)
+	}
+	if inst.Spec.ParallelSlots != nil {
+		model.serverArgs = setServerIntFlag(model.serverArgs, "--parallel", *inst.Spec.ParallelSlots)
+	}
+	return model
+}
+
+func setServerIntFlag(args []string, flag string, value int32) []string {
+	result := append([]string(nil), args...)
+	for i := 0; i+1 < len(result); i++ {
+		if result[i] == flag {
+			result[i+1] = fmt.Sprint(value)
+			return result
+		}
+	}
+	return append(result, flag, fmt.Sprint(value))
+}
+
 func (m modelSelection) path() string {
 	return "/models/" + m.file
 }
@@ -354,7 +395,7 @@ func resolveModel(requested string) modelSelection {
 			file: "phi-2.Q4_0.gguf",
 			url:  "https://huggingface.co/TheBloke/phi-2-GGUF/resolve/main/phi-2.Q4_0.gguf?download=true",
 		}
-	case "tinyllama-1.1b-chat-v1.0", "tinyllama", "", "default":
+	case "tinyllama-1.1b-chat-v1.0", tinyLlamaModel, "", "default":
 		return modelSelection{
 			name: trimmed,
 			file: "tinyllama.gguf",
@@ -1149,6 +1190,21 @@ func defaultServiceHealthChecker(ctx context.Context, targetURL string) error {
 		return fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (r *LLMInstanceReconciler) rejectModelSettings(ctx context.Context, inst *llmv1alpha1.LLMInstance, message string) error {
+	previous := inst.Status.DeepCopy()
+	meta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{
+		Type: "Ready", Status: metav1.ConditionFalse, Reason: "ModelSettingsRejected",
+		Message: message, ObservedGeneration: inst.Generation,
+	})
+	inst.Status.Phase = "Rejected"
+	inst.Status.Endpoint = ""
+	inst.Status.ObservedGeneration = inst.Generation
+	if apiequality.Semantic.DeepEqual(*previous, inst.Status) {
+		return nil
+	}
+	return r.Status().Update(ctx, inst)
 }
 
 func (r *LLMInstanceReconciler) updateProvisioningStatus(ctx context.Context, inst *llmv1alpha1.LLMInstance, endpoint, reason, message string) error {

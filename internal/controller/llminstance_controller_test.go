@@ -221,6 +221,163 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(container.Args).To(Equal([]string{"-m", "/models/tinyllama.gguf", "--port", "8000", "--host", "0.0.0.0"}))
 	})
 
+	DescribeTable("applies runtime settings through the actual reconcile path", func(byoc bool) {
+		reconciler.ModelServerCeilings = ModelServerCeilings{CPUMilli: 6000, MemoryMiB: 8192, ContextSize: 16384, ParallelSlots: 4}
+		inst := &llmv1alpha1.LLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: "runtime", Namespace: namespace},
+			Spec: llmv1alpha1.LLMInstanceSpec{
+				Model: "qwen3-4b",
+				Resources: &llmv1alpha1.ModelServerResources{
+					CPU:    &llmv1alpha1.ModelCPUResources{RequestMilli: 6000, LimitMilli: 6000},
+					Memory: &llmv1alpha1.ModelMemoryResources{RequestMiB: 4096, LimitMiB: 8192},
+				},
+				ContextSize: ptrTo(int32(16384)), ParallelSlots: ptrTo(int32(1)),
+			},
+		}
+		if byoc {
+			reconciler.RemoteClientBuilder = func(_ []byte) (client.Client, error) { return k8sClient, nil }
+			Expect(k8sClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "runtime-cluster", Namespace: namespace}, Data: map[string][]byte{"kubeconfig": []byte("test")}})).To(Succeed())
+			inst.Spec.ClusterRef = &llmv1alpha1.ClusterRef{KubeconfigSecretName: "runtime-cluster"}
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: inst.Name, Namespace: namespace}}
+		for i := 0; i < 3; i++ {
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		key := types.NamespacedName{Name: inst.Name + "-llama", Namespace: namespace}
+		if byoc {
+			key = types.NamespacedName{Name: byocBaseName(inst.Annotations[slugAnnotationKey]), Namespace: byocNamespace}
+		}
+		var deploy appsv1.Deployment
+		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
+		c := deploy.Spec.Template.Spec.Containers[0]
+		Expect(c.Resources.Requests.Cpu().MilliValue()).To(Equal(int64(6000)))
+		Expect(c.Resources.Limits.Cpu().MilliValue()).To(Equal(int64(6000)))
+		Expect(c.Resources.Requests.Memory().String()).To(Equal("4Gi"))
+		Expect(c.Resources.Limits.Memory().String()).To(Equal("8Gi"))
+		Expect(c.Args).To(ContainElements("--jinja", "--ctx-size", "16384", "--parallel", "1"))
+		Expect(countString(c.Args, "--ctx-size")).To(Equal(1))
+		if byoc {
+			Expect(c.Args).To(ContainElements("--api-key-file", byocAPIKeyFilePath()))
+		}
+
+		// Updates must replace existing values, not only affect new deployments.
+		inst.Spec.Resources.CPU = &llmv1alpha1.ModelCPUResources{RequestMilli: 2000, LimitMilli: 4000}
+		inst.Spec.ContextSize = ptrTo(int32(8192))
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+		_, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
+		c = deploy.Spec.Template.Spec.Containers[0]
+		Expect(c.Resources.Requests.Cpu().MilliValue()).To(Equal(int64(2000)))
+		Expect(c.Resources.Limits.Cpu().MilliValue()).To(Equal(int64(4000)))
+		Expect(c.Args).To(ContainElement("8192"))
+		Expect(c.Args).NotTo(ContainElement("16384"))
+
+		// Removing overrides restores this model's original defaults.
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		inst.Spec.Resources = nil
+		inst.Spec.ContextSize = nil
+		inst.Spec.ParallelSlots = nil
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+		_, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
+		c = deploy.Spec.Template.Spec.Containers[0]
+		Expect(c.Resources.Requests.Cpu().MilliValue()).To(Equal(int64(500)))
+		Expect(c.Resources.Limits.Cpu().MilliValue()).To(Equal(int64(1800)))
+		Expect(c.Resources.Limits.Memory().String()).To(Equal("7Gi"))
+		Expect(c.Args).NotTo(ContainElement("--parallel"))
+		if byoc {
+			Expect(c.Args).To(ContainElements("--api-key-file", byocAPIKeyFilePath()))
+		}
+	}, Entry("local", false), Entry("BYOC", true))
+
+	DescribeTable("rejects tenant budgets before local or BYOC workload writes", func(byoc bool) {
+		inst := &llmv1alpha1.LLMInstance{ObjectMeta: metav1.ObjectMeta{Name: "ceiling", Namespace: namespace}, Spec: llmv1alpha1.LLMInstanceSpec{Model: "qwen3-4b", Resources: &llmv1alpha1.ModelServerResources{CPU: &llmv1alpha1.ModelCPUResources{RequestMilli: 6000, LimitMilli: 6000}}}}
+		remoteReads := 0
+		if byoc {
+			reconciler.RemoteClientBuilder = func(_ []byte) (client.Client, error) { remoteReads++; return k8sClient, nil }
+			Expect(k8sClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "ceiling-cluster", Namespace: namespace}, Data: map[string][]byte{"kubeconfig": []byte("test")}})).To(Succeed())
+			inst.Spec.ClusterRef = &llmv1alpha1.ClusterRef{KubeconfigSecretName: "ceiling-cluster"}
+		}
+		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: inst.Name, Namespace: namespace}}
+		_, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.Phase).To(Equal("Rejected"))
+		condition := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
+		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+		Expect(condition.Reason).To(Equal("ModelSettingsRejected"))
+		Expect(condition.Message).To(ContainSubstring("provider ceiling 500"))
+		Expect(inst.Status.Endpoint).To(BeEmpty())
+		Expect(inst.Finalizers).To(BeEmpty())
+		Expect(remoteReads).To(BeZero())
+		version := inst.ResourceVersion
+		_, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.ResourceVersion).To(Equal(version))
+
+		reconciler.ModelServerCeilings.CPUMilli = 6000
+		for i := 0; i < 3; i++ {
+			_, err = reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		key := types.NamespacedName{Name: inst.Name + "-llama", Namespace: namespace}
+		if byoc {
+			key = types.NamespacedName{Name: byocBaseName(inst.Annotations[slugAnnotationKey]), Namespace: byocNamespace}
+		}
+		var deploy appsv1.Deployment
+		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
+		Expect(deploy.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().MilliValue()).To(Equal(int64(6000)))
+		version = deploy.ResourceVersion
+		inst.Spec.Resources.CPU.LimitMilli = 7000
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+		_, err = reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
+		Expect(inst.Status.Phase).To(Equal("Rejected"))
+		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
+		Expect(deploy.ResourceVersion).To(Equal(version))
+	}, Entry("local", false), Entry("BYOC", true))
+
+	It("keeps model defaults and independent resource pairs", func() {
+		for _, name := range []string{"tinyllama", "phi-2", "gemma-3-1b-it", "gemma-3-4b-it", "gemma-3-12b-it", "qwen3-4b"} {
+			inst := &llmv1alpha1.LLMInstance{Spec: llmv1alpha1.LLMInstanceSpec{Model: name}}
+			Expect(modelForInstance(inst)).To(Equal(resolveModel(name)))
+		}
+		inst := &llmv1alpha1.LLMInstance{Spec: llmv1alpha1.LLMInstanceSpec{Model: "qwen3-4b", Resources: &llmv1alpha1.ModelServerResources{CPU: &llmv1alpha1.ModelCPUResources{RequestMilli: 6000, LimitMilli: 6000}}}}
+		c := llamaServerContainer(modelForInstance(inst))
+		Expect(c.Resources.Limits.Memory().String()).To(Equal("7Gi"))
+		inst.Spec.Resources.CPU = nil
+		inst.Spec.Resources.Memory = &llmv1alpha1.ModelMemoryResources{RequestMiB: 8192, LimitMiB: 16384}
+		c = llamaServerContainer(modelForInstance(inst))
+		Expect(c.Resources.Limits.Cpu().MilliValue()).To(Equal(int64(1800)))
+		Expect(c.Resources.Limits.Memory().String()).To(Equal("16Gi"))
+	})
+
+	It("rejects resource and server settings outside API bounds", func() {
+		invalid := []llmv1alpha1.LLMInstanceSpec{
+			{Resources: &llmv1alpha1.ModelServerResources{CPU: &llmv1alpha1.ModelCPUResources{RequestMilli: 99, LimitMilli: 100}}},
+			{Resources: &llmv1alpha1.ModelServerResources{CPU: &llmv1alpha1.ModelCPUResources{RequestMilli: 100, LimitMilli: 16001}}},
+			{Resources: &llmv1alpha1.ModelServerResources{CPU: &llmv1alpha1.ModelCPUResources{RequestMilli: 6000, LimitMilli: 5000}}},
+			{Resources: &llmv1alpha1.ModelServerResources{Memory: &llmv1alpha1.ModelMemoryResources{RequestMiB: 127, LimitMiB: 128}}},
+			{Resources: &llmv1alpha1.ModelServerResources{Memory: &llmv1alpha1.ModelMemoryResources{RequestMiB: 128, LimitMiB: 65537}}},
+			{Resources: &llmv1alpha1.ModelServerResources{Memory: &llmv1alpha1.ModelMemoryResources{RequestMiB: 8192, LimitMiB: 4096}}},
+			{ContextSize: ptrTo(int32(1023))}, {ContextSize: ptrTo(int32(131073))},
+			{ParallelSlots: ptrTo(int32(0))}, {ParallelSlots: ptrTo(int32(17))},
+		}
+		for i, spec := range invalid {
+			inst := &llmv1alpha1.LLMInstance{ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("invalid-%d", i), Namespace: namespace}, Spec: spec}
+			Expect(apierrors.IsInvalid(k8sClient.Create(ctx, inst))).To(BeTrue(), "case %d", i)
+		}
+	})
+
 	It("configures Qwen for OpenAI-compatible tool calls with bounded resources", func() {
 		model := resolveModel("qwen3-4b")
 		Expect(model.url).To(ContainSubstring("/resolve/34778e26c8fa5e8bc0daa2389a9f958cffb1aedd/"))
@@ -826,3 +983,13 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(ready.Reason).To(Equal("KubeconfigSecretMissing"))
 	})
 })
+
+func countString(values []string, target string) int {
+	count := 0
+	for _, value := range values {
+		if value == target {
+			count++
+		}
+	}
+	return count
+}

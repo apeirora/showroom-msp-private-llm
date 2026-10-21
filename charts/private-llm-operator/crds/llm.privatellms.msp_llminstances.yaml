@@ -1,9 +1,9 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.5
-  creationTimestamp: null
   name: llminstances.llm.privatellms.msp
 spec:
   group: llm.privatellms.msp
@@ -66,6 +66,14 @@ spec:
                       as-a-Service.
                     type: string
                 type: object
+              contextSize:
+                description: |-
+                  ContextSize sets --ctx-size. Omission keeps the model server default.
+                  The model can impose a lower context limit.
+                format: int32
+                maximum: 131072
+                minimum: 1024
+                type: integer
               dnsPolicy:
                 default: ClusterFirst
                 description: |-
@@ -87,6 +95,13 @@ spec:
                 - gemma-3-12b-it
                 - qwen3-4b
                 type: string
+              parallelSlots:
+                description: ParallelSlots sets --parallel. Omission keeps the model
+                  server default.
+                format: int32
+                maximum: 16
+                minimum: 1
+                type: integer
               replicas:
                 description: |-
                   Replicas indicates how many server pods to run.
@@ -94,6 +109,56 @@ spec:
                 format: int32
                 minimum: 0
                 type: integer
+              resources:
+                description: Resources overrides model server resources. Omitted CPU
+                  or memory pairs keep model defaults.
+                properties:
+                  cpu:
+                    description: CPU sets both the CPU request and limit in millicores.
+                    properties:
+                      limitMilli:
+                        description: LimitMilli is the CPU limit in millicores.
+                        format: int32
+                        maximum: 16000
+                        minimum: 100
+                        type: integer
+                      requestMilli:
+                        description: RequestMilli is the CPU request in millicores.
+                        format: int32
+                        maximum: 16000
+                        minimum: 100
+                        type: integer
+                    required:
+                    - limitMilli
+                    - requestMilli
+                    type: object
+                    x-kubernetes-validations:
+                    - message: CPU request must not exceed the limit
+                      rule: self.requestMilli <= self.limitMilli
+                  memory:
+                    description: Memory sets both the memory request and limit in
+                      MiB.
+                    properties:
+                      limitMiB:
+                        description: LimitMiB is the memory limit in MiB.
+                        format: int32
+                        maximum: 65536
+                        minimum: 128
+                        type: integer
+                      requestMiB:
+                        description: RequestMiB is the memory request in MiB.
+                        format: int32
+                        maximum: 65536
+                        minimum: 128
+                        type: integer
+                    required:
+                    - limitMiB
+                    - requestMiB
+                    type: object
+                    x-kubernetes-validations:
+                    - message: memory request must not exceed the limit
+                      rule: self.requestMiB <= self.limitMiB
+                type: object
             type: object
           status:
             description: LLMInstanceStatus defines the observed state of LLMInstance
@@ -182,9 +247,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: null
-  storedVersions: null
