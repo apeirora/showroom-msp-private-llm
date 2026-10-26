@@ -147,6 +147,35 @@ curl -sS "$OPENAI_API_URL/v1/chat/completions" \
   -d '{"messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
+## Authentication upgrades
+
+The internal `/auth/verify` URL must bind `namespace`, `instance`, `uid`, and
+`slug` to the LLMInstance owning the route. The operator creates this URL and
+updates existing forwardAuth middlewares. Slug-only URLs and forwarded headers
+cannot supply the instance identity. ForwardAuth accepts only Opaque Secrets
+in that namespace whose controller owner is the current APITokenRequest for the
+instance and whose name matches the request's published Secret.
+
+During an upgrade, old slug-only middlewares fail closed until their instances
+reconcile. With rolling updates and leader election, the new auth server can
+receive requests before the new leader upgrades those URLs. Existing owned
+middlewares are upgraded before model-setting or workload reconciliation gates,
+but API failures can still delay the update. Verify every middleware has the four
+binding parameters before accepting the rollout. No endpoint or token rotation is part of this change.
+Duplicate slug claims are denied for both instances. Slug annotations remain
+mutable; operator-owned slugs and migration of existing BYOC resource names are
+still required to prevent collision-based denial of service (showroom#793).
+The auth service reads the Kubernetes API directly. An invalid token causes an
+instance GET and a namespaced Secret LIST; owner GETs and the cluster-wide
+collision check run only after a token match. API availability and per-request
+lookup load still require deployment validation. Unrelated forwardAuth options
+are preserved when the operator updates its address and header policy.
+
+These checks cover hosted forwardAuth routes. BYOC inference uses a separate
+key-file path whose Secret ownership/type filtering is not changed here.
+Token-request retargeting remains supported: reconciliation updates the Secret's
+instance label, slug and endpoint to the new target.
+
 ## Documentation
 
 | Guide | Description |

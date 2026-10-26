@@ -22,6 +22,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -150,6 +151,12 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			}
 		}
 		return ctrl.Result{}, nil
+	}
+
+	// Upgrade an already-owned auth route even if settings or workload
+	// reconciliation will reject this instance. Never create a new route here.
+	if err := r.upgradeExistingAuthMiddleware(ctx, inst); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Reject tenant settings before any local or remote workload changes.
@@ -805,46 +812,80 @@ func (r *LLMInstanceReconciler) reconcileStripMiddleware(ctx context.Context, in
 	return nil
 }
 
+func (r *LLMInstanceReconciler) upgradeExistingAuthMiddleware(ctx context.Context, inst *llmv1alpha1.LLMInstance) error {
+	if inst.IsBYOC() {
+		return nil
+	}
+	slug := strings.TrimSpace(inst.Annotations[slugAnnotationKey])
+	if slug == "" {
+		return nil
+	}
+	svcName := fmt.Sprintf("%s-llama", inst.Name)
+	return r.reconcileAuthMiddleware(ctx, inst, llamaLabels(inst.Name), svcName, slug, false)
+}
+
 func (r *LLMInstanceReconciler) reconcileForwardAuthMiddleware(ctx context.Context, inst *llmv1alpha1.LLMInstance, labels map[string]string, svcName, slug string) error {
-	logger := log.FromContext(ctx)
-	mwName := authMiddlewareName(svcName)
+	return r.reconcileAuthMiddleware(ctx, inst, labels, svcName, slug, true)
+}
+
+func (r *LLMInstanceReconciler) reconcileAuthMiddleware(ctx context.Context, inst *llmv1alpha1.LLMInstance, labels map[string]string, svcName, slug string, createIfMissing bool) error {
+	if inst.UID == "" {
+		return fmt.Errorf("cannot bind forwardAuth to an instance without a UID")
+	}
+	query := url.Values{
+		"namespace": {inst.Namespace}, "instance": {inst.Name},
+		"uid": {string(inst.UID)}, "slug": {slug},
+	}
+	authAddr := strings.TrimRight(r.AuthServiceURL, "/") + "/auth/verify?" + query.Encode()
 	mw := &unstructured.Unstructured{}
 	mw.SetGroupVersionKind(schema.GroupVersionKind{Group: "traefik.io", Version: "v1alpha1", Kind: "Middleware"})
-	key := client.ObjectKey{Namespace: inst.Namespace, Name: mwName}
-	if err := r.Get(ctx, key, mw); err != nil {
-		if meta.IsNoMatchError(err) || strings.Contains(err.Error(), "no matches for kind \"Middleware\"") {
-			logger.Info("Traefik Middleware CRD not found; skipping forwardAuth middleware creation", "error", err.Error())
-			return nil
-		}
-		if !apierrors.IsNotFound(err) {
-			return err
-		}
-		authAddr := fmt.Sprintf("%s/auth/verify?slug=%s", r.AuthServiceURL, slug)
-		newMW := &unstructured.Unstructured{Object: map[string]interface{}{
-			"apiVersion": "traefik.io/v1alpha1",
-			"kind":       "Middleware",
-			"metadata": map[string]interface{}{
-				"name":      mwName,
-				"namespace": inst.Namespace,
-				"labels":    copyInterfaceMap(labels),
-			},
-			"spec": map[string]interface{}{
-				"forwardAuth": map[string]interface{}{
-					"address":             authAddr,
-					"trustForwardHeader":  true,
-					"authResponseHeaders": []interface{}{},
-				},
-			},
-		}}
-		if err := ctrl.SetControllerReference(inst, newMW, r.Scheme); err != nil {
-			return err
-		}
-		if err := r.Create(ctx, newMW); err != nil {
-			return err
-		}
-		logger.Info("created Traefik Middleware for forwardAuth", "name", mwName)
+	key := client.ObjectKey{Namespace: inst.Namespace, Name: authMiddlewareName(svcName)}
+	err := r.Get(ctx, key, mw)
+	if meta.IsNoMatchError(err) || (err != nil && strings.Contains(err.Error(), "no matches for kind \"Middleware\"")) {
+		log.FromContext(ctx).Info("Traefik Middleware CRD not found; skipping forwardAuth middleware creation")
+		return nil
 	}
-	return nil
+	if err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	creating := apierrors.IsNotFound(err)
+	if creating && !createIfMissing {
+		return nil
+	}
+	if creating {
+		mw.SetName(key.Name)
+		mw.SetNamespace(key.Namespace)
+		mw.SetLabels(labels)
+		if err := ctrl.SetControllerReference(inst, mw, r.Scheme); err != nil {
+			return err
+		}
+	} else if !metav1.IsControlledBy(mw, inst) {
+		return fmt.Errorf("refusing to update forwardAuth middleware %s: not owned by this LLMInstance", key)
+	}
+	current, _, err := unstructured.NestedMap(mw.Object, "spec", "forwardAuth")
+	if err != nil {
+		return err
+	}
+	// Preserve unrelated forwardAuth options while enforcing the auth binding.
+	desired := make(map[string]interface{}, len(current)+3)
+	for key, value := range current {
+		desired[key] = value
+	}
+	desired["address"] = authAddr
+	desired["trustForwardHeader"] = false
+	desired["authResponseHeaders"] = []interface{}{}
+	if !creating && apiequality.Semantic.DeepEqual(current, desired) {
+		return nil
+	}
+	if err := unstructured.SetNestedMap(mw.Object, desired, "spec", "forwardAuth"); err != nil {
+		return err
+	}
+	if creating {
+		return r.Create(ctx, mw)
+	}
+	// Upgrade existing slug-only middlewares too; create-only reconciliation
+	// would leave deployed routes unable to use the new authentication contract.
+	return r.Update(ctx, mw)
 }
 
 func (r *LLMInstanceReconciler) reconcileIngress(ctx context.Context, inst *llmv1alpha1.LLMInstance, labels map[string]string, svcName, pathPrefix string) error {

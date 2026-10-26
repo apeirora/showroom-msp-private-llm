@@ -300,7 +300,7 @@ func main() {
 	labeledClient := newLabelingClient(mgr.GetClient(), baseLabels)
 
 	// Start lightweight auth server that validates Bearer tokens against Secrets
-	authServer := &auth.Server{K8sClient: labeledClient}
+	authServer := &auth.Server{K8sClient: mgr.GetAPIReader()}
 	go func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()

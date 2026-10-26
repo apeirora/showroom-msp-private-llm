@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
@@ -285,6 +286,8 @@ var _ = Describe("APITokenRequest controller", func() {
 				openAIAPIURLKey: []byte(""),
 			},
 		}
+		// Backfill applies to an operator-owned Secret; unrelated Secrets must not be adopted.
+		Expect(ctrl.SetControllerReference(tr, staleSecret, scheme.Scheme)).To(Succeed())
 		Expect(k8sClient.Create(ctx, staleSecret)).To(Succeed())
 
 		result, err = reconciler.Reconcile(ctx, req)

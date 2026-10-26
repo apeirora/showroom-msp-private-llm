@@ -191,7 +191,12 @@ func (r *APITokenRequestReconciler) ensureSecret(ctx context.Context, tr *llmv1a
 		return err
 	}
 
-	if r.applySecretMutations(&sec, slug, endpoint) {
+	owner := metav1.GetControllerOf(&sec)
+	if owner == nil || owner.APIVersion != llmv1alpha1.GroupVersion.String() || owner.Kind != "APITokenRequest" ||
+		owner.UID != tr.UID || owner.Name != tr.Name || sec.Type != corev1.SecretTypeOpaque {
+		return fmt.Errorf("refusing to use token Secret %s/%s: unexpected controller owner or type", sec.Namespace, sec.Name)
+	}
+	if r.applySecretMutations(&sec, inst.Name, slug, endpoint) {
 		if err := r.Update(ctx, &sec); err != nil {
 			return err
 		}
@@ -261,10 +266,14 @@ func (r *APITokenRequestReconciler) createSecret(ctx context.Context, tr *llmv1a
 	return nil
 }
 
-func (r *APITokenRequestReconciler) applySecretMutations(sec *corev1.Secret, slug, endpoint string) bool {
+func (r *APITokenRequestReconciler) applySecretMutations(sec *corev1.Secret, instanceName, slug, endpoint string) bool {
 	updated := false
 	if sec.Labels == nil {
 		sec.Labels = map[string]string{}
+	}
+	if sec.Labels[instanceLabelKey] != instanceName {
+		sec.Labels[instanceLabelKey] = instanceName
+		updated = true
 	}
 	if sec.Labels[compatibilityLabelKey] != compatibilityLabelOpenAI {
 		sec.Labels[compatibilityLabelKey] = compatibilityLabelOpenAI
