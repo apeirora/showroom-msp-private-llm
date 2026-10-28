@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1-rc.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.2...v2.17.1-rc.3) (2026-10-28)
+
+
+### Bug Fixes
+
+* **auth:** Own inference slugs through reviewed operator policy ([#225](https://github.com/apeirora/showroom-msp-private-llm/issues/225)) ([7b8e500](https://github.com/apeirora/showroom-msp-private-llm/commit/7b8e5002a7a1c541fdeee02bc44cee536ee0b5ac))
+
 ## [2.17.1-rc.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.1...v2.17.1-rc.2) (2026-10-28)
 
 
