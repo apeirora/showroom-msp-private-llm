@@ -14,10 +14,16 @@ import (
 )
 
 func TestPlaintextProbeReachesConfiguredHostname(t *testing.T) {
-	for _, status := range []int{
-		http.StatusOK, http.StatusFound, http.StatusUnauthorized, http.StatusBadRequest, http.StatusNotFound,
+	for _, tc := range []struct {
+		status    int
+		wantError bool
+	}{
+		{http.StatusOK, true}, {http.StatusFound, true}, {http.StatusUnauthorized, true},
+		{http.StatusForbidden, true}, {http.StatusMethodNotAllowed, true},
+		{http.StatusInternalServerError, true}, {http.StatusServiceUnavailable, true},
+		{http.StatusBadRequest, false}, {http.StatusNotFound, false},
 	} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+		t.Run(http.StatusText(tc.status), func(t *testing.T) {
 			var matched atomic.Bool
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Host != hostname || r.URL.Path != "/v1/models" {
@@ -28,7 +34,7 @@ func TestPlaintextProbeReachesConfiguredHostname(t *testing.T) {
 				if r.Header.Get("Authorization") != "" {
 					t.Error("plaintext probe sent credentials")
 				}
-				w.WriteHeader(status)
+				w.WriteHeader(tc.status)
 			}))
 			defer server.Close()
 			f := &fixture{address: strings.TrimPrefix(server.URL, "http://"), report: &report{}}
@@ -36,14 +42,23 @@ func TestPlaintextProbeReachesConfiguredHostname(t *testing.T) {
 			if !matched.Load() {
 				t.Fatal("plaintext probe bypassed the configured hostname route")
 			}
-			accepted := status == http.StatusOK || status == http.StatusFound || status == http.StatusUnauthorized
-			if accepted && (err == nil || !strings.Contains(err.Error(), "plaintext accepted")) {
-				t.Fatalf("reachable plaintext route was not detected: status=%d err=%v", status, err)
+			if tc.wantError && (err == nil || !strings.Contains(err.Error(), "plaintext accepted")) {
+				t.Fatalf("reachable plaintext route was not detected: status=%d err=%v", tc.status, err)
 			}
-			if !accepted && err != nil {
+			if !tc.wantError && err != nil {
 				t.Fatalf("plaintext protocol/no-route rejection failed probe: %v", err)
 			}
 		})
+	}
+}
+
+func TestPlaintextProbeAllowsTransportFailure(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	address := strings.TrimPrefix(server.URL, "http://")
+	server.Close()
+	f := &fixture{address: address, report: &report{}}
+	if err := f.testPlaintext(); err != nil {
+		t.Fatalf("closed HTTP listener did not qualify as transport rejection: %v", err)
 	}
 }
 

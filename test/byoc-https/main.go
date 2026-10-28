@@ -382,13 +382,18 @@ func (f *fixture) testPlaintext() error {
 	}
 	req.Host = hostname
 	res, err := plain.Do(req)
+	detail := "configured hostname: HTTP transport failed"
 	if err == nil {
 		_ = res.Body.Close()
-		if (res.StatusCode >= 200 && res.StatusCode < 400) || res.StatusCode == http.StatusUnauthorized {
-			return fmt.Errorf("plaintext accepted: %d", res.StatusCode)
+		// Only the known protocol/no-route responses qualify as rejection.
+		// Auth, method, and server errors can still come from a plaintext route.
+		if res.StatusCode != http.StatusBadRequest && res.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("plaintext accepted or ambiguous: HTTP %d is not a known protocol/no-route rejection",
+				res.StatusCode)
 		}
+		detail = fmt.Sprintf("configured hostname returned HTTP %d", res.StatusCode)
 	}
-	f.pass("plaintext_rejected", "configured hostname returned no redirect, success or authentication response")
+	f.pass("plaintext_rejected", detail)
 	return nil
 }
 
