@@ -125,11 +125,12 @@ extraEnv:
 ### Development HTTPS with external Traefik
 
 ```sh
+VERSION=2.17.1-rc.3
 helm upgrade --install private-llm \
   oci://ghcr.io/apeirora/charts/private-llm-operator \
   --version "$VERSION" \
   -f reviewed-operator-values.yaml \
-  --namespace private-llm-operator --create-namespace \
+  --namespace private-llm-system --create-namespace \
   --set PUBLIC_HOST=llm.dev.example.com \
   --set PUBLIC_SCHEME=https \
   --set tls.secretName=llm-tls-cert \
@@ -157,6 +158,7 @@ Use an independently verified build of the same reviewed release, including
 slug-policy support; changing the repository does not validate that image.
 
 ```sh
+VERSION=2.17.1-rc.3
 helm upgrade --install private-llm charts/private-llm-operator \
   -f reviewed-operator-values.yaml \
   --namespace private-llm-system --create-namespace \
