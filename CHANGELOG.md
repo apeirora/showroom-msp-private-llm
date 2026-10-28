@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1-rc.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.0...v2.17.1-rc.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* Bind instance credentials and require managed BYOC HTTPS ([#221](https://github.com/apeirora/showroom-msp-private-llm/issues/221)) ([a8ae5c3](https://github.com/apeirora/showroom-msp-private-llm/commit/a8ae5c34adc1ca0773910f9ff55641ff28d0faee))
+
 ## [2.17.0](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.16.7...v2.17.0) (2026-10-21)
 
 
