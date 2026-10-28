@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	errSlugRouteOwnership   = errors.New("named Ingress is not controlled by this LLMInstance")
-	errSlugRouteConflict    = errors.New("another Ingress overlaps the selected inference path")
-	errSlugBackendOwnership = errors.New("named hosted backend is not controlled by this LLMInstance")
+	errSlugRejection        = errors.New("unsafe inference identity or route configuration")
+	errSlugRouteOwnership   = fmt.Errorf("%w: named Ingress is not controlled by this LLMInstance", errSlugRejection)
+	errSlugRouteConflict    = fmt.Errorf("%w: another Ingress overlaps the selected inference path", errSlugRejection)
+	errSlugBackendOwnership = fmt.Errorf("%w: named hosted backend is not controlled by this LLMInstance", errSlugRejection)
 )
 
 func (r *LLMInstanceReconciler) routeReader() client.Reader {
@@ -30,15 +31,15 @@ func (r *LLMInstanceReconciler) routeReader() client.Reader {
 func (r *LLMInstanceReconciler) selectSlug(inst *llmv1alpha1.LLMInstance) (slugpolicy.Selection, error) {
 	selection, err := r.SlugPolicy.Select(inst)
 	if err != nil {
-		return selection, err
+		return selection, fmt.Errorf("%w: %w", errSlugRejection, err)
 	}
 	if selection.Source == slugpolicy.Derived && inst.Status.Slug == "" &&
 		(inst.Status.Endpoint != "" || inst.Status.ActiveBYOCSlug != "" || inst.Status.ActiveBYOCKubeconfigSecretName != "") {
-		return slugpolicy.Selection{}, errors.New("a previously provisioned instance requires its reviewed legacy slug")
+		return slugpolicy.Selection{}, fmt.Errorf("%w: a previously provisioned instance requires its reviewed legacy slug", errSlugRejection)
 	}
 	if (inst.Status.ActiveBYOCSlug != "" && inst.Status.ActiveBYOCSlug != selection.Slug) ||
 		(inst.Status.Slug != "" && inst.Status.Slug != selection.Slug) {
-		return slugpolicy.Selection{}, errors.New("operator slug mapping changed; explicit endpoint and workload migration is required")
+		return slugpolicy.Selection{}, fmt.Errorf("%w: operator slug mapping changed; explicit endpoint and workload migration is required", errSlugRejection)
 	}
 	return selection, nil
 }
@@ -62,10 +63,10 @@ func (r *LLMInstanceReconciler) ensureSlug(ctx context.Context, inst *llmv1alpha
 		return "", false, err
 	}
 	if persisted.UID != uid || client.ObjectKeyFromObject(&persisted) != identity {
-		return "", false, errors.New("instance identity changed during slug persistence")
+		return "", false, fmt.Errorf("%w: instance identity changed during slug persistence", errSlugRejection)
 	}
 	if persisted.Status.Slug != selection.Slug || persisted.Status.SlugSource != selection.Source {
-		return "", false, errors.New("LLMInstance schema must persist status.slug and status.slugSource")
+		return "", false, fmt.Errorf("%w: LLMInstance schema must persist status.slug and status.slugSource", errSlugRejection)
 	}
 	return selection.Slug, true, nil
 }
@@ -81,6 +82,11 @@ func ownsLLMResource(inst *llmv1alpha1.LLMInstance, obj client.Object) bool {
 }
 
 func (r *LLMInstanceReconciler) rejectSlug(ctx context.Context, inst *llmv1alpha1.LLMInstance, cause error) error {
+	// API read/write failures do not establish that the current route is unsafe.
+	// Preserve its last known state and let the reconciler retry those errors.
+	if !errors.Is(cause, errSlugRejection) {
+		return cause
+	}
 	// Never modify another instance's route. BYOC remote cleanup stays bound to
 	// its recorded active slug and protected credentials; no remote rename here.
 	var ing networkingv1.Ingress

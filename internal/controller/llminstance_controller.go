@@ -786,17 +786,17 @@ func (r *LLMInstanceReconciler) reconcileStripMiddleware(ctx context.Context, in
 		return nil
 	}
 	if !ownsLLMResource(inst, mw) {
-		return fmt.Errorf("refusing to update foreign strip middleware")
+		return fmt.Errorf("%w: refusing to update foreign strip middleware", errSlugRejection)
 	}
 	current, _, err := unstructured.NestedStringSlice(mw.Object, "spec", "stripPrefix", "prefixes")
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: invalid strip middleware: %w", errSlugRejection, err)
 	}
 	if len(current) == 1 && current[0] == pathPrefix {
 		return nil
 	}
 	if err := unstructured.SetNestedStringSlice(mw.Object, []string{pathPrefix}, "spec", "stripPrefix", "prefixes"); err != nil {
-		return err
+		return fmt.Errorf("%w: invalid strip middleware: %w", errSlugRejection, err)
 	}
 	return r.Update(ctx, mw)
 }
@@ -820,7 +820,7 @@ func (r *LLMInstanceReconciler) reconcileForwardAuthMiddleware(ctx context.Conte
 
 func (r *LLMInstanceReconciler) reconcileAuthMiddleware(ctx context.Context, inst *llmv1alpha1.LLMInstance, labels map[string]string, svcName, slug string, createIfMissing bool) error {
 	if inst.UID == "" {
-		return fmt.Errorf("cannot bind forwardAuth to an instance without a UID")
+		return fmt.Errorf("%w: cannot bind forwardAuth to an instance without a UID", errSlugRejection)
 	}
 	query := url.Values{
 		"namespace": {inst.Namespace}, "instance": {inst.Name},
@@ -850,11 +850,11 @@ func (r *LLMInstanceReconciler) reconcileAuthMiddleware(ctx context.Context, ins
 			return err
 		}
 	} else if !ownsLLMResource(inst, mw) {
-		return fmt.Errorf("refusing to update forwardAuth middleware %s: not owned by this LLMInstance", key)
+		return fmt.Errorf("%w: refusing to update forwardAuth middleware %s: not owned by this LLMInstance", errSlugRejection, key)
 	}
 	current, _, err := unstructured.NestedMap(mw.Object, "spec", "forwardAuth")
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: invalid forwardAuth middleware: %w", errSlugRejection, err)
 	}
 	// Preserve unrelated forwardAuth options while enforcing the auth binding.
 	desired := make(map[string]interface{}, len(current)+3)
@@ -868,7 +868,7 @@ func (r *LLMInstanceReconciler) reconcileAuthMiddleware(ctx context.Context, ins
 		return nil
 	}
 	if err := unstructured.SetNestedMap(mw.Object, desired, "spec", "forwardAuth"); err != nil {
-		return err
+		return fmt.Errorf("%w: invalid forwardAuth middleware: %w", errSlugRejection, err)
 	}
 	if creating {
 		return r.Create(ctx, mw)
