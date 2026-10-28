@@ -6,8 +6,46 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 )
+
+func TestPlaintextProbeReachesConfiguredHostname(t *testing.T) {
+	for _, status := range []int{
+		http.StatusOK, http.StatusFound, http.StatusUnauthorized, http.StatusBadRequest, http.StatusNotFound,
+	} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			var matched atomic.Bool
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Host != hostname || r.URL.Path != "/v1/models" {
+					http.NotFound(w, r)
+					return
+				}
+				matched.Store(true)
+				if r.Header.Get("Authorization") != "" {
+					t.Error("plaintext probe sent credentials")
+				}
+				w.WriteHeader(status)
+			}))
+			defer server.Close()
+			f := &fixture{address: strings.TrimPrefix(server.URL, "http://"), report: &report{}}
+			err := f.testPlaintext()
+			if !matched.Load() {
+				t.Fatal("plaintext probe bypassed the configured hostname route")
+			}
+			accepted := status == http.StatusOK || status == http.StatusFound || status == http.StatusUnauthorized
+			if accepted && (err == nil || !strings.Contains(err.Error(), "plaintext accepted")) {
+				t.Fatalf("reachable plaintext route was not detected: status=%d err=%v", status, err)
+			}
+			if !accepted && err != nil {
+				t.Fatalf("plaintext protocol/no-route rejection failed probe: %v", err)
+			}
+		})
+	}
+}
 
 func TestMissingSNIRequiresServerAlert(t *testing.T) {
 	alert := &net.OpError{Op: "remote error", Err: errors.New("tls: unrecognized name")}

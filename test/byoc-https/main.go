@@ -373,17 +373,29 @@ func (f *fixture) testStreaming() error {
 	return nil
 }
 
-func (f *fixture) testTLSRejection() error {
+func (f *fixture) testPlaintext() error {
 	plain := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: rejectRedirect}
 	defer plain.CloseIdleConnections()
-	res, err := plain.Get("http://" + f.address + "/v1/models")
+	req, err := http.NewRequest(http.MethodGet, "http://"+f.address+"/v1/models", nil)
+	if err != nil {
+		return err
+	}
+	req.Host = hostname
+	res, err := plain.Do(req)
 	if err == nil {
 		_ = res.Body.Close()
-		if res.StatusCode >= 200 && res.StatusCode < 400 {
+		if (res.StatusCode >= 200 && res.StatusCode < 400) || res.StatusCode == http.StatusUnauthorized {
 			return fmt.Errorf("plaintext accepted: %d", res.StatusCode)
 		}
 	}
-	f.pass("plaintext_rejected", "no redirect or successful model response")
+	f.pass("plaintext_rejected", "configured hostname returned no redirect, success or authentication response")
+	return nil
+}
+
+func (f *fixture) testTLSRejection() error {
+	if err := f.testPlaintext(); err != nil {
+		return err
+	}
 	for _, tc := range []struct {
 		name, server string
 		roots        *x509.CertPool
@@ -391,7 +403,7 @@ func (f *fixture) testTLSRejection() error {
 		{"untrusted_cert_rejected", hostname, x509.NewCertPool()}, {"unknown_sni_rejected", "other.byoc.test", f.pool},
 	} {
 		c := f.newClient(tc.roots, tc.server)
-		res, err = f.get(c, "/health", "")
+		res, err := f.get(c, "/health", "")
 		c.CloseIdleConnections()
 		if err == nil {
 			_ = res.Body.Close()
