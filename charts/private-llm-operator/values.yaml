@@ -8,7 +8,7 @@ auth:
   externalURL: ''
 image:
   repository: ghcr.io/apeirora/private-llm-controller
-  tag: 2.17.0
+  tag: 2.17.1-rc.1
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 extraEnv: []
@@ -52,9 +52,6 @@ modelServerCeilings:
   memoryMiB: 0
   contextSize: 0
   parallelSlots: 0
-
-# BYOC has no plaintext fallback. Configure before migrating any BYOC instance.
-# DNS/certificate controllers and the named issuer must already exist on the MSP.
 byocTLS:
   domain: ''
   namespace: private-llm-byoc-tls
