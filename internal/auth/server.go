@@ -25,6 +25,7 @@ import (
 	"time"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-private-llm/internal/slugpolicy"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,7 +45,8 @@ const (
 type Server struct {
 	// Use the API reader, not the manager cache: revocation must not rely on
 	// eventually consistent Secret or APITokenRequest data.
-	K8sClient client.Reader
+	K8sClient  client.Reader
+	SlugPolicy *slugpolicy.Policy
 }
 
 // Start handles /auth/verify. Instance identity comes exclusively from the
@@ -136,9 +138,13 @@ func (s *Server) authorize(ctx context.Context, binding instanceBinding, token s
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{Namespace: binding.namespace, Name: binding.name}, &inst); err != nil {
 		return false, client.IgnoreNotFound(err)
 	}
+	selection, selectionErr := s.SlugPolicy.Select(&inst)
+	if selectionErr != nil || selection.Slug != binding.slug || inst.Status.Slug != selection.Slug ||
+		inst.Status.SlugSource != selection.Source {
+		return false, nil
+	}
 	if string(inst.UID) != binding.uid || !inst.DeletionTimestamp.IsZero() || inst.IsBYOC() ||
-		inst.Status.ActiveBYOCKubeconfigSecretName != "" ||
-		strings.TrimSpace(inst.Annotations[slugKey]) != binding.slug {
+		inst.Status.ActiveBYOCKubeconfigSecretName != "" {
 		return false, nil
 	}
 
@@ -158,27 +164,10 @@ func (s *Server) authorize(ctx context.Context, binding instanceBinding, token s
 			return false, err
 		}
 		if valid {
-			return s.uniqueSlug(ctx, &inst, binding.slug)
+			return true, nil
 		}
 	}
 	return false, nil
-}
-
-func (s *Server) uniqueSlug(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) (bool, error) {
-	// Until slugs have an operator-owned persistence/migration contract, deny
-	// ambiguous routes rather than choosing one of several tenant claims.
-	var instances llmv1alpha1.LLMInstanceList
-	if err := s.K8sClient.List(ctx, &instances); err != nil {
-		return false, err
-	}
-	for _, other := range instances.Items {
-		if strings.TrimSpace(other.Annotations[slugKey]) == slug &&
-			(other.UID != inst.UID || other.Namespace != inst.Namespace || other.Name != inst.Name) {
-			return false, nil
-		}
-	}
-
-	return true, nil
 }
 
 func (s *Server) ownsToken(ctx context.Context, inst *llmv1alpha1.LLMInstance, sec *corev1.Secret) (bool, error) {

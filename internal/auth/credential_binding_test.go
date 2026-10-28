@@ -30,7 +30,7 @@ func TestAuthRejectsCredentialFromPreviousInstanceOrTarget(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, target, nil)
 			req.Header.Set("Authorization", "Bearer "+testToken)
 			rr := httptest.NewRecorder()
-			(&Server{K8sClient: authClient(t, inst, tr, sec)}).Handler(context.Background()).ServeHTTP(rr, req)
+			(&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: authClient(t, inst, tr, sec)}).Handler(context.Background()).ServeHTTP(rr, req)
 			if rr.Code != http.StatusUnauthorized {
 				t.Fatalf("previous credential accepted on replacement hosted route: status = %d", rr.Code)
 			}

@@ -33,6 +33,81 @@
           "maximum": 16
         }
       }
+    },
+    "slugPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cutover",
+        "entries"
+      ],
+      "properties": {
+        "cutover": {
+          "type": "string"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "uid",
+              "namespace",
+              "name",
+              "mode"
+            ],
+            "properties": {
+              "uid": {
+                "type": "string",
+                "minLength": 1
+              },
+              "namespace": {
+                "type": "string",
+                "minLength": 1
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "legacy",
+                  "derive"
+                ]
+              },
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "oneOf": [
+              {
+                "properties": {
+                  "mode": {
+                    "const": "legacy"
+                  }
+                },
+                "required": [
+                  "slug"
+                ]
+              },
+              {
+                "properties": {
+                  "mode": {
+                    "const": "derive"
+                  }
+                },
+                "not": {
+                  "required": [
+                    "slug"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
     }
   }
 }

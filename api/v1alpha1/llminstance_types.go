@@ -126,6 +126,11 @@ func (i *LLMInstance) IsBYOC() bool {
 
 // LLMInstanceStatus defines the observed state of LLMInstance
 type LLMInstanceStatus struct {
+	// Slug and SlugSource report the operator-selected routing/workload identity.
+	// They are output only; selection comes from the operator policy and MSP UID.
+	Slug       string `json:"slug,omitempty"`
+	SlugSource string `json:"slugSource,omitempty"`
+
 	// Phase is a high-level summary of the instance lifecycle (e.g., "Ready").
 	Phase string `json:"phase,omitempty"`
 

@@ -11,11 +11,14 @@ spec:
   selector:
     matchLabels:
       control-plane: controller-manager
-  strategy: {}
+  strategy:
+    type: Recreate
+    rollingUpdate: null
   template:
     metadata:
       annotations:
         kubectl.kubernetes.io/default-container: manager
+        checksum/slug-policy: {{ include (print $.Template.BasePath "/slug-policy.yaml") . | sha256sum }}
       labels:
         {{- include "private-llm-operator.labels" . | nindent 8 }}
         control-plane: controller-manager
@@ -34,12 +37,17 @@ spec:
             - --leader-elect
             - --auth-bind-address=:8090
             - --auth-external-url=$(AUTH_EXTERNAL_URL)
+            - --slug-policy-file=/etc/private-llm-slugs/policy.json
             - --max-model-cpu-milli={{ .Values.modelServerCeilings.cpuMilli }}
             - --max-model-memory-mib={{ .Values.modelServerCeilings.memoryMiB }}
             - --max-context-size={{ .Values.modelServerCeilings.contextSize }}
             - --max-parallel-slots={{ .Values.modelServerCeilings.parallelSlots }}
           command:
             - /manager
+          volumeMounts:
+            - name: slug-policy
+              mountPath: /etc/private-llm-slugs
+              readOnly: true
           env:
             - name: PUBLIC_HOST
               value: {{ coalesce (index (.Values.global | default dict) "publicHost") .Values.PUBLIC_HOST "localhost" | quote }}
@@ -106,4 +114,8 @@ spec:
       securityContext:
         runAsNonRoot: true
       serviceAccountName: private-llm-controller-manager
+      volumes:
+        - name: slug-policy
+          configMap:
+            name: private-llm-slug-policy
       terminationGracePeriodSeconds: 10

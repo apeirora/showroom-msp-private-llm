@@ -137,7 +137,8 @@ build: manifests generate fmt vet ## Build manager binary.
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run -ldflags "-X main.version=$(VERSION)" ./cmd/main.go
+	@test -n "$(SLUG_POLICY_FILE)" || (echo "Set SLUG_POLICY_FILE to the reviewed policy JSON; see docs/slug-policy.md"; exit 1)
+	go run -ldflags "-X main.version=$(VERSION)" ./cmd/main.go --slug-policy-file="$(SLUG_POLICY_FILE)"
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.

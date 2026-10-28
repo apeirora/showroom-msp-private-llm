@@ -1,5 +1,13 @@
 # OCM Installation
 
+Before installing or upgrading, prepare the required [operator-owned slug
+policy](slug-policy.md), including the fixed cutover and every legacy MSP identity.
+Use `private-llm-operator.slugPolicy` for the MSP umbrella, `slugPolicy` for the
+standalone operator, or `operator.slugPolicy` for the OCM installer. Pass that
+reviewed values file to the commands below. The empty default is intentionally
+not deployable. Stop competing old managers for the Recreate migration.
+
+
 Deploy the Private LLM Operator using the [Open Component Model](https://ocm.software/) (OCM) supply chain. The OCM controller resolves the component version from an OCI registry, extracts the Helm chart via a `Resource`, and hands it to a `FluxDeployer` that creates a Flux `HelmRelease`.
 
 ---

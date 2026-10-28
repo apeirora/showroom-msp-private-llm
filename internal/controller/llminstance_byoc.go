@@ -775,7 +775,14 @@ func (r *LLMInstanceReconciler) deleteCachedBYOCCredentials(ctx context.Context,
 }
 
 func (r *LLMInstanceReconciler) cleanupBYOC(ctx context.Context, inst *llmv1alpha1.LLMInstance) error {
-	slug := safeBYOCSlug(inst, inst.Annotations[slugAnnotationKey])
+	slug := inst.Status.ActiveBYOCSlug
+	if slug == "" && inst.Status.ActiveBYOCKubeconfigSecretName != "" {
+		selection, err := r.SlugPolicy.Select(inst)
+		if err != nil {
+			return fmt.Errorf("legacy BYOC cleanup requires its reviewed slug mapping: %w", err)
+		}
+		slug = selection.Slug
+	}
 	targetID := inst.Status.ActiveBYOCTargetID
 	if targetID != "" {
 		if err := r.cleanupBYOCManagedTLS(ctx, inst, r.byocCleanupTLSConfig(inst), targetID); err != nil {

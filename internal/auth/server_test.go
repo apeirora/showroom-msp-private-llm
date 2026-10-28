@@ -20,9 +20,12 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-private-llm/internal/slugpolicy"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,9 +43,10 @@ const (
 
 func authFixture() (*llmv1alpha1.LLMInstance, *llmv1alpha1.APITokenRequest, *corev1.Secret) {
 	inst := &llmv1alpha1.LLMInstance{ObjectMeta: metav1.ObjectMeta{
-		Name: "model", Namespace: "tenant-a", UID: "instance-a",
+		Name: "model", Namespace: "tenant-a", UID: "instance-a", CreationTimestamp: metav1.NewTime(time.Unix(100, 0)),
 		Annotations: map[string]string{"llm.privatellms.msp/slug": testSlug},
 	}}
+	inst.Status.Slug, inst.Status.SlugSource = testSlug, slugpolicy.Legacy
 	tr := &llmv1alpha1.APITokenRequest{
 		ObjectMeta: metav1.ObjectMeta{Name: "access", Namespace: inst.Namespace, UID: "request-a", Generation: 1},
 		Spec:       llmv1alpha1.APITokenRequestSpec{InstanceName: inst.Name},
@@ -80,7 +84,7 @@ func authStatus(c client.Client) int {
 	req := httptest.NewRequest(http.MethodGet, boundURL, nil)
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	rr := httptest.NewRecorder()
-	(&Server{K8sClient: c}).Handler(context.Background()).ServeHTTP(rr, req)
+	(&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: c}).Handler(context.Background()).ServeHTTP(rr, req)
 	return rr.Code
 }
 
@@ -159,8 +163,8 @@ func TestAuthRejectsUntrustedOwnership(t *testing.T) {
 		{"recreated instance", func(i *llmv1alpha1.LLMInstance, _ *llmv1alpha1.APITokenRequest, _ *corev1.Secret) {
 			i.UID = "new-instance"
 		}},
-		{"instance slug changed", func(i *llmv1alpha1.LLMInstance, _ *llmv1alpha1.APITokenRequest, _ *corev1.Secret) {
-			i.Annotations["llm.privatellms.msp/slug"] = "another-slug"
+		{"published slug changed", func(i *llmv1alpha1.LLMInstance, _ *llmv1alpha1.APITokenRequest, _ *corev1.Secret) {
+			i.Status.Slug = "another-slug"
 		}},
 		{"deleting instance", func(i *llmv1alpha1.LLMInstance, _ *llmv1alpha1.APITokenRequest, _ *corev1.Secret) {
 			now := metav1.Now()
@@ -194,7 +198,7 @@ func TestAuthRejectsUntrustedOwnership(t *testing.T) {
 
 func TestAuthRequiresFixedBinding(t *testing.T) {
 	inst, tr, sec := authFixture()
-	handler := (&Server{K8sClient: authClient(t, inst, tr, sec)}).Handler(context.Background())
+	handler := (&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: authClient(t, inst, tr, sec)}).Handler(context.Background())
 	for _, target := range []string{
 		"/auth/verify", "/auth/verify?slug=" + testSlug,
 		boundURL + "&namespace=tenant-b", boundURL + "&slug=another-slug", boundURL + "&uid=another-uid",
@@ -222,14 +226,14 @@ func TestAuthRequiresFixedBinding(t *testing.T) {
 	}
 }
 
-func TestAuthRejectsAmbiguousRoutes(t *testing.T) {
+func TestAuthIgnoresTenantSlugCollisionClaims(t *testing.T) {
 	for _, namespace := range []string{"tenant-a", foreignNamespace} {
 		t.Run(namespace, func(t *testing.T) {
 			inst, tr, sec := authFixture()
 			other := inst.DeepCopy()
 			other.Name, other.Namespace, other.UID = "other", namespace, "other-instance"
-			if got := authStatus(authClient(t, inst, tr, sec, other)); got != http.StatusUnauthorized {
-				t.Fatalf("ambiguous route status = %d, want 401", got)
+			if got := authStatus(authClient(t, inst, tr, sec, other)); got != http.StatusOK {
+				t.Fatalf("tenant collision disrupted the reviewed owner: status = %d", got)
 			}
 		})
 	}
@@ -237,7 +241,7 @@ func TestAuthRejectsAmbiguousRoutes(t *testing.T) {
 
 func TestAuthBearerValidation(t *testing.T) {
 	inst, tr, sec := authFixture()
-	handler := (&Server{K8sClient: authClient(t, inst, tr, sec)}).Handler(context.Background())
+	handler := (&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: authClient(t, inst, tr, sec)}).Handler(context.Background())
 	for _, header := range []string{"", "Bearer ", "Basic synthetic", "Bearer wrong"} {
 		req := httptest.NewRequest(http.MethodGet, boundURL, nil)
 		req.Header.Set("Authorization", header)
@@ -295,7 +299,7 @@ func TestAuthLookupErrorsFailClosed(t *testing.T) {
 			inst, tr, sec := authFixture()
 			c := checkedAuthClient{Client: authClient(t, inst, tr, sec), failAt: failAt}
 			want := http.StatusInternalServerError
-			if failAt == "" {
+			if failAt == "" || failAt == "instance list" {
 				want = http.StatusOK
 			}
 			if got := authStatus(c); got != want {
@@ -337,14 +341,30 @@ func TestAuthSkipsExpensiveLookupsForUnmatchedTokens(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, boundURL, nil)
 	req.Header.Set("Authorization", "Bearer junk")
 	rr := httptest.NewRecorder()
-	(&Server{K8sClient: c}).Handler(context.Background()).ServeHTTP(rr, req)
+	(&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: c}).Handler(context.Background()).ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized || c.instanceLists != 0 || c.requestGets != 0 {
 		t.Fatalf("junk token: status=%d, cluster lists=%d, owner gets=%d", rr.Code, c.instanceLists, c.requestGets)
 	}
 	if got := authStatus(c); got != http.StatusOK {
 		t.Fatalf("unrelated broken owner denied valid token: %d", got)
 	}
-	if c.instanceLists != 1 || c.requestGets != 1 {
+	if c.instanceLists != 0 || c.requestGets != 1 {
 		t.Fatalf("valid token: cluster lists=%d, owner gets=%d", c.instanceLists, c.requestGets)
+	}
+}
+
+func testAuthSlugPolicy() *slugpolicy.Policy {
+	policy, err := slugpolicy.Parse(strings.NewReader(`{"cutover":"2030-01-01T00:00:00Z","entries":[{"uid":"instance-a","namespace":"tenant-a","name":"model","mode":"legacy","slug":"victim-slug"}]}`))
+	if err != nil {
+		panic(err)
+	}
+	return policy
+}
+
+func TestAuthIgnoresTenantSlugOverride(t *testing.T) {
+	inst, tr, sec := authFixture()
+	inst.Annotations[slugKey] = "attacker-selected"
+	if status := authStatus(authClient(t, inst, tr, sec)); status != http.StatusOK {
+		t.Fatalf("tenant metadata changed reviewed authorization: %d", status)
 	}
 }

@@ -255,6 +255,13 @@ spec:
                 description: Phase is a high-level summary of the instance lifecycle
                   (e.g., "Ready").
                 type: string
+              slug:
+                description: |-
+                  Slug and SlugSource report the operator-selected routing/workload identity.
+                  They are output only; selection comes from the operator policy and MSP UID.
+                type: string
+              slugSource:
+                type: string
             type: object
         type: object
     served: true

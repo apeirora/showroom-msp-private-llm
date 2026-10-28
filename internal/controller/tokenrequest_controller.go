@@ -41,6 +41,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-private-llm/internal/slugpolicy"
 )
 
 const (
@@ -78,7 +79,8 @@ const apiTokenRequestFinalizer = "llm.privatellms.msp/apitokenrequest-finalizer"
 
 type APITokenRequestReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	SlugPolicy *slugpolicy.Policy
+	Scheme     *runtime.Scheme
 }
 
 func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -109,10 +111,10 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{RequeueAfter: 10 * time.Second}, client.IgnoreNotFound(err)
 	}
 
-	// Read slug from instance annotation (used to avoid exposing namespace)
-	slug := ""
-	if inst.Annotations != nil {
-		slug = strings.TrimSpace(inst.Annotations[slugAnnotationKey])
+	selection, selectionErr := r.SlugPolicy.Select(&inst)
+	slug := selection.Slug
+	if selectionErr != nil || inst.Status.Slug != slug || inst.Status.SlugSource != selection.Source {
+		slug = ""
 	}
 
 	ready := meta.FindStatusCondition(inst.Status.Conditions, "Ready")
@@ -127,7 +129,7 @@ func (r *APITokenRequestReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if slug == "" || endpoint == "" || !instanceReady || !validEndpoint {
 		waitingFor := []string{}
 		if slug == "" {
-			waitingFor = append(waitingFor, "annotation "+slugAnnotationKey)
+			waitingFor = append(waitingFor, "operator-selected slug")
 		}
 		if endpoint == "" {
 			waitingFor = append(waitingFor, "status.endpoint")
@@ -237,7 +239,7 @@ func (r *APITokenRequestReconciler) ensureSecret(ctx context.Context, tr *llmv1a
 	if !ownsTokenSecret(tr, &sec) {
 		return fmt.Errorf("refusing to use token Secret %s/%s: unexpected controller owner or type", sec.Namespace, sec.Name)
 	}
-	rotated, err := rotateTokenForTarget(&sec, inst, true)
+	rotated, err := rotateTokenForTarget(&sec, inst, true, slug)
 	if err != nil {
 		return err
 	}
@@ -285,7 +287,7 @@ func (r *APITokenRequestReconciler) invalidateTokenEndpoint(ctx context.Context,
 	if !ownsTokenSecret(tr, &sec) {
 		return fmt.Errorf("refusing to invalidate token Secret %s/%s: unexpected controller owner or type", sec.Namespace, sec.Name)
 	}
-	changed, err := rotateTokenForTarget(&sec, inst, false)
+	changed, err := rotateTokenForTarget(&sec, inst, false, "")
 	if err != nil {
 		return err
 	}
@@ -329,7 +331,7 @@ func (r *APITokenRequestReconciler) invalidateTokenEndpoint(ctx context.Context,
 // rotateTokenForTarget is called only after verifying exact Secret ownership.
 // Pending instances with no established target cannot authorize a new key.
 // Hosted migration rotates only when the replacement hosted endpoint is Ready.
-func rotateTokenForTarget(sec *corev1.Secret, inst *llmv1alpha1.LLMInstance, allowHosted bool) (bool, error) {
+func rotateTokenForTarget(sec *corev1.Secret, inst *llmv1alpha1.LLMInstance, allowHosted bool, selectedSlug string) (bool, error) {
 	if inst == nil {
 		return false, nil
 	}
@@ -349,7 +351,7 @@ func rotateTokenForTarget(sec *corev1.Secret, inst *llmv1alpha1.LLMInstance, all
 		}
 		target = ""
 	}
-	if !byoc && sec.Annotations[credentialTargetAnnotation] == "" && sec.Annotations[credentialInstanceAnnotation] == "" && legacyHostedBindingMatches(sec, inst) {
+	if !byoc && sec.Annotations[credentialTargetAnnotation] == "" && sec.Annotations[credentialInstanceAnnotation] == "" && legacyHostedBindingMatches(sec, inst, selectedSlug) {
 		// Preserve a legacy key only when the prior instance name and slug
 		// still match. A retarget before the first upgrade reconcile, or an
 		// ambiguous binding, must rotate rather than adopt the previous key.
@@ -385,9 +387,11 @@ func rotateTokenForTarget(sec *corev1.Secret, inst *llmv1alpha1.LLMInstance, all
 	return true, nil
 }
 
-func legacyHostedBindingMatches(sec *corev1.Secret, inst *llmv1alpha1.LLMInstance) bool {
-	slug := strings.TrimSpace(inst.Annotations[slugAnnotationKey])
-	return sec.Labels[instanceLabelKey] == inst.Name && slug != "" && sec.Labels[slugAnnotationKey] == slug
+func legacyHostedBindingMatches(sec *corev1.Secret, inst *llmv1alpha1.LLMInstance, selectedSlug string) bool {
+	// The Ready caller has verified this against the operator policy. Tenant
+	// annotations cannot establish ownership during a legacy key backfill.
+	return sec.Labels[instanceLabelKey] == inst.Name && selectedSlug != "" && sec.Labels[slugAnnotationKey] == selectedSlug
+
 }
 
 // touchAPITokenRequest retries synchronization of an already-written Secret.

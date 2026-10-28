@@ -9,6 +9,13 @@ namespace: default
 # field above.
 namePrefix: private-llm-
 
+# Replace this intentionally incomplete policy before installation.
+# The generated name changes with its contents, triggering a Recreate rollout.
+configMapGenerator:
+- name: slug-policy
+  files:
+  - policy.json=slug-policy.json
+
 # Labels to add to all resources and selectors.
 #labels:
 #- includeSelectors: true

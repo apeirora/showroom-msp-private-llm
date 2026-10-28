@@ -304,6 +304,9 @@ func TestHostedInstanceRetargetRotatesKey(t *testing.T) {
 			}
 			replacement := inst.DeepCopy()
 			replacement.Name, replacement.UID, replacement.ResourceVersion = "other-hosted", "hosted-b", ""
+			replacement.Annotations[slugAnnotationKey] = "other-slug"
+			replacement.Status.Slug = "other-slug"
+			r.SlugPolicy = testLegacySlugPolicy(inst, replacement)
 			if tc.pending {
 				replacement.Status.Conditions[0].Status = metav1.ConditionFalse
 			}

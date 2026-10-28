@@ -18,8 +18,6 @@ package controller
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -49,11 +47,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
+	"github.com/apeirora/showroom-msp-private-llm/internal/slugpolicy"
 )
 
 // LLMInstanceReconciler reconciles a LLMInstance object
 type LLMInstanceReconciler struct {
 	client.Client
+	RouteReader         client.Reader
+	SlugPolicy          *slugpolicy.Policy
 	Scheme              *runtime.Scheme
 	ModelServerCeilings ModelServerCeilings
 	PublicHost          string
@@ -131,10 +132,14 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	const finalizerName = "llm.privatellms.msp/llminstance-finalizer"
 
+	if _, err := r.selectSlug(inst); err != nil {
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
+	}
+
 	// Upgrade an already-owned auth route even if settings or workload
 	// reconciliation will reject this instance. Never create a new route here.
 	if err := r.upgradeExistingAuthMiddleware(ctx, inst); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 
 	// Reject tenant settings before any local or remote workload changes.
@@ -154,10 +159,16 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	slug, requeue, err := r.ensureSlug(ctx, inst)
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 	if requeue {
 		return ctrl.Result{Requeue: true}, nil
+	}
+
+	if !inst.IsBYOC() {
+		if err := r.checkSlugRoute(ctx, inst, slug); err != nil {
+			return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
+		}
 	}
 
 	model := modelForInstance(inst)
@@ -179,24 +190,24 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	labels := llamaLabels(inst.Name)
 
 	if err := r.reconcileDeployment(ctx, inst, labels, model); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 
 	svcName := fmt.Sprintf("%s-llama", inst.Name)
 	if err := r.reconcileService(ctx, inst, labels, svcName); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 
 	pathPrefix := fmt.Sprintf("/llm/%s", slug)
 
 	if err := r.reconcileStripMiddleware(ctx, inst, labels, svcName, pathPrefix); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 	if err := r.reconcileForwardAuthMiddleware(ctx, inst, labels, svcName, slug); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 	if err := r.reconcileIngress(ctx, inst, labels, svcName, pathPrefix); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 
 	ready, reason, message, err := r.evaluateInstanceReadiness(ctx, inst, svcName)
@@ -216,7 +227,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	logger.Info("reconciled LLMInstance", "name", req.NamespacedName)
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 func (r *LLMInstanceReconciler) startTracing(ctx context.Context) (context.Context, trace.Span) {
@@ -235,38 +246,13 @@ func (r *LLMInstanceReconciler) startTracing(ctx context.Context) (context.Conte
 
 func (r *LLMInstanceReconciler) getInstance(ctx context.Context, name types.NamespacedName) (*llmv1alpha1.LLMInstance, bool, error) {
 	inst := &llmv1alpha1.LLMInstance{}
-	if err := r.Get(ctx, name, inst); err != nil {
+	if err := r.routeReader().Get(ctx, name, inst); err != nil {
 		if apierrors.IsNotFound(err) {
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
 	return inst, true, nil
-}
-
-func (r *LLMInstanceReconciler) ensureSlug(ctx context.Context, inst *llmv1alpha1.LLMInstance) (string, bool, error) {
-	anns := inst.GetAnnotations()
-	slug := ""
-	if anns != nil {
-		slug = strings.TrimSpace(anns[slugAnnotationKey])
-	}
-	if slug != "" {
-		return slug, false, nil
-	}
-
-	newSlug, err := generateSlug(9)
-	if err != nil {
-		return "", false, err
-	}
-	if anns == nil {
-		anns = map[string]string{}
-	}
-	anns[slugAnnotationKey] = newSlug
-	inst.SetAnnotations(anns)
-	if err := r.Update(ctx, inst); err != nil {
-		return "", false, err
-	}
-	return newSlug, true, nil
 }
 
 func llamaLabels(instanceName string) map[string]string {
@@ -424,6 +410,9 @@ func (r *LLMInstanceReconciler) reconcileDeployment(ctx context.Context, inst *l
 		return nil
 	}
 
+	if !ownsLLMResource(inst, &existing) {
+		return errSlugBackendOwnership
+	}
 	replicasChanged, previousReplicas := ensureDeploymentReplicas(&existing, desiredReplicas)
 	modelChanged := ensureDeploymentModel(&existing, model)
 	dnsPolicyChanged := ensureDeploymentDNSPolicy(&existing, effectiveDNSPolicy(inst))
@@ -751,6 +740,10 @@ func (r *LLMInstanceReconciler) reconcileService(ctx context.Context, inst *llmv
 			return err
 		}
 		logger.Info("created llama.cpp Service", "name", svcName)
+		return nil
+	}
+	if !ownsLLMResource(inst, &svc) {
+		return errSlugBackendOwnership
 	}
 	return nil
 }
@@ -790,18 +783,33 @@ func (r *LLMInstanceReconciler) reconcileStripMiddleware(ctx context.Context, in
 			return err
 		}
 		logger.Info("created Traefik Middleware for prefix strip", "name", mwName, "path", pathPrefix)
+		return nil
 	}
-	return nil
+	if !ownsLLMResource(inst, mw) {
+		return fmt.Errorf("refusing to update foreign strip middleware")
+	}
+	current, _, err := unstructured.NestedStringSlice(mw.Object, "spec", "stripPrefix", "prefixes")
+	if err != nil {
+		return err
+	}
+	if len(current) == 1 && current[0] == pathPrefix {
+		return nil
+	}
+	if err := unstructured.SetNestedStringSlice(mw.Object, []string{pathPrefix}, "spec", "stripPrefix", "prefixes"); err != nil {
+		return err
+	}
+	return r.Update(ctx, mw)
 }
 
 func (r *LLMInstanceReconciler) upgradeExistingAuthMiddleware(ctx context.Context, inst *llmv1alpha1.LLMInstance) error {
 	if inst.IsBYOC() {
 		return nil
 	}
-	slug := strings.TrimSpace(inst.Annotations[slugAnnotationKey])
-	if slug == "" {
-		return nil
+	selection, err := r.selectSlug(inst)
+	if err != nil {
+		return err
 	}
+	slug := selection.Slug
 	svcName := fmt.Sprintf("%s-llama", inst.Name)
 	return r.reconcileAuthMiddleware(ctx, inst, llamaLabels(inst.Name), svcName, slug, false)
 }
@@ -841,7 +849,7 @@ func (r *LLMInstanceReconciler) reconcileAuthMiddleware(ctx context.Context, ins
 		if err := ctrl.SetControllerReference(inst, mw, r.Scheme); err != nil {
 			return err
 		}
-	} else if !metav1.IsControlledBy(mw, inst) {
+	} else if !ownsLLMResource(inst, mw) {
 		return fmt.Errorf("refusing to update forwardAuth middleware %s: not owned by this LLMInstance", key)
 	}
 	current, _, err := unstructured.NestedMap(mw.Object, "spec", "forwardAuth")
@@ -873,6 +881,9 @@ func (r *LLMInstanceReconciler) reconcileAuthMiddleware(ctx context.Context, ins
 func (r *LLMInstanceReconciler) reconcileIngress(ctx context.Context, inst *llmv1alpha1.LLMInstance, labels map[string]string, svcName, pathPrefix string) error {
 	logger := log.FromContext(ctx)
 	ingressName := svcName
+	if err := r.checkSlugRoute(ctx, inst, strings.TrimPrefix(pathPrefix, "/llm/")); err != nil {
+		return err
+	}
 	var ing networkingv1.Ingress
 	key := client.ObjectKey{Namespace: inst.Namespace, Name: ingressName}
 	if err := r.Get(ctx, key, &ing); err != nil {
@@ -891,6 +902,9 @@ func (r *LLMInstanceReconciler) reconcileIngress(ctx context.Context, inst *llmv
 		return nil
 	}
 
+	if !ownsSlugIngress(inst, &ing) {
+		return errSlugRouteOwnership
+	}
 	isHTTPS := strings.EqualFold(r.PublicScheme, "https")
 	desiredEntry := r.desiredIngressEntryPoints(isHTTPS)
 	desiredMiddleware := desiredMiddlewareAnnotation(inst.Namespace, svcName)
@@ -969,6 +983,7 @@ func (r *LLMInstanceReconciler) buildDesiredIngress(inst *llmv1alpha1.LLMInstanc
 		},
 	}
 	r.applyExtraIngressAnnotations(ingress, false)
+	r.ensureIngressHTTPRule(ingress, pathPrefix, svcName)
 	return ingress
 }
 
@@ -1037,51 +1052,15 @@ func (r *LLMInstanceReconciler) ensureIngressClass(ing *networkingv1.Ingress) bo
 }
 
 func (r *LLMInstanceReconciler) ensureIngressHTTPRule(ing *networkingv1.Ingress, pathPrefix, svcName string) bool {
-	updated := false
-	pathType := networkingv1.PathTypePrefix
-	if len(ing.Spec.Rules) == 0 {
-		ing.Spec.Rules = []networkingv1.IngressRule{{}}
-		updated = true
+	desired := r.slugIngressRules(pathPrefix, svcName)
+	changed := !apiequality.Semantic.DeepEqual(ing.Spec.Rules, desired) || ing.Spec.DefaultBackend != nil
+	ing.Spec.Rules, ing.Spec.DefaultBackend = desired, nil
+	// An override can turn the exact root path back into an unsafe raw prefix.
+	if _, exists := ing.Annotations["traefik.ingress.kubernetes.io/router.pathmatcher"]; exists {
+		delete(ing.Annotations, "traefik.ingress.kubernetes.io/router.pathmatcher")
+		changed = true
 	}
-	rule := &ing.Spec.Rules[0]
-	if rule.Host != r.PublicHost {
-		rule.Host = r.PublicHost
-		updated = true
-	}
-	if rule.HTTP == nil {
-		rule.HTTP = &networkingv1.HTTPIngressRuleValue{}
-		updated = true
-	}
-	if len(rule.HTTP.Paths) == 0 {
-		rule.HTTP.Paths = []networkingv1.HTTPIngressPath{{}}
-		updated = true
-	}
-	path := &rule.HTTP.Paths[0]
-	if path.PathType == nil {
-		path.PathType = &pathType
-		updated = true
-	}
-	if *path.PathType != pathType {
-		path.PathType = &pathType
-		updated = true
-	}
-	if path.Path != pathPrefix {
-		path.Path = pathPrefix
-		updated = true
-	}
-	if path.Backend.Service == nil {
-		path.Backend.Service = &networkingv1.IngressServiceBackend{}
-		updated = true
-	}
-	if path.Backend.Service.Name != svcName {
-		path.Backend.Service.Name = svcName
-		updated = true
-	}
-	if path.Backend.Service.Port.Number != 8000 {
-		path.Backend.Service.Port = networkingv1.ServiceBackendPort{Number: 8000}
-		updated = true
-	}
-	return updated
+	return changed
 }
 
 func (r *LLMInstanceReconciler) ensureIngressTLS(ing *networkingv1.Ingress, isHTTPS bool) bool {
@@ -1307,37 +1286,6 @@ func (r *LLMInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.findInstancesForSecret),
 		).
 		Complete(r)
-}
-
-// generateSlug creates a short, label-safe, URL-safe slug from cryptographically
-// random bytes. It uses unpadded base64url, truncated, and ensures the first and
-// last characters are alphanumeric to satisfy Kubernetes label value rules.
-func generateSlug(numBytes int) (string, error) {
-	b := make([]byte, numBytes)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	s := base64.RawURLEncoding.EncodeToString(b)
-	// Cap to max 16 chars to keep URLs compact
-	if len(s) > 16 {
-		s = s[:16]
-	}
-	// Ensure it starts and ends with an alphanumeric character (Kubernetes label requirement)
-	if len(s) > 0 {
-		sb := []byte(s)
-		if !isAlphaNumeric(sb[0]) {
-			sb[0] = 'a'
-		}
-		if !isAlphaNumeric(sb[len(sb)-1]) {
-			sb[len(sb)-1] = 'z'
-		}
-		s = string(sb)
-	}
-	return s, nil
-}
-
-func isAlphaNumeric(b byte) bool {
-	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
 }
 
 func (r *LLMInstanceReconciler) finalizeLLMInstance(ctx context.Context, inst *llmv1alpha1.LLMInstance, req ctrl.Request) error {

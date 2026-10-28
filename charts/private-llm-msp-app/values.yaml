@@ -46,6 +46,11 @@ imagePullSecret:
 # Passed through to the operator sub-chart. Public-facing config comes from
 # `global.publicHost` / `global.publicScheme` above — no duplication here.
 private-llm-operator:
+  # Required at install: fixed API-clock cutover and reviewed legacy MSP identities.
+  # Override private-llm-operator.slugPolicy; see docs/slug-policy.md.
+  slugPolicy:
+    cutover: ""
+    entries: []
   # Local-only: Traefik stack is provided by `task local-setup`.
   traefik:
     enabled: false

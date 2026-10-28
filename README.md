@@ -159,10 +159,15 @@ also carry the current instance UID in `llm.privatellms.msp/credential-instance-
 and have no BYOC `llm.privatellms.msp/credential-target` binding. Old keys cannot
 authenticate a replacement hosted instance while rotation is still pending.
 
+The manager requires a reviewed [slug policy](docs/slug-policy.md) with a fixed
+cutover and explicit MSP UID/namespace/name mappings for legacy endpoints. The
+policy controls reconciliation and authentication; tenant annotations cannot
+choose or change a route. Install its CRD/schema and policy before starting the
+new manager. The deployment uses one replica and Recreate; stop any other old
+manager so the two naming contracts cannot serve at once.
+
 During an upgrade, old slug-only middlewares fail closed until their instances
-reconcile. With rolling updates and leader election, the new auth server can
-receive requests before the new leader upgrades those URLs. Existing owned
-middlewares are upgraded before model-setting or workload reconciliation gates,
+reconcile. Existing owned middlewares are upgraded before model-setting or workload reconciliation gates,
 but API failures can still delay the update. Verify every middleware has the four
 binding parameters before accepting the rollout. Hosted middleware migration is
 separate from the BYOC endpoint/key migration described below.
@@ -170,14 +175,15 @@ Unannotated legacy hosted keys are denied until their token requests reconcile.
 An unchanged name and slug allow the controller to backfill the UID without
 changing the key; ambiguous or changed bindings rotate it. Verify token access
 after this reconciliation as part of rollout acceptance.
-Duplicate slug claims are denied for both instances. Slug annotations remain
-mutable for hosted instances; BYOC pins its observed workload slug in status.
-Operator-owned hosted slugs and collision-resistant resource names are
-still required to prevent collision-based denial of service (showroom#793).
+New slugs derive from the immutable MSP instance UID. Explicit legacy entries
+preserve reviewed endpoints and reject overlapping route names. BYOC's active
+slug must agree with the policy before workload or cleanup-cache writes; an
+unmapped legacy instance cannot reconcile or publish a new token endpoint.
+Hosted access is denied; an existing BYOC workload can keep serving its previous
+key, so a missing map is not remote revocation.
 The auth service reads the Kubernetes API directly. An invalid token causes an
-instance GET and a namespaced Secret LIST; owner GETs and the cluster-wide
-collision check run only after a token match. API availability and per-request
-lookup load still require deployment validation. Unrelated forwardAuth options
+instance GET and a namespaced Secret LIST; owner GETs run only after a token
+match. API availability and per-request lookup load still require deployment validation. Unrelated forwardAuth options
 are preserved when the operator updates its address and header policy.
 
 These checks cover hosted forwardAuth routes. BYOC inference uses a separate

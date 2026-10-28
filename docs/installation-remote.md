@@ -1,5 +1,13 @@
 # Remote Deployment
 
+Before installing or upgrading, prepare the required [operator-owned slug
+policy](slug-policy.md), including the fixed cutover and every legacy MSP identity.
+Use `private-llm-operator.slugPolicy` for the MSP umbrella, `slugPolicy` for the
+standalone operator, or `operator.slugPolicy` for the OCM installer. Pass that
+reviewed values file to the commands below. The empty default is intentionally
+not deployable. Stop competing old managers for the Recreate migration.
+
+
 Deploy the Private LLM Operator to a remote Kubernetes cluster using Flux GitOps, as used in the ApeiroRA Platform Mesh.
 
 ---

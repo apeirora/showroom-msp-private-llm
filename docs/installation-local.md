@@ -1,5 +1,13 @@
 # Local Installation
 
+Before installing or upgrading, prepare the required [operator-owned slug
+policy](slug-policy.md), including the fixed cutover and every legacy MSP identity.
+Use `private-llm-operator.slugPolicy` for the MSP umbrella, `slugPolicy` for the
+standalone operator, or `operator.slugPolicy` for the OCM installer. Pass that
+reviewed values file to the commands below. The empty default is intentionally
+not deployable. Stop competing old managers for the Recreate migration.
+
+
 Install the Private LLM provider on a local [Platform Mesh](https://github.com/platform-mesh/helm-charts) setup with two `helm install` commands.
 
 ## Prerequisites
