@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -394,25 +395,42 @@ func main() {
 
 	// Auth must run on every replica, independently of manager leader election,
 	// while sharing its process shutdown signal and bounded connection cleanup.
-	runtimeCtx, cancelRuntime := context.WithCancel(ctrl.SetupSignalHandler())
-	defer cancelRuntime()
 	authServer := &auth.Server{K8sClient: mgr.GetAPIReader()}
-	authStopped := make(chan struct{})
-	go func() {
-		defer close(authStopped)
-		if err := authServer.Start(runtimeCtx, authBind); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			setupLog.Error(err, "auth server stopped")
-		}
-	}()
-
 	setupLog.Info("starting manager")
-	err = mgr.Start(runtimeCtx)
-	cancelRuntime()
-	<-authStopped
+	err = runOperator(ctrl.SetupSignalHandler(), mgr.Start, func(ctx context.Context) error {
+		return authServer.Start(ctx, authBind)
+	})
 	if err != nil {
-		setupLog.Error(err, "problem running manager")
+		setupLog.Error(err, "problem running operator")
 		os.Exit(1)
 	}
+}
+
+// runOperator starts auth on every replica, outside manager leader election.
+// Either service stopping cancels the other. Both Start functions must honor
+// cancellation and finish their bounded cleanup before returning.
+func runOperator(ctx context.Context, startManager, startAuth func(context.Context) error) error {
+	runtimeCtx, cancelRuntime := context.WithCancel(ctx)
+	defer cancelRuntime()
+	authStopped := make(chan error, 1)
+	go func() {
+		err := startAuth(runtimeCtx)
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		if err == nil && runtimeCtx.Err() == nil {
+			err = errors.New("listener stopped without runtime cancellation")
+		}
+		if err != nil {
+			err = fmt.Errorf("authentication server: %w", err)
+		}
+		authStopped <- err
+		cancelRuntime()
+	}()
+
+	managerErr := startManager(runtimeCtx)
+	cancelRuntime()
+	return errors.Join(managerErr, <-authStopped)
 }
 
 func initOpenTelemetry(ctx context.Context) (func(context.Context) error, error) {
