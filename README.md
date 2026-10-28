@@ -154,7 +154,10 @@ The internal `/auth/verify` URL must bind `namespace`, `instance`, `uid`, and
 updates existing forwardAuth middlewares. Slug-only URLs and forwarded headers
 cannot supply the instance identity. ForwardAuth accepts only Opaque Secrets
 in that namespace whose controller owner is the current APITokenRequest for the
-instance and whose name matches the request's published Secret.
+instance and whose name matches the request's published Secret. The Secret must
+also carry the current instance UID in `llm.privatellms.msp/credential-instance-uid`
+and have no BYOC `llm.privatellms.msp/credential-target` binding. Old keys cannot
+authenticate a replacement hosted instance while rotation is still pending.
 
 During an upgrade, old slug-only middlewares fail closed until their instances
 reconcile. With rolling updates and leader election, the new auth server can
@@ -163,6 +166,10 @@ middlewares are upgraded before model-setting or workload reconciliation gates,
 but API failures can still delay the update. Verify every middleware has the four
 binding parameters before accepting the rollout. Hosted middleware migration is
 separate from the BYOC endpoint/key migration described below.
+Unannotated legacy hosted keys are denied until their token requests reconcile.
+An unchanged name and slug allow the controller to backfill the UID without
+changing the key; ambiguous or changed bindings rotate it. Verify token access
+after this reconciliation as part of rollout acceptance.
 Duplicate slug claims are denied for both instances. Slug annotations remain
 mutable for hosted instances; BYOC pins its observed workload slug in status.
 Operator-owned hosted slugs and collision-resistant resource names are

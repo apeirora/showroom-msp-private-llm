@@ -31,7 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const slugKey = "llm.privatellms.msp/slug"
+const (
+	slugKey               = "llm.privatellms.msp/slug"
+	credentialInstanceKey = "llm.privatellms.msp/credential-instance-uid"
+	credentialTargetKey   = "llm.privatellms.msp/credential-target"
+)
 
 type Server struct {
 	// Use the API reader, not the manager cache: revocation must not rely on
@@ -104,7 +108,8 @@ func (s *Server) authorize(ctx context.Context, binding instanceBinding, token s
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{Namespace: binding.namespace, Name: binding.name}, &inst); err != nil {
 		return false, client.IgnoreNotFound(err)
 	}
-	if string(inst.UID) != binding.uid || !inst.DeletionTimestamp.IsZero() ||
+	if string(inst.UID) != binding.uid || !inst.DeletionTimestamp.IsZero() || inst.IsBYOC() ||
+		inst.Status.ActiveBYOCKubeconfigSecretName != "" ||
 		strings.TrimSpace(inst.Annotations[slugKey]) != binding.slug {
 		return false, nil
 	}
@@ -149,8 +154,12 @@ func (s *Server) uniqueSlug(ctx context.Context, inst *llmv1alpha1.LLMInstance, 
 }
 
 func (s *Server) ownsToken(ctx context.Context, inst *llmv1alpha1.LLMInstance, sec *corev1.Secret) (bool, error) {
+	// The route UID alone does not bind a credential: a recreated instance or
+	// a BYOC-to-hosted transition can create its route before token rotation.
+	// Legacy keys remain denied until the token controller binds them safely.
 	if sec.Namespace != inst.Namespace || sec.Type != corev1.SecretTypeOpaque || !sec.DeletionTimestamp.IsZero() ||
-		sec.Labels["llm.privatellms.msp/instance"] != inst.Name {
+		sec.Labels["llm.privatellms.msp/instance"] != inst.Name ||
+		sec.Annotations[credentialInstanceKey] != string(inst.UID) || sec.Annotations[credentialTargetKey] != "" {
 		return false, nil
 	}
 	owner := metav1.GetControllerOf(sec)

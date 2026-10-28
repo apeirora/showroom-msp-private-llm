@@ -184,6 +184,18 @@ var _ = Describe("Authentication boundary against the Kubernetes API", func() {
 			return response.Code
 		}
 		Expect(status(string(sec.Data[openAIAPIKeyKey]))).To(Equal(http.StatusOK))
+		// During an upgrade, an unbound legacy key stays denied until the token
+		// controller verifies its old name/slug binding and records this UID.
+		legacyKey := string(sec.Data[openAIAPIKeyKey])
+		delete(sec.Annotations, credentialInstanceAnnotation)
+		Expect(k8sClient.Update(ctx, &sec)).To(Succeed())
+		Expect(status(legacyKey)).To(Equal(http.StatusUnauthorized))
+		_, err := reconciler.Reconcile(ctx, req)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(&sec), &sec)).To(Succeed())
+		Expect(sec.Annotations[credentialInstanceAnnotation]).To(Equal(string(inst.UID)))
+		Expect(string(sec.Data[openAIAPIKeyKey])).To(Equal(legacyKey))
+		Expect(status(legacyKey)).To(Equal(http.StatusOK))
 		foreign := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "byoc-kubeconfig", Namespace: foreignNS, Labels: map[string]string{slugAnnotationKey: slug}},
 			StringData: map[string]string{openAIAPIKeyKey: "synthetic-foreign-token"},

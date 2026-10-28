@@ -52,6 +52,7 @@ func authFixture() (*llmv1alpha1.LLMInstance, *llmv1alpha1.APITokenRequest, *cor
 	sec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: tr.Status.SecretName, Namespace: inst.Namespace,
+			Annotations: map[string]string{credentialInstanceKey: string(inst.UID)},
 			Labels: map[string]string{"llm.privatellms.msp/slug": testSlug, "llm.privatellms.msp/instance": inst.Name,
 				"llm.privatellms.msp/apitokenrequest": tr.Name},
 			OwnerReferences: []metav1.OwnerReference{{APIVersion: llmv1alpha1.GroupVersion.String(), Kind: "APITokenRequest",
