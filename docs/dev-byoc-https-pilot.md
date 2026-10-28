@@ -16,14 +16,13 @@ HTTP URL and API key even after the server becomes HTTPS-only. Stop consumers,
 change the route and URLs, rotate keys, and restart together. Returning to the
 plaintext controller is not a rollback option.
 
-There is a concrete production release hazard. At infrastructure commit
-`657e1670f047f081daf1144c334e05c78e5793f1`:
+At infrastructure commit `0358e37d9ed29f48f391ed61978e22dda592e09d`:
 
-- `clusters/cc-d2/msp02/kustomization.yaml` pins the MSP chart to `2.16.4-rc`.
-- `clusters/cc-two/msp02/kustomization.yaml` inherits the base range
-  `>=2.8.0 <3.0.0`; publishing another stable 2.x chart can upgrade production.
-- The tag workflow previously published `:latest` for every tag. The prerelease
-  guard in `hack/release-image-tags.sh` must be included in the reviewed tag.
+- The development MSP chart is pinned to `2.17.1-rc.1`.
+- The production overlay pins both MSP and PM charts to `2.16.1-rc`, overriding
+  the base range. Production does not follow that base range.
+- The prerelease guard in `hack/release-image-tags.sh` keeps RC publication from
+  changing the stable controller image's `:latest` tag.
 
 Use a reviewed **prerelease** version and an exact development chart/image pin.
 Do not publish a stable release for this pilot. Do not modify production pins or
@@ -99,6 +98,16 @@ image automation. Recheck the live sources and HelmRelease values before release
    Verify target-change and deletion cleanup on a disposable instance if doing so
    would disrupt the pilot. Confirm hosted workloads and production versions
    remained unchanged. Keep exact remaining evidence gaps open on the ticket.
+
+   For a manual renewal, first verify the dedicated Certificate's UID and instance
+   ownership label. Set `spec.renew: true` and clear `spec.ensureRenewedAfter` to
+   `null` on that Certificate only. Gardener acknowledges the request by removing
+   `renew` and setting `ensureRenewedAfter`; the operator preserves those two
+   controls while continuing to enforce the hostname, issuer and output Secret.
+   Wait for the new certificate fingerprint, remote Secret propagation and Ready
+   pod revision before accepting the renewal. Model API keys must remain unchanged.
+   Do not delete the Certificate or its output/cache Secrets to force renewal, and
+   do not revoke a valid certificate as a renewal test.
 
 If a gate fails, leave affected consumers stopped and the endpoint unavailable.
 Keep the secure listener/configuration and investigate the failure; never restore

@@ -179,6 +179,9 @@ func (r *LLMInstanceReconciler) reconcileBYOCManagedCertificate(ctx context.Cont
 		return err
 	}
 	desired := byocCertificateSpec(name, hostname, string(cert.GetUID()), cfg, inst)
+	if err = preserveBYOCCertificateRenewal(cert, desired); err != nil {
+		return err
+	}
 	if reflect.DeepEqual(cert.Object["spec"], desired) {
 		return nil
 	}
@@ -198,6 +201,36 @@ func byocCertificateSpec(name, hostname, certificateUID string, cfg BYOCTLSConfi
 		"issuerRef":    map[string]interface{}{"name": cfg.IssuerName, "namespace": cfg.IssuerNamespace},
 		"secretLabels": labels,
 	}
+}
+
+// Gardener acknowledges spec.renew by replacing it with ensureRenewedAfter.
+// Keep only these documented renewal controls; subjects, issuer, output and
+// ownership labels remain exclusively derived from the instance and operator.
+func preserveBYOCCertificateRenewal(cert *unstructured.Unstructured, desired map[string]interface{}) error {
+	for _, field := range []string{"renew", "ensureRenewedAfter"} {
+		value, found, err := unstructured.NestedFieldNoCopy(cert.Object, "spec", field)
+		if err != nil {
+			return fmt.Errorf("invalid BYOC Certificate renewal specification")
+		}
+		if !found || value == nil {
+			continue
+		}
+		if field == "renew" {
+			if _, ok := value.(bool); !ok {
+				return fmt.Errorf("BYOC Certificate renew must be a boolean")
+			}
+		} else {
+			timestamp, ok := value.(string)
+			if !ok {
+				return fmt.Errorf("BYOC Certificate ensureRenewedAfter must be an RFC3339 timestamp")
+			}
+			if _, err = time.Parse(time.RFC3339, timestamp); err != nil {
+				return fmt.Errorf("BYOC Certificate ensureRenewedAfter must be an RFC3339 timestamp")
+			}
+		}
+		desired[field] = value
+	}
+	return nil
 }
 
 func validBYOCDNSTarget(address string) bool {
@@ -395,7 +428,11 @@ func (r *LLMInstanceReconciler) reconcileBYOCTLSSecret(ctx context.Context, remo
 	}
 	// The desired spec and identity must already have converged. Never deliver a
 	// certificate through an operator config change before explicit reconciliation.
-	if !reflect.DeepEqual(cert.Object["spec"], byocCertificateSpec(name, hostname, string(cert.GetUID()), cfg, inst)) {
+	desired := byocCertificateSpec(name, hostname, string(cert.GetUID()), cfg, inst)
+	if err = preserveBYOCCertificateRenewal(cert, desired); err != nil {
+		return "", err
+	}
+	if !reflect.DeepEqual(cert.Object["spec"], desired) {
 		return "", fmt.Errorf("%w: Certificate specification has not converged", ErrBYOCTLSNotReady)
 	}
 	state, _, _ := unstructured.NestedString(cert.Object, "status", "state")
