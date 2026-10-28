@@ -2,11 +2,14 @@
 
 Deploy the Private LLM Operator to a Kubernetes cluster using Helm.
 
-Prepare the required [slug migration policy](slug-policy.md) first. All commands
-below must include `-f reviewed-operator-values.yaml` containing `slugPolicy`.
+The examples below select `2.17.1-rc.3` for development only, after its published
+artifacts are verified. Leave production deployment configuration unchanged.
+Prepare the required [slug migration policy](slug-policy.md) first. Each operator
+install below loads `reviewed-operator-values.yaml` containing `slugPolicy`.
 Its fixed cutover and verified MSP identity map are required; the empty default
-cannot start the new manager. Use a release containing this policy support,
-not the historical `2.8.1` example below.
+cannot start the new manager. Audit legacy source-namespace isolation and stop
+competing old managers before migration. For the MSP umbrella, use
+`private-llm-operator.slugPolicy` in its reviewed values instead.
 
 ---
 
@@ -16,15 +19,19 @@ not the historical `2.8.1` example below.
 - Helm 3.14+
 - kubectl configured for your cluster
 - (Optional) Traefik ingress controller if not using the bundled one
+- For Platform Mesh, install `private-llm-pm-integration` in the KCP provider
+  workspace before `private-llm-sync-agent`, so its APIExport exists first.
 
 ## Install from OCI Registry
 
 The chart is published to GHCR as an OCI artifact:
 
 ```sh
+VERSION=2.17.1-rc.3
 helm upgrade --install private-llm \
   oci://ghcr.io/apeirora/charts/private-llm-operator \
-  --version 2.8.1 \
+  --version "$VERSION" \
+  -f reviewed-operator-values.yaml \
   --namespace private-llm-system --create-namespace \
   --set PUBLIC_HOST=llm.example.com \
   --set PUBLIC_SCHEME=https
@@ -32,8 +39,12 @@ helm upgrade --install private-llm \
 
 ## Install from Local Source
 
+Use a clean checkout of the reviewed `v$VERSION` release tag for all local-chart
+examples. `--dependency-update` does not select the source or image version.
+
 ```sh
 helm upgrade --install private-llm charts/private-llm-operator \
+  -f reviewed-operator-values.yaml \
   --namespace private-llm-system --create-namespace \
   --dependency-update \
   --set PUBLIC_HOST=llm.example.com
@@ -49,7 +60,7 @@ helm upgrade --install private-llm charts/private-llm-operator \
 | `PUBLIC_SCHEME` | URL scheme (`http` or `https`) | `http` |
 | `tls.secretName` | TLS Secret for Ingress (required for HTTPS) | `""` |
 | `image.repository` | Operator container image | `ghcr.io/apeirora/private-llm-controller` |
-| `image.tag` | Image tag | `2.8.1` |
+| `image.tag` | Image tag | Packaged chart release version |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `imagePullSecrets` | Image pull secrets | `[]` |
 
@@ -111,13 +122,15 @@ extraEnv:
 
 ## Example Configurations
 
-### Production with HTTPS
+### Development HTTPS with external Traefik
 
 ```sh
 helm upgrade --install private-llm \
   oci://ghcr.io/apeirora/charts/private-llm-operator \
+  --version "$VERSION" \
+  -f reviewed-operator-values.yaml \
   --namespace private-llm-operator --create-namespace \
-  --set PUBLIC_HOST=llm.production.example.com \
+  --set PUBLIC_HOST=llm.dev.example.com \
   --set PUBLIC_SCHEME=https \
   --set tls.secretName=llm-tls-cert \
   --set traefik.enabled=false \
@@ -129,6 +142,7 @@ helm upgrade --install private-llm \
 
 ```sh
 helm upgrade --install private-llm charts/private-llm-operator \
+  -f reviewed-operator-values.yaml \
   --namespace private-llm-system --create-namespace \
   --dependency-update \
   --set PUBLIC_HOST=localhost \
@@ -139,11 +153,15 @@ helm upgrade --install private-llm charts/private-llm-operator \
 
 ### Custom Image
 
+Use an independently verified build of the same reviewed release, including
+slug-policy support; changing the repository does not validate that image.
+
 ```sh
 helm upgrade --install private-llm charts/private-llm-operator \
+  -f reviewed-operator-values.yaml \
   --namespace private-llm-system --create-namespace \
   --set image.repository=my-registry.example.com/private-llm-controller \
-  --set image.tag=v2.8.1 \
+  --set image.tag="$VERSION" \
   --set image.pullPolicy=Always \
   --set 'imagePullSecrets[0].name=my-registry-secret'
 ```

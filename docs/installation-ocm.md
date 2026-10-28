@@ -7,6 +7,12 @@ standalone operator, or `operator.slugPolicy` for the OCM installer. Pass that
 reviewed values file to the commands below. The empty default is intentionally
 not deployable. Stop competing old managers for the Recreate migration.
 
+The development pilot uses direct Helm; it does not validate the OCM route or
+component publication. The RC example below is an explicit development opt-in
+only after independently verifying that exact component and its referenced
+artifacts. Do not use a broad version constraint or deploy the RC to production.
+Use the local installer chart and bootstrap from a clean checkout of the reviewed
+`v2.17.1-rc.3` tag; selecting a component version does not update those local files.
 
 Deploy the Private LLM Operator using the [Open Component Model](https://ocm.software/) (OCM) supply chain. The OCM controller resolves the component version from an OCI registry, extracts the Helm chart via a `Resource`, and hands it to a `FluxDeployer` that creates a Flux `HelmRelease`.
 
@@ -68,11 +74,13 @@ kubectl -n private-llm-system create secret docker-registry ghcr-credentials \
 
 ## Step 2: Configure Values
 
-Create a `values.yaml` override file:
+Create a `values.yaml` override file. Separately prepare
+`reviewed-ocm-values.yaml` with the reviewed `operator.slugPolicy` cutoff and
+identity map; the example does not invent either value:
 
 ```yaml
 component:
-  semver: ">=2.0.1"               # semver constraint for the component version
+  semver: "2.17.1-rc.3" # Development only, after separate OCM artifact verification.
 
 operator:
   targetNamespace: private-llm-system
@@ -93,7 +101,7 @@ operator:
 | `component.componentName` | OCM component identity | `llm.privatellms.msp/private-llm` |
 | `component.repositoryUrl` | OCI registry URL | `ghcr.io/apeirora/ocm` |
 | `component.secretRefName` | Secret with registry credentials | `ghcr-credentials` |
-| `component.semver` | Semver version or constraint | `>=2.0.1` |
+| `component.semver` | Override with an exact reviewed component version | Historical `>=2.0.1`; must be overridden |
 | `component.interval` | Reconciliation interval | `1m` |
 | `component.chartResourceName` | Name of the chart resource in the component | `oci-helm-chart-private-llm-operator` |
 | `operator.targetNamespace` | Namespace where the operator is deployed | `private-llm-system` |
@@ -103,6 +111,7 @@ operator:
 | `operator.traefikEnabled` | Deploy bundled Traefik | `true` |
 | `operator.tlsSecretName` | TLS secret for ingress | `""` |
 | `operator.ingressExtraAnnotations` | Extra ingress annotations | `{}` |
+| `operator.slugPolicy` | Required fixed cutoff and verified MSP identity map | Empty cutoff; prevents startup |
 
 ## Step 3: Install via Helm
 
@@ -110,6 +119,7 @@ operator:
 helm template private-llm charts/private-llm-operator-ocm/ \
   -f charts/private-llm-operator-ocm/values.yaml \
   -f ./values.yaml \
+  -f reviewed-ocm-values.yaml \
   | kubectl apply -f -
 ```
 
@@ -143,13 +153,15 @@ kubectl get pods -n private-llm-system
 
 ## Upgrading
 
-Update `component.semver` in your values file and re-apply:
+Update `component.semver` to the exact reviewed release after its artifact and
+migration checks, preserving the reviewed policy, then re-apply:
 
 ```sh
-# Edit values.yaml: component.semver: ">=2.1.0"
+# Edit values.yaml: component.semver must be an exact reviewed version.
 helm template private-llm charts/private-llm-operator-ocm/ \
   -f charts/private-llm-operator-ocm/values.yaml \
   -f ./values.yaml \
+  -f reviewed-ocm-values.yaml \
   | kubectl apply -f -
 ```
 
@@ -157,16 +169,25 @@ The OCM controller detects the version change, resolves the new chart, and the `
 
 ## Manual Deployment via bootstrap.yaml
 
-For quick testing without Helm, use `ocm/bootstrap.yaml` with `envsubst`:
+Render `ocm/bootstrap.yaml` locally first; do not pipe its incomplete defaults
+directly into the cluster:
 
 ```sh
 export GH_OWNER=apeirora
-export VERSION=">=2.0.1"
+export VERSION=2.17.1-rc.3 # Development only, after separate OCM verification.
 
-envsubst < ocm/bootstrap.yaml | kubectl apply -f -
+envsubst '${GH_OWNER} ${VERSION}' < ocm/bootstrap.yaml > bootstrap-rendered.yaml
 ```
 
-This creates the same three resources (`ComponentVersion`, `Resource`, `FluxDeployer`) with sensible defaults. Edit the `FluxDeployer`'s `.spec.helmReleaseTemplate.values` section in the file to customize operator settings before applying.
+Before applying, replace the FluxDeployer's
+`.spec.helmReleaseTemplate.values.slugPolicy` with the reviewed cutoff and map,
+and review its other operator settings, including HTTPS/TLS. The generated
+empty cutoff cannot start the manager. Only after that review and the migration
+prerequisites are complete:
+
+```sh
+kubectl apply -f bootstrap-rendered.yaml
+```
 
 ## Publishing a Custom OCM Component
 
@@ -220,13 +241,17 @@ ocm get components ghcr.io/$GH_OWNER/ocm//llm.privatellms.msp/private-llm:$VERSI
 If you prefer to skip OCM entirely and install the chart directly:
 
 ```sh
-helm upgrade --install private-llm-operator charts/private-llm-operator \
+VERSION=2.17.1-rc.3 # Explicit development opt-in after artifact verification.
+helm upgrade --install private-llm-operator \
+  oci://ghcr.io/apeirora/charts/private-llm-operator \
+  --version "$VERSION" \
+  -f reviewed-operator-values.yaml \
   --namespace private-llm-system --create-namespace \
   --set PUBLIC_HOST=llm.example.com \
   --set PUBLIC_SCHEME=https \
   --set tls.secretName=private-llm \
   --set image.repository=ghcr.io/apeirora/private-llm-controller \
-  --set image.tag=2.8.1 \
+  --set image.tag="$VERSION" \
   --set 'imagePullSecrets[0].name=ghcr-credentials' \
   --set traefik.enabled=false
 ```
