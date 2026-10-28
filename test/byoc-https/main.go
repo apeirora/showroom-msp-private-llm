@@ -399,14 +399,38 @@ func (f *fixture) testTLSRejection() error {
 		}
 		f.pass(tc.name, "")
 	}
-	// Intentionally disable client verification only to test server rejection without SNI.
-	conn, err := tls.Dial("tcp", f.address, &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12})
+	return f.testMissingSNI()
+}
+
+func (f *fixture) testMissingSNI() error {
+	dialer := &net.Dialer{Timeout: 3 * time.Second}
+	config := &tls.Config{RootCAs: f.pool, MinVersion: tls.VersionTLS12}
+	control := config.Clone()
+	control.ServerName = hostname
+	conn, err := tls.DialWithDialer(dialer, "tcp", f.address, control)
+	if err != nil {
+		return fmt.Errorf("valid-SNI control failed certificate verification: %w", err)
+	}
+	_ = conn.Close()
+	// Dial derives ServerName from the loopback IP when empty; crypto/tls omits
+	// IP addresses from SNI. Keep normal verification enabled and require the
+	// server's specific rejection, never a local certificate or network failure.
+	conn, err = tls.DialWithDialer(dialer, "tcp", f.address, config)
 	if err == nil {
 		_ = conn.Close()
 		return errors.New("missing SNI unexpectedly accepted")
 	}
-	f.pass("missing_sni_rejected", "")
+	if !isMissingSNIAlert(err) {
+		return fmt.Errorf("missing-SNI probe did not receive the server's unrecognized-name alert: %w", err)
+	}
+	f.pass("missing_sni_rejected", "valid-SNI control verified; missing SNI received remote unrecognized-name alert")
 	return nil
+}
+
+func isMissingSNIAlert(err error) bool {
+	var remote *net.OpError
+	return errors.As(err, &remote) && remote.Op == "remote error" &&
+		remote.Err.Error() == "tls: unrecognized name"
 }
 
 func (f *fixture) testPrivateModelPort() error {

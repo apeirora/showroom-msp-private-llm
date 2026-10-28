@@ -27,6 +27,9 @@ The JSON report records these checks:
 - Plaintext HTTP rejected without a redirect to HTTPS.
 - Untrusted certificates, missing SNI, unknown SNI, expired certificates and
   certificates for another hostname rejected by a verifying client.
+- The missing-SNI probe first verifies a valid-SNI control, then requires the
+  server's unrecognized-name TLS alert. Client certificate failures and network
+  errors cannot count as proof of server rejection; verification stays enabled.
 - A sibling container can reach Traefik but cannot reach the loopback model port.
 - Kubernetes-style atomic `..data` symlink replacement followed by a controlled
   restart serves the replacement certificate, checked by its fingerprint.
