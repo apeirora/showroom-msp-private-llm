@@ -83,19 +83,36 @@ sequenceDiagram
     participant LLM as llama.cpp
 
     Client->>Traefik: GET /llm/<slug>/v1/chat/completions<br>Authorization: Bearer <token>
-    Traefik->>AuthServer: GET /auth/verify?slug=<slug><br>Authorization: Bearer <token>
-    AuthServer->>K8s: List Secrets with label<br>llm.privatellms.msp/slug=<slug>
-    K8s-->>AuthServer: Matching Secrets
-    AuthServer->>AuthServer: Compare token with OPENAI_API_KEY
+    Traefik->>AuthServer: GET /auth/verify?namespace=...&instance=...&uid=...&slug=...<br>Authorization: Bearer <token>
+    AuthServer->>K8s: Get bound instance; list Secrets in its namespace
+    K8s-->>AuthServer: Instance and candidate Secrets
+    AuthServer->>AuthServer: Constant-time token comparison
+    AuthServer->>K8s: For a match: verify APITokenRequest owner and unique slug
     AuthServer-->>Traefik: 200 OK / 401 Unauthorized
     Traefik->>LLM: Forward request (strip /llm/<slug> prefix)
     LLM-->>Client: Response
 ```
 
-The auth server validates tokens by:
-1. Extracting the slug from the query parameter or `X-Forwarded-Uri` header
-2. Looking up Secrets labeled with `llm.privatellms.msp/slug=<slug>`
-3. Comparing the bearer token against the Secret's `OPENAI_API_KEY` field
+For hosted routes, the auth server validates tokens by:
+1. Requiring a single namespace, instance name, UID and slug from the operator's
+   forwardAuth URL. Client-forwarded headers cannot supply the binding.
+2. Reading that instance and checking its UID, slug and deletion state, then
+   listing slug-labeled Secrets only within its namespace.
+3. Comparing the bearer token against candidate `OPENAI_API_KEY` values in constant
+   time before fetching any token-request owner or listing instances for collisions.
+4. Requiring a matching Opaque Secret controlled by the current APITokenRequest
+   for this instance, with matching labels, published Secret name, UID and observed
+   generation. Deleting resources and API errors deny access.
+5. Denying duplicate slug claims before returning 200. This is an ambiguity check,
+   not protection against all route-prefix conflicts; immutable operator-owned
+   slugs remain outstanding.
+
+Direct API reads make revocation checks independent of the manager cache, but
+per-request API load requires deployment validation. Existing owned middleware
+URLs are upgraded before model-setting and workload gates; rolling upgrades can
+still deny requests until the new leader completes that migration. See the
+README's authentication upgrade notes. BYOC inference uses a separate API-key
+file and does not pass through this forwardAuth handler.
 
 ### Sync Agent
 

@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
@@ -235,7 +236,7 @@ var _ = Describe("APITokenRequest controller", func() {
 		Expect(ready.Reason).To(Equal("Provisioned"))
 	})
 
-	It("should backfill endpoint and slug on existing token secret", func() {
+	It("should backfill the endpoint and rotate a legacy token with an ambiguous slug binding", func() {
 		instanceName := "instance-" + utilrand.String(5)
 		tokenName := "token-" + utilrand.String(5)
 		slug := "slug-" + utilrand.String(5)
@@ -285,6 +286,8 @@ var _ = Describe("APITokenRequest controller", func() {
 				openAIAPIURLKey: []byte(""),
 			},
 		}
+		// Backfill applies to an operator-owned Secret; unrelated Secrets must not be adopted.
+		Expect(ctrl.SetControllerReference(tr, staleSecret, scheme.Scheme)).To(Succeed())
 		Expect(k8sClient.Create(ctx, staleSecret)).To(Succeed())
 
 		result, err = reconciler.Reconcile(ctx, req)
@@ -295,7 +298,9 @@ var _ = Describe("APITokenRequest controller", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, &secret)).To(Succeed())
 		Expect(string(secret.Data[openAIAPIURLKey])).To(Equal(expectedEndpoint))
 		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/slug", slug))
-		Expect(string(secret.Data[openAIAPIKeyKey])).To(Equal("static-test-token"))
+		Expect(string(secret.Data[openAIAPIKeyKey])).NotTo(Equal("static-test-token"))
+		Expect(secret.Data[openAIAPIKeyKey]).NotTo(BeEmpty())
+		Expect(secret.Annotations[credentialInstanceAnnotation]).To(Equal(string(inst.UID)))
 	})
 
 	It("should remove generated secret during deletion", func() {

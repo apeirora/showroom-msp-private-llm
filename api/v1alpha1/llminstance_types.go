@@ -139,6 +139,16 @@ type LLMInstanceStatus struct {
 	// the new one.
 	ActiveBYOCKubeconfigSecretName string `json:"activeBYOCKubeconfigSecretName,omitempty"`
 
+	// ActiveBYOCTargetID binds TLS material to the API trust and cluster UID.
+	ActiveBYOCTargetID string `json:"activeBYOCTargetID,omitempty"`
+
+	// ActiveBYOCTLSDomain and namespace preserve cleanup coordinates if operator configuration changes.
+	ActiveBYOCTLSDomain    string `json:"activeBYOCTLSDomain,omitempty"`
+	ActiveBYOCTLSNamespace string `json:"activeBYOCTLSNamespace,omitempty"`
+
+	// ActiveBYOCSlug is the immutable workload identity captured on first provisioning.
+	ActiveBYOCSlug string `json:"activeBYOCSlug,omitempty"`
+
 	// ObservedGeneration reflects the generation observed by the controller.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 

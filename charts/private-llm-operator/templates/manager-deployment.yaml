@@ -49,6 +49,16 @@ spec:
               value: {{ .Values.tls.secretName | default "" | quote }}
             - name: INGRESS_EXTRA_ANNOTATIONS
               value: {{ .Values.ingress.extraAnnotations | toJson | quote }}
+            - name: BYOC_TLS_DOMAIN
+              value: {{ .Values.byocTLS.domain | quote }}
+            - name: BYOC_TLS_NAMESPACE
+              value: {{ .Values.byocTLS.namespace | quote }}
+            - name: BYOC_TLS_ISSUER
+              value: {{ .Values.byocTLS.issuerName | quote }}
+            - name: BYOC_TLS_ISSUER_NAMESPACE
+              value: {{ .Values.byocTLS.issuerNamespace | quote }}
+            - name: BYOC_DNS_CLASS
+              value: {{ .Values.byocTLS.dnsClass | quote }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:

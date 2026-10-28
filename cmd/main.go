@@ -20,7 +20,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -190,6 +193,21 @@ func main() {
 	var publicSchemeEnv string
 	var ingressExtraAnnotationsJSON string
 	var tlsSecretName string
+	var byocTLS controller.BYOCTLSConfig
+	flag.StringVar(&byocTLS.Domain, "byoc-tls-domain", os.Getenv("BYOC_TLS_DOMAIN"), "Operator-managed BYOC DNS suffix")
+	flag.StringVar(
+		&byocTLS.Namespace, "byoc-tls-namespace", os.Getenv("BYOC_TLS_NAMESPACE"),
+		"Protected namespace for per-instance BYOC certificates",
+	)
+	flag.StringVar(
+		&byocTLS.IssuerName, "byoc-tls-issuer", os.Getenv("BYOC_TLS_ISSUER"),
+		"Existing Gardener Certificate issuer",
+	)
+	flag.StringVar(
+		&byocTLS.IssuerNamespace, "byoc-tls-issuer-namespace", os.Getenv("BYOC_TLS_ISSUER_NAMESPACE"),
+		"Existing Gardener issuer namespace",
+	)
+	flag.StringVar(&byocTLS.DNSClass, "byoc-dns-class", os.Getenv("BYOC_DNS_CLASS"), "Gardener DNS controller class")
 	flag.StringVar(&authBind, "auth-bind-address", ":8090", "Address for internal auth server")
 	flag.StringVar(
 		&authExternalURL,
@@ -299,19 +317,10 @@ func main() {
 
 	labeledClient := newLabelingClient(mgr.GetClient(), baseLabels)
 
-	// Start lightweight auth server that validates Bearer tokens against Secrets
-	authServer := &auth.Server{K8sClient: labeledClient}
-	go func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		if err := authServer.Start(ctx, authBind); err != nil {
-			setupLog.Error(err, "auth server stopped")
-		}
-	}()
-
 	if err = (&controller.LLMInstanceReconciler{
 		Client:              labeledClient,
 		ModelServerCeilings: modelCeilings,
+		BYOCTLS:             byocTLS,
 		Scheme:              mgr.GetScheme(),
 		PublicHost: func() string {
 			if v := os.Getenv("PUBLIC_HOST"); v != "" {
@@ -384,11 +393,44 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Auth must run on every replica, independently of manager leader election,
+	// while sharing its process shutdown signal and bounded connection cleanup.
+	authServer := &auth.Server{K8sClient: mgr.GetAPIReader()}
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
+	err = runOperator(ctrl.SetupSignalHandler(), mgr.Start, func(ctx context.Context) error {
+		return authServer.Start(ctx, authBind)
+	})
+	if err != nil {
+		setupLog.Error(err, "problem running operator")
 		os.Exit(1)
 	}
+}
+
+// runOperator starts auth on every replica, outside manager leader election.
+// Either service stopping cancels the other. Both Start functions must honor
+// cancellation and finish their bounded cleanup before returning.
+func runOperator(ctx context.Context, startManager, startAuth func(context.Context) error) error {
+	runtimeCtx, cancelRuntime := context.WithCancel(ctx)
+	defer cancelRuntime()
+	authStopped := make(chan error, 1)
+	go func() {
+		err := startAuth(runtimeCtx)
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		if err == nil && runtimeCtx.Err() == nil {
+			err = errors.New("listener stopped without runtime cancellation")
+		}
+		if err != nil {
+			err = fmt.Errorf("authentication server: %w", err)
+		}
+		authStopped <- err
+		cancelRuntime()
+	}()
+
+	managerErr := startManager(runtimeCtx)
+	cancelRuntime()
+	return errors.Join(managerErr, <-authStopped)
 }
 
 func initOpenTelemetry(ctx context.Context) (func(context.Context) error, error) {

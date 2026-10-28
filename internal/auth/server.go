@@ -17,93 +17,192 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
+	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const (
+	slugKey               = "llm.privatellms.msp/slug"
+	credentialInstanceKey = "llm.privatellms.msp/credential-instance-uid"
+	credentialTargetKey   = "llm.privatellms.msp/credential-target"
+	authorizationTimeout  = 5 * time.Second
+	shutdownTimeout       = 5 * time.Second
+)
+
 type Server struct {
-	K8sClient client.Client
+	// Use the API reader, not the manager cache: revocation must not rely on
+	// eventually consistent Secret or APITokenRequest data.
+	K8sClient client.Reader
 }
 
-// Start runs a small HTTP server handling /auth/verify to validate Authorization: Bearer tokens.
-// It uses an opaque instance slug (no namespace exposure). The slug is taken from:
-// - the 'slug' query parameter when provided (preferred)
-// - or parsed from 'X-Forwarded-Uri' when the request path looks like '/llm/<slug>/...'
+// Start handles /auth/verify. Instance identity comes exclusively from the
+// operator-managed forwardAuth URL, never from client-forwarded headers.
 func (s *Server) Start(ctx context.Context, bindAddress string) error {
-	mux := s.Handler(ctx)
+	srv := s.httpServer(ctx, bindAddress)
+	shutdownDone := make(chan struct{})
+	stopShutdown := context.AfterFunc(ctx, func() {
+		defer close(shutdownDone)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			_ = srv.Close()
+		}
+	})
+	err := srv.ListenAndServe()
+	// ListenAndServe returns as soon as shutdown closes the listener. Wait for
+	// bounded connection cleanup, or cancel the callback after a startup error.
+	if !stopShutdown() {
+		<-shutdownDone
+	}
+	return err
+}
 
-	srv := &http.Server{Addr: bindAddress, Handler: mux}
-	go func() {
-		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
-	}()
-	return srv.ListenAndServe()
+func (s *Server) httpServer(ctx context.Context, bindAddress string) *http.Server {
+	// This listener makes small forwardAuth decisions; it never streams model
+	// responses. Socket deadlines and the total API lookup deadline are separate.
+	return &http.Server{
+		Addr: bindAddress, Handler: s.Handler(ctx),
+		ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
+		WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return ctx },
+	}
+}
+
+type instanceBinding struct {
+	namespace, name, uid, slug string
+}
+
+func parseBinding(query url.Values) (instanceBinding, bool) {
+	for _, key := range []string{"namespace", "instance", "uid", "slug"} {
+		if len(query[key]) != 1 || strings.TrimSpace(query.Get(key)) == "" {
+			return instanceBinding{}, false
+		}
+	}
+	b := instanceBinding{query.Get("namespace"), query.Get("instance"), query.Get("uid"), query.Get("slug")}
+	valid := len(validation.IsDNS1123Label(b.namespace)) == 0 &&
+		len(validation.IsDNS1123Subdomain(b.name)) == 0 && len(validation.IsValidLabelValue(b.slug)) == 0
+	return b, valid
 }
 
 // Handler returns the HTTP handler for the auth server. Useful for tests.
 func (s *Server) Handler(ctx context.Context) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/verify", func(w http.ResponseWriter, r *http.Request) {
-		logger := log.FromContext(ctx)
-		slug := r.URL.Query().Get("slug")
-		if slug == "" {
-			// Try to derive slug from forwarded URI: expected '/llm/<slug>/...'
-			forwarded := r.Header.Get("X-Forwarded-Uri")
-			if forwarded != "" {
-				// normalize and split
-				if strings.HasPrefix(forwarded, "/") {
-					parts := strings.Split(forwarded, "/")
-					// parts: ['', 'llm', '<slug>', ...]
-					if len(parts) >= 3 && parts[1] == "llm" && parts[2] != "" {
-						slug = parts[2]
-					}
-				}
-			}
-		}
-		if slug == "" {
-			http.Error(w, "missing slug", http.StatusBadRequest)
+		binding, ok := parseBinding(r.URL.Query())
+		if !ok {
+			http.Error(w, "missing or invalid instance binding", http.StatusBadRequest)
 			return
 		}
-		// Parse Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		header := r.Header.Get("Authorization")
+		token := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
+		if !strings.HasPrefix(header, "Bearer ") || token == "" {
 			w.Header().Set("WWW-Authenticate", "Bearer")
 			http.Error(w, "missing bearer token", http.StatusUnauthorized)
 			return
 		}
-		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-		if token == "" {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			http.Error(w, "empty bearer token", http.StatusUnauthorized)
-			return
-		}
-		// Find any Secret with matching token
-		var secrets corev1.SecretList
-		// Search cluster-wide by opaque slug label
-		selector := labels.SelectorFromSet(map[string]string{
-			"llm.privatellms.msp/slug": slug,
-		})
-		if err := s.K8sClient.List(ctx, &secrets, &client.ListOptions{LabelSelector: selector}); err != nil {
-			logger.Error(err, "failed to list secrets by slug")
+		allowed, err := s.authorize(r.Context(), binding, token)
+		if err != nil {
+			log.FromContext(ctx).Error(err, "failed to validate instance token")
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		for _, sec := range secrets.Items {
-			if val, ok := sec.Data["OPENAI_API_KEY"]; ok {
-				if string(val) == token {
-					w.WriteHeader(http.StatusOK)
-					_, _ = w.Write([]byte("ok"))
-					return
-				}
-			}
+		if !allowed {
+			w.Header().Set("WWW-Authenticate", "Bearer error=\"invalid_token\"")
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
 		}
-		w.Header().Set("WWW-Authenticate", "Bearer error=\"invalid_token\"")
-		http.Error(w, "invalid token", http.StatusUnauthorized)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
 	})
 	return mux
+}
+
+func (s *Server) authorize(ctx context.Context, binding instanceBinding, token string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, authorizationTimeout)
+	defer cancel()
+	var inst llmv1alpha1.LLMInstance
+	if err := s.K8sClient.Get(ctx, client.ObjectKey{Namespace: binding.namespace, Name: binding.name}, &inst); err != nil {
+		return false, client.IgnoreNotFound(err)
+	}
+	if string(inst.UID) != binding.uid || !inst.DeletionTimestamp.IsZero() || inst.IsBYOC() ||
+		inst.Status.ActiveBYOCKubeconfigSecretName != "" ||
+		strings.TrimSpace(inst.Annotations[slugKey]) != binding.slug {
+		return false, nil
+	}
+
+	var secrets corev1.SecretList
+	if err := s.K8sClient.List(ctx, &secrets, client.InNamespace(inst.Namespace),
+		client.MatchingLabels{slugKey: binding.slug}); err != nil {
+		return false, err
+	}
+	for i := range secrets.Items {
+		sec := &secrets.Items[i]
+		// Reject unrelated keys before any owner lookups or cluster-wide scans.
+		if subtle.ConstantTimeCompare(sec.Data["OPENAI_API_KEY"], []byte(token)) != 1 {
+			continue
+		}
+		valid, err := s.ownsToken(ctx, &inst, sec)
+		if err != nil {
+			return false, err
+		}
+		if valid {
+			return s.uniqueSlug(ctx, &inst, binding.slug)
+		}
+	}
+	return false, nil
+}
+
+func (s *Server) uniqueSlug(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) (bool, error) {
+	// Until slugs have an operator-owned persistence/migration contract, deny
+	// ambiguous routes rather than choosing one of several tenant claims.
+	var instances llmv1alpha1.LLMInstanceList
+	if err := s.K8sClient.List(ctx, &instances); err != nil {
+		return false, err
+	}
+	for _, other := range instances.Items {
+		if strings.TrimSpace(other.Annotations[slugKey]) == slug &&
+			(other.UID != inst.UID || other.Namespace != inst.Namespace || other.Name != inst.Name) {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
+func (s *Server) ownsToken(ctx context.Context, inst *llmv1alpha1.LLMInstance, sec *corev1.Secret) (bool, error) {
+	// The route UID alone does not bind a credential: a recreated instance or
+	// a BYOC-to-hosted transition can create its route before token rotation.
+	// Legacy keys remain denied until the token controller binds them safely.
+	if sec.Namespace != inst.Namespace || sec.Type != corev1.SecretTypeOpaque || !sec.DeletionTimestamp.IsZero() ||
+		sec.Labels["llm.privatellms.msp/instance"] != inst.Name ||
+		sec.Annotations[credentialInstanceKey] != string(inst.UID) || sec.Annotations[credentialTargetKey] != "" {
+		return false, nil
+	}
+	owner := metav1.GetControllerOf(sec)
+	if owner == nil || owner.UID == "" || owner.Kind != "APITokenRequest" ||
+		owner.APIVersion != llmv1alpha1.GroupVersion.String() {
+		return false, nil
+	}
+	var tr llmv1alpha1.APITokenRequest
+	if err := s.K8sClient.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: owner.Name}, &tr); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return tr.UID == owner.UID && tr.DeletionTimestamp.IsZero() && tr.Spec.InstanceName == inst.Name &&
+		tr.Status.SecretName == sec.Name && tr.Status.ObservedGeneration == tr.Generation &&
+		sec.Labels["llm.privatellms.msp/apitokenrequest"] == tr.Name, nil
 }
