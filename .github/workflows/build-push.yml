@@ -101,6 +101,7 @@ jobs:
           - private-llm-pm-app
     env:
       VERSION: ${{ needs.publish-image.outputs.version }}
+      IMAGE: ${{ needs.publish-image.outputs.image }}
       CHART_REGISTRY: ${{ needs.publish-image.outputs.chart_registry }}
     steps:
       - name: Check out repository
@@ -121,9 +122,9 @@ jobs:
           chart_dir="charts/${chart}"
           out_dir="dist/${chart}"
           pkg="${chart}-${VERSION}.tgz"
-          # Update the default before vendoring the operator into the umbrella.
-          # --app-version alone leaves values.image.tag at the previous release.
-          python3 hack/set-release-image.py charts/private-llm-operator/values.yaml "$VERSION"
+          # Match the published image before vendoring the operator into the umbrella.
+          # --app-version alone leaves the previous tag and the upstream repository.
+          python3 hack/set-release-image.py charts/private-llm-operator/values.yaml "$VERSION" --repository "$IMAGE"
           echo "::group::${chart}"
           # Pull deps recursively for any sub-chart with its own deps. `helm
           # dep update` on the umbrella alone does not descend, so file:// sub
