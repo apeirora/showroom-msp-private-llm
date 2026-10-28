@@ -1,5 +1,7 @@
 # Usage: envsubst < bootstrap.yaml | kubectl apply -f -
 # Required variables: GH_OWNER, VERSION
+# Before applying, replace values.slugPolicy with the reviewed fixed-cutover map.
+# Empty policy intentionally cannot start the new operator; see docs/slug-policy.md.
 apiVersion: delivery.ocm.software/v1alpha1
 kind: ComponentVersion
 metadata:
@@ -44,6 +46,9 @@ spec:
     releaseName: private-llm-operator
     targetNamespace: private-llm-system
     values:
+      slugPolicy:
+        cutover: ""
+        entries: []
       PUBLIC_HOST: llm.example.com
       PUBLIC_SCHEME: http
       traefik:

@@ -77,7 +77,9 @@ var _ = Describe("APITokenRequest controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
 
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
 		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
@@ -177,6 +179,7 @@ var _ = Describe("APITokenRequest controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
 
 		tr := &llmv1alpha1.APITokenRequest{
 			ObjectMeta: metav1.ObjectMeta{
@@ -217,6 +220,7 @@ var _ = Describe("APITokenRequest controller", func() {
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: instanceName, Namespace: namespace}, inst)).To(Succeed())
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
 		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
@@ -252,6 +256,8 @@ var _ = Describe("APITokenRequest controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
 		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
@@ -320,7 +326,9 @@ var _ = Describe("APITokenRequest controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, inst)).To(Succeed())
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
 
+		reconciler.SlugPolicy = testLegacySlugPolicy(inst)
 		setInstanceReadyStatus(inst, expectedEndpoint)
 		Expect(k8sClient.Status().Update(ctx, inst)).To(Succeed())
 
@@ -372,6 +380,9 @@ var _ = Describe("APITokenRequest controller", func() {
 })
 
 func setInstanceReadyStatus(inst *llmv1alpha1.LLMInstance, endpoint string) {
+	if inst.Status.Slug == "" {
+		inst.Status.Slug, inst.Status.SlugSource = inst.Annotations[slugAnnotationKey], testLegacySlugSource
+	}
 	inst.Status.Endpoint = endpoint
 	inst.Status.ObservedGeneration = inst.Generation
 	meta.SetStatusCondition(&inst.Status.Conditions, metav1.Condition{

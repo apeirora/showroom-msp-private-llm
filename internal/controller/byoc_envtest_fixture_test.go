@@ -115,7 +115,7 @@ func (f byocIntegrationFixture) provision(inst *llmv1alpha1.LLMInstance, remote 
 	}
 	Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(inst), inst)).To(Succeed())
 	var svc corev1.Service
-	Expect(remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: byocBaseName(inst.Annotations[slugAnnotationKey])}, &svc)).To(Succeed())
+	Expect(remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: byocBaseName(inst.Status.Slug)}, &svc)).To(Succeed())
 	// A syntactically public address is required; external probes are overridden.
 	// No connection or DNS write to this address occurs in envtest.
 	svc.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{{IP: "8.8.8.8"}}
@@ -129,7 +129,7 @@ func (f byocIntegrationFixture) provision(inst *llmv1alpha1.LLMInstance, remote 
 func byocMarkDeploymentReady(remote client.Client, inst *llmv1alpha1.LLMInstance) {
 	ctx := context.Background()
 	var deploy appsv1.Deployment
-	Expect(remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: byocBaseName(inst.Annotations[slugAnnotationKey])}, &deploy)).To(Succeed())
+	Expect(remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: byocBaseName(inst.Status.Slug)}, &deploy)).To(Succeed())
 	deploy.Status.ObservedGeneration = deploy.Generation
 	deploy.Status.Replicas, deploy.Status.UpdatedReplicas, deploy.Status.ReadyReplicas, deploy.Status.AvailableReplicas = 1, 1, 1, 1
 	Expect(remote.Status().Update(ctx, &deploy)).To(Succeed())

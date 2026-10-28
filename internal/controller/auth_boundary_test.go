@@ -143,7 +143,7 @@ func TestTokenSecretRejectsAdoption(t *testing.T) {
 }
 
 var _ = Describe("Authentication boundary against the Kubernetes API", func() {
-	It("accepts controller-minted tokens, rejects foreign Secrets and collisions, and revokes on deletion", func() {
+	It("accepts controller-minted tokens, rejects foreign Secrets, ignores tenant slug collisions, and revokes on deletion", func() {
 		ctx := context.Background()
 		ns := "auth-" + utilrand.String(5)
 		foreignNS := "auth-foreign-" + utilrand.String(5)
@@ -164,7 +164,7 @@ var _ = Describe("Authentication boundary against the Kubernetes API", func() {
 			Spec:       llmv1alpha1.APITokenRequestSpec{InstanceName: inst.Name},
 		}
 		Expect(k8sClient.Create(ctx, tr)).To(Succeed())
-		reconciler := &APITokenRequestReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		reconciler := &APITokenRequestReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), SlugPolicy: testLegacySlugPolicy(inst)}
 		req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: ns, Name: tr.Name}}
 		for i := 0; i < 2; i++ {
 			_, err := reconciler.Reconcile(ctx, req)
@@ -175,7 +175,7 @@ var _ = Describe("Authentication boundary against the Kubernetes API", func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: ns, Name: tr.Status.SecretName}, &sec)).To(Succeed())
 		// Keep generated token bytes in memory; only assert on HTTP status.
 		query := url.Values{"namespace": {ns}, "instance": {inst.Name}, "uid": {string(inst.UID)}, "slug": {slug}}
-		handler := (&auth.Server{K8sClient: k8sClient}).Handler(ctx)
+		handler := (&auth.Server{K8sClient: k8sClient, SlugPolicy: reconciler.SlugPolicy}).Handler(ctx)
 		status := func(token string) int {
 			request := httptest.NewRequest(http.MethodGet, "/auth/verify?"+query.Encode(), nil)
 			request.Header.Set("Authorization", "Bearer "+token)
@@ -206,7 +206,7 @@ var _ = Describe("Authentication boundary against the Kubernetes API", func() {
 			Name: "other", Namespace: foreignNS, Annotations: map[string]string{slugAnnotationKey: slug},
 		}}
 		Expect(k8sClient.Create(ctx, collision)).To(Succeed())
-		Expect(status(string(sec.Data[openAIAPIKeyKey]))).To(Equal(http.StatusUnauthorized))
+		Expect(status(string(sec.Data[openAIAPIKeyKey]))).To(Equal(http.StatusOK))
 		Expect(k8sClient.Delete(ctx, collision)).To(Succeed())
 		Expect(status(string(sec.Data[openAIAPIKeyKey]))).To(Equal(http.StatusOK))
 		Expect(k8sClient.Delete(ctx, tr)).To(Succeed())
@@ -266,7 +266,14 @@ func TestExistingAuthUpgradesBeforeWorkloadGates(t *testing.T) {
 				builder = builder.WithObjects(mw)
 			}
 			c := builder.Build()
-			r := &LLMInstanceReconciler{Client: deploymentReadFailure{Client: c}, Scheme: sch, AuthServiceURL: "http://auth"}
+			r := &LLMInstanceReconciler{Client: deploymentReadFailure{Client: c}, Scheme: sch, AuthServiceURL: "http://auth", SlugPolicy: testLegacySlugPolicy(inst)}
+			if err := c.Update(ctx, inst); err != nil {
+				t.Fatal(err)
+			}
+			inst.Status.Slug, inst.Status.SlugSource = "demo", testLegacySlugSource
+			if err := c.Status().Update(ctx, inst); err != nil {
+				t.Fatal(err)
+			}
 			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: client.ObjectKeyFromObject(inst)})
 			if (err != nil) != tt.wantError {
 				t.Fatalf("reconcile error=%v, want error=%v", err, tt.wantError)
@@ -316,7 +323,7 @@ var _ = Describe("Token retargeting across instances", func() {
 		tr := &llmv1alpha1.APITokenRequest{ObjectMeta: metav1.ObjectMeta{Name: "access", Namespace: ns.Name},
 			Spec: llmv1alpha1.APITokenRequestSpec{InstanceName: instances[0].Name}}
 		Expect(k8sClient.Create(ctx, tr)).To(Succeed())
-		reconciler := &APITokenRequestReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+		reconciler := &APITokenRequestReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), SlugPolicy: testLegacySlugPolicy(instances...)}
 		req := ctrl.Request{NamespacedName: client.ObjectKeyFromObject(tr)}
 		for i := 0; i < 2; i++ {
 			_, err := reconciler.Reconcile(ctx, req)
@@ -326,7 +333,7 @@ var _ = Describe("Token retargeting across instances", func() {
 		var sec corev1.Secret
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: ns.Name, Name: tr.Status.SecretName}, &sec)).To(Succeed())
 		token := string(sec.Data[openAIAPIKeyKey])
-		handler := (&auth.Server{K8sClient: k8sClient}).Handler(ctx)
+		handler := (&auth.Server{K8sClient: k8sClient, SlugPolicy: reconciler.SlugPolicy}).Handler(ctx)
 		status := func(inst *llmv1alpha1.LLMInstance) int {
 			query := url.Values{"namespace": {inst.Namespace}, "instance": {inst.Name}, "uid": {string(inst.UID)}, "slug": {inst.Annotations[slugAnnotationKey]}}
 			request := httptest.NewRequest(http.MethodGet, "/auth/verify?"+query.Encode(), nil)

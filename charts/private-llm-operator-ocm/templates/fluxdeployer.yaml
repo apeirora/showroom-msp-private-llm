@@ -13,6 +13,8 @@ spec:
     releaseName: {{ .Values.component.name }}
     targetNamespace: {{ .Values.operator.targetNamespace }}
     values:
+      slugPolicy:
+        {{- toYaml .Values.operator.slugPolicy | nindent 8 }}
       PUBLIC_HOST: {{ .Values.operator.publicHost }}
       PUBLIC_SCHEME: {{ .Values.operator.publicScheme }}
       {{- if .Values.operator.tlsSecretName }}

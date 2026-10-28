@@ -21,6 +21,9 @@ spec:
     matchLabels:
       control-plane: controller-manager
   replicas: 1
+  strategy:
+    type: Recreate
+    rollingUpdate: null
   template:
     metadata:
       annotations:
@@ -65,8 +68,13 @@ spec:
         - --health-probe-bind-address=:8081
         - --auth-bind-address=:8090
         - --auth-external-url=$(AUTH_EXTERNAL_URL)
+        - --slug-policy-file=/etc/private-llm-slugs/policy.json
         image: controller:latest
         name: manager
+        volumeMounts:
+        - name: slug-policy
+          mountPath: /etc/private-llm-slugs
+          readOnly: true
         env:
         - name: PUBLIC_HOST
           value: localhost
@@ -110,4 +118,8 @@ spec:
             cpu: 10m
             memory: 64Mi
       serviceAccountName: controller-manager
+      volumes:
+      - name: slug-policy
+        configMap:
+          name: slug-policy
       terminationGracePeriodSeconds: 10

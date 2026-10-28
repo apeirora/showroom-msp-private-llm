@@ -38,6 +38,7 @@ func tokenEndpointFixture(t *testing.T) (*APITokenRequestReconciler, *llmv1alpha
 			Annotations: map[string]string{slugAnnotationKey: "model-slug"}},
 		Spec: llmv1alpha1.LLMInstanceSpec{ClusterRef: &llmv1alpha1.ClusterRef{KubeconfigSecretName: "cluster"}},
 	}
+	policy := testLegacySlugPolicy(inst)
 	setInstanceReadyStatus(inst, tokenFixtureHTTPSURL)
 	inst.Status.ActiveBYOCTargetID = tokenFixtureTarget
 	tr := &llmv1alpha1.APITokenRequest{
@@ -56,7 +57,7 @@ func tokenEndpointFixture(t *testing.T) (*APITokenRequestReconciler, *llmv1alpha
 		t.Fatal(err)
 	}
 	c := clientfake.NewClientBuilder().WithScheme(sch).WithStatusSubresource(inst, tr).WithObjects(inst, tr, sec).Build()
-	return &APITokenRequestReconciler{Client: c, Scheme: sch}, inst, tr, sec
+	return &APITokenRequestReconciler{Client: c, Scheme: sch, SlugPolicy: policy}, inst, tr, sec
 }
 
 func reconcileTokenEndpoint(t *testing.T, r *APITokenRequestReconciler, tr *llmv1alpha1.APITokenRequest) error {
@@ -129,10 +130,7 @@ func setTokenEndpointScenario(t *testing.T, r *APITokenRequestReconciler, inst *
 		}
 		inst.Status.Conditions[0].Status = metav1.ConditionFalse
 	case "missing-slug":
-		delete(inst.Annotations, slugAnnotationKey)
-		if err := r.Update(ctx, inst); err != nil {
-			t.Fatal(err)
-		}
+		inst.Status.Slug = ""
 	}
 	if scenario == "missing-instance" {
 		if err := r.Delete(ctx, inst); err != nil {

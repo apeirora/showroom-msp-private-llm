@@ -53,6 +53,7 @@ import (
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
 	"github.com/apeirora/showroom-msp-private-llm/internal/auth"
 	"github.com/apeirora/showroom-msp-private-llm/internal/controller"
+	"github.com/apeirora/showroom-msp-private-llm/internal/slugpolicy"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -188,6 +189,8 @@ func main() {
 		"If set the metrics endpoint is served securely")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	var slugPolicyFile string
+	flag.StringVar(&slugPolicyFile, "slug-policy-file", "", "Required operator-owned slug policy JSON file")
 	var authBind string
 	var authExternalURL string
 	var publicSchemeEnv string
@@ -236,6 +239,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	slugPolicy, err := loadSlugPolicy(slugPolicyFile)
+	if err != nil {
+		setupLog.Error(err, "invalid slug policy")
+		os.Exit(1)
+	}
 	if err := modelCeilings.Validate(); err != nil {
 		setupLog.Error(err, "invalid model server ceilings")
 		os.Exit(1)
@@ -319,6 +327,8 @@ func main() {
 
 	if err = (&controller.LLMInstanceReconciler{
 		Client:              labeledClient,
+		RouteReader:         mgr.GetAPIReader(),
+		SlugPolicy:          slugPolicy,
 		ModelServerCeilings: modelCeilings,
 		BYOCTLS:             byocTLS,
 		Scheme:              mgr.GetScheme(),
@@ -376,8 +386,9 @@ func main() {
 	}
 
 	if err = (&controller.APITokenRequestReconciler{
-		Client: labeledClient,
-		Scheme: mgr.GetScheme(),
+		Client:     labeledClient,
+		SlugPolicy: slugPolicy,
+		Scheme:     mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "APITokenRequest")
 		os.Exit(1)
@@ -395,7 +406,7 @@ func main() {
 
 	// Auth must run on every replica, independently of manager leader election,
 	// while sharing its process shutdown signal and bounded connection cleanup.
-	authServer := &auth.Server{K8sClient: mgr.GetAPIReader()}
+	authServer := &auth.Server{K8sClient: mgr.GetAPIReader(), SlugPolicy: slugPolicy}
 	setupLog.Info("starting manager")
 	err = runOperator(ctrl.SetupSignalHandler(), mgr.Start, func(ctx context.Context) error {
 		return authServer.Start(ctx, authBind)
@@ -475,4 +486,16 @@ func initOpenTelemetry(ctx context.Context) (func(context.Context) error, error)
 	))
 
 	return tp.Shutdown, nil
+}
+
+func loadSlugPolicy(path string) (*slugpolicy.Policy, error) {
+	if path == "" {
+		return nil, fmt.Errorf("--slug-policy-file is required")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open slug policy: %w", err)
+	}
+	defer func() { _ = file.Close() }()
+	return slugpolicy.Parse(file)
 }

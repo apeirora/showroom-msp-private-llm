@@ -9,6 +9,10 @@ component:
   chartResourceName: oci-helm-chart-private-llm-operator
 
 operator:
+  # Required reviewed policy passed to the extracted operator chart.
+  slugPolicy:
+    cutover: ''
+    entries: []
   targetNamespace: private-llm-system
   publicHost: localhost
   publicScheme: http

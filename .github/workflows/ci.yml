@@ -15,6 +15,7 @@ on:
       - 'hack/test-token-secret-cleanup.py'
       - 'hack/test-token-request-ui.py'
       - 'hack/test-model-server-ceilings.py'
+      - 'hack/test-slug-policy-chart.py'
       - 'hack/test-release-image-tags.py'
       - 'hack/release-image-tags.sh'
       - 'hack/set-release-image.py'
@@ -175,7 +176,7 @@ jobs:
         uses: azure/setup-helm@v4
 
       - name: Install chart test dependency
-        if: matrix.chart == 'private-llm-sync-agent'
+        if: matrix.chart == 'private-llm-sync-agent' || matrix.chart == 'private-llm-operator'
         run: python3 -m pip install PyYAML==6.0.3
 
       - name: Lint, template, and package chart
@@ -200,6 +201,7 @@ jobs:
           if [ "$chart" = "private-llm-operator" ]; then
             python3 hack/test-token-request-ui.py
             python3 hack/test-model-server-ceilings.py
+            python3 hack/test-slug-policy-chart.py
             bash hack/test-ord-chart.sh
           fi
           mkdir -p "$out_dir"

@@ -27,6 +27,8 @@ The operator manages two custom resources in the `llm.privatellms.msp` API group
 | Field | Description |
 |-------|-------------|
 | `status.phase` | `Provisioning` or `Ready` |
+| `status.slug` | Informational operator-selected slug; tenant changes do not select routing |
+| `status.slugSource` | Whether the policy preserves a legacy name or derives the current identity |
 | `status.endpoint` | Public URL (e.g., `https://host/llm/<slug>`) |
 | `status.conditions[].type=Ready` | Detailed readiness information |
 

@@ -15,7 +15,7 @@ import (
 
 func TestAuthServerRejectsSlowHeadersAndServesNormalRequests(t *testing.T) {
 	inst, tr, sec := authFixture()
-	srv := (&Server{K8sClient: authClient(t, inst, tr, sec)}).httpServer(context.Background(), "")
+	srv := (&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: authClient(t, inst, tr, sec)}).httpServer(context.Background(), "")
 	for name, timeout := range map[string]time.Duration{
 		"headers": srv.ReadHeaderTimeout, "reads": srv.ReadTimeout,
 		"writes": srv.WriteTimeout, "idle": srv.IdleTimeout,
@@ -96,7 +96,7 @@ func TestAuthLookupReceivesTotalDeadline(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, boundURL, nil)
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	result := httptest.NewRecorder()
-	(&Server{K8sClient: reader}).Handler(context.Background()).ServeHTTP(result, req)
+	(&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: reader}).Handler(context.Background()).ServeHTTP(result, req)
 	if result.Code != http.StatusInternalServerError {
 		t.Fatalf("failed API lookup did not fail closed: HTTP %d", result.Code)
 	}
@@ -117,7 +117,7 @@ func TestAuthLookupStopsWhenRequestIsCanceled(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		(&Server{K8sClient: reader}).Handler(context.Background()).ServeHTTP(result, req)
+		(&Server{SlugPolicy: testAuthSlugPolicy(), K8sClient: reader}).Handler(context.Background()).ServeHTTP(result, req)
 	}()
 	select {
 	case <-entered:

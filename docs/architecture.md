@@ -65,7 +65,7 @@ The core component. A Go-based Kubernetes operator built with [Kubebuilder](http
 
 **Key design decisions:**
 
-- **Slug-based routing** -- Each LLMInstance gets a random 12-character URL slug stored as an annotation. This avoids exposing namespace names in public URLs.
+- **Slug-based routing** -- A required operator policy preserves reviewed legacy URLs and derives new names from the immutable MSP instance UID. Tenant annotations and status are not authority; see [slug migration](slug-policy.md).
 - **Owner references** -- All child resources (Deployment, Service, Ingress, Middleware) are owned by the LLMInstance CR, enabling garbage collection on deletion.
 - **Finalizers** -- Both controllers use finalizers to ensure cleanup of associated resources.
 - **Health probing** -- The operator probes the llama.cpp `/health` endpoint before marking an instance as Ready.
@@ -87,7 +87,7 @@ sequenceDiagram
     AuthServer->>K8s: Get bound instance; list Secrets in its namespace
     K8s-->>AuthServer: Instance and candidate Secrets
     AuthServer->>AuthServer: Constant-time token comparison
-    AuthServer->>K8s: For a match: verify APITokenRequest owner and unique slug
+    AuthServer->>K8s: For a match: verify APITokenRequest owner and credential binding
     AuthServer-->>Traefik: 200 OK / 401 Unauthorized
     Traefik->>LLM: Forward request (strip /llm/<slug> prefix)
     LLM-->>Client: Response
@@ -96,21 +96,21 @@ sequenceDiagram
 For hosted routes, the auth server validates tokens by:
 1. Requiring a single namespace, instance name, UID and slug from the operator's
    forwardAuth URL. Client-forwarded headers cannot supply the binding.
-2. Reading that instance and checking its UID, slug and deletion state, then
+2. Reading that instance and checking its UID, policy-derived slug and deletion state, then
    listing slug-labeled Secrets only within its namespace.
 3. Comparing the bearer token against candidate `OPENAI_API_KEY` values in constant
-   time before fetching any token-request owner or listing instances for collisions.
+   time before fetching any token-request owner.
 4. Requiring a matching Opaque Secret controlled by the current APITokenRequest
    for this instance, with matching labels, published Secret name, UID and observed
    generation. Deleting resources and API errors deny access.
-5. Denying duplicate slug claims before returning 200. This is an ambiguity check,
-   not protection against all route-prefix conflicts; immutable operator-owned
-   slugs remain outstanding.
+5. Resolving the same operator-owned slug policy used by reconciliation. Tenant
+   annotation collisions cannot select routes; approved legacy entries must not
+   overlap each other or the reserved namespace for derived identities.
 
 Direct API reads make revocation checks independent of the manager cache, but
 per-request API load requires deployment validation. Existing owned middleware
-URLs are upgraded before model-setting and workload gates; rolling upgrades can
-still deny requests until the new leader completes that migration. See the
+URLs are upgraded before model-setting and workload gates. The one-replica
+Recreate migration can deny requests until reconciliation completes. See the
 README's authentication upgrade notes. BYOC inference uses a separate API-key
 file and does not pass through this forwardAuth handler.
 
@@ -142,7 +142,7 @@ Three components enable the Platform Mesh portal UI:
 ```mermaid
 stateDiagram-v2
     [*] --> Created: kubectl apply
-    Created --> SlugAssigned: Generate random slug annotation
+    Created --> SlugAssigned: Resolve operator-owned slug policy
     SlugAssigned --> Provisioning: Create Deployment + Service + Ingress + Middlewares
     Provisioning --> Provisioning: Requeue every 5s
     Provisioning --> Ready: Deployment available + Endpoints ready + /health passes
@@ -153,7 +153,7 @@ stateDiagram-v2
 
 **Detailed provisioning steps:**
 
-1. **Slug generation** -- A 12-char base64url slug is generated and stored as annotation `llm.privatellms.msp/slug`
+1. **Slug assignment** -- The operator policy selects a reviewed legacy slug or derives a new slug from the immutable MSP UID. `status.slug` records the selected value; the old annotation is ignored and may retain stale or tenant-supplied text
 2. **Deployment creation** -- An init container downloads the GGUF model from HuggingFace, then the llama.cpp server starts
 3. **Service creation** -- ClusterIP service on port 8000
 4. **Middleware creation** -- Traefik StripPrefix (removes `/llm/<slug>`) and ForwardAuth (validates bearer token)

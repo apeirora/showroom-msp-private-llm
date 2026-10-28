@@ -70,6 +70,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 
 		reconciler = &LLMInstanceReconciler{
 			Client:         k8sClient,
+			SlugPolicy:     testDerivedSlugPolicy(),
 			Scheme:         scheme.Scheme,
 			PublicHost:     "public.example.test",
 			AuthServiceURL: "https://auth.example.test",
@@ -113,7 +114,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 
 		// fetch instance to ensure slug set
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
-		slug := inst.Annotations[slugAnnotationKey]
+		slug := inst.Status.Slug
 		Expect(slug).NotTo(BeEmpty())
 
 		// third reconcile provisions resources, but should not mark ready yet
@@ -168,7 +169,8 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		// fourth reconcile should mark instance as ready
 		res, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Requeue || res.RequeueAfter > 0).To(BeFalse())
+		Expect(res.Requeue).To(BeFalse())
+		Expect(res.RequeueAfter).To(Equal(30 * time.Second))
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
 		Expect(inst.Status.Phase).To(Equal("Ready"))
@@ -199,7 +201,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
-		slug := inst.Annotations[slugAnnotationKey]
+		slug := inst.Status.Slug
 		Expect(slug).NotTo(BeEmpty())
 
 		inst.Spec.Model = "tinyllama"
@@ -254,7 +256,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
 		key := types.NamespacedName{Name: inst.Name + "-llama", Namespace: namespace}
 		if byoc {
-			key = types.NamespacedName{Name: byocBaseName(inst.Annotations[slugAnnotationKey]), Namespace: byocNamespace}
+			key = types.NamespacedName{Name: byocBaseName(inst.Status.Slug), Namespace: byocNamespace}
 		}
 		var deploy appsv1.Deployment
 		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
@@ -341,7 +343,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
 		key := types.NamespacedName{Name: inst.Name + "-llama", Namespace: namespace}
 		if byoc {
-			key = types.NamespacedName{Name: byocBaseName(inst.Annotations[slugAnnotationKey]), Namespace: byocNamespace}
+			key = types.NamespacedName{Name: byocBaseName(inst.Status.Slug), Namespace: byocNamespace}
 		}
 		var deploy appsv1.Deployment
 		Expect(k8sClient.Get(ctx, key, &deploy)).To(Succeed())
@@ -478,7 +480,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		inst := f.newInstance(namespace, "customer-kubeconfig", "customer-api")
 		firstRevision := f.provision(inst, k8sClient)
 		servedFingerprint = firstRevision
-		remoteName := byocBaseName(inst.Annotations[slugAnnotationKey])
+		remoteName := byocBaseName(inst.Status.Slug)
 		tlsName, hostname, err := byocTLSIdentity(inst, reconciler.BYOCTLS, inst.Status.ActiveBYOCTargetID)
 		Expect(err).NotTo(HaveOccurred())
 		var deploy appsv1.Deployment
@@ -656,7 +658,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal("customer-kubeconfig"))
 		Expect(inst.Status.Endpoint).To(BeEmpty())
 		Expect(meta.IsStatusConditionFalse(inst.Status.Conditions, "Ready")).To(BeTrue())
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: byocCredentialsName(inst.Annotations[slugAnnotationKey]), Namespace: namespace}, &corev1.Secret{})).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: byocCredentialsName(inst.Status.Slug), Namespace: namespace}, &corev1.Secret{})).To(Succeed())
 	})
 
 	DescribeTable("cleans the previous BYOC target and rotates the TLS identity", func(replaceSameSecret bool) {
@@ -691,7 +693,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(inst), inst)).To(Succeed())
 		Expect(inst.Status.ActiveBYOCKubeconfigSecretName).To(Equal(expectedTarget))
 		Expect(inst.Status.ActiveBYOCTargetID).NotTo(Equal(oldID))
-		remoteName := byocBaseName(inst.Annotations[slugAnnotationKey])
+		remoteName := byocBaseName(inst.Status.Slug)
 		for _, obj := range []client.Object{&appsv1.Deployment{}, &corev1.Service{}} {
 			Expect(apierrors.IsNotFound(remoteA.Get(ctx, types.NamespacedName{Name: remoteName, Namespace: byocNamespace}, obj))).To(BeTrue())
 		}
@@ -736,7 +738,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(meta.IsStatusConditionFalse(inst.Status.Conditions, "Ready")).To(BeTrue())
 		failRemoteB = false
 		f.provision(inst, remoteB)
-		Expect(remoteB.Get(ctx, types.NamespacedName{Name: byocBaseName(inst.Annotations[slugAnnotationKey]), Namespace: byocNamespace}, &appsv1.Deployment{})).To(Succeed())
+		Expect(remoteB.Get(ctx, types.NamespacedName{Name: byocBaseName(inst.Status.Slug), Namespace: byocNamespace}, &appsv1.Deployment{})).To(Succeed())
 	})
 
 	It("does not activate an invalid kubeconfig and recovers with a verified target", func() {
@@ -820,7 +822,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deployName, Namespace: namespace}, &deploy)).To(Succeed())
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
-		slug := inst.Annotations[slugAnnotationKey]
+		slug := inst.Status.Slug
 		Expect(slug).NotTo(BeEmpty())
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: byocBaseName(slug), Namespace: byocNamespace}, &appsv1.Deployment{}))).To(BeTrue())
 	})

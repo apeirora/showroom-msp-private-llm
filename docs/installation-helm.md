@@ -2,6 +2,12 @@
 
 Deploy the Private LLM Operator to a Kubernetes cluster using Helm.
 
+Prepare the required [slug migration policy](slug-policy.md) first. All commands
+below must include `-f reviewed-operator-values.yaml` containing `slugPolicy`.
+Its fixed cutover and verified MSP identity map are required; the empty default
+cannot start the new manager. Use a release containing this policy support,
+not the historical `2.8.1` example below.
+
 ---
 
 ## Prerequisites
@@ -81,6 +87,8 @@ ingress:
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
+| `slugPolicy.cutover` | Fixed API-clock cutoff from the reviewed migration inventory | Empty; required before deployment |
+| `slugPolicy.entries` | Explicit MSP UID/namespace/name legacy mappings | `[]` |
 | `auth.externalURL` | External URL for Traefik to reach the auth server | Auto-derived from POD_NAMESPACE |
 
 ### Portal Integration
