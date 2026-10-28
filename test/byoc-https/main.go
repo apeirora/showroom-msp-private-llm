@@ -32,6 +32,8 @@ const image = "docker.io/library/traefik:v3.7.16@" +
 	"sha256:1336e85aaed293bd63d005086e0dd013b04078b26aaeb1c18b26a2f928af7e65"
 const hostname = "instance.byoc.test"
 const dummyToken = "fixture-only-not-a-real-key"
+const upstreamMarkerHeader = "X-Byoc-Fixture-Upstream"
+const upstreamMarkerValue = "dummy-model"
 
 type check struct {
 	Name   string `json:"name"`
@@ -101,10 +103,18 @@ func serve() {
 		}
 		_, _ = io.WriteString(w, "{\"object\":\"list\",\"data\":[]}")
 	})
-	s := &http.Server{Addr: "127.0.0.1:8000", Handler: mux, ReadHeaderTimeout: 5 * time.Second}
+	s := &http.Server{Addr: "127.0.0.1:8000", Handler: markUpstream(mux), ReadHeaderTimeout: 5 * time.Second}
 	if err := s.ListenAndServe(); err != nil {
 		panic(err)
 	}
+}
+
+func markUpstream(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Mark every dummy response before authentication or route selection.
+		w.Header().Set(upstreamMarkerHeader, upstreamMarkerValue)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func docker(args ...string) ([]byte, error) {
@@ -242,7 +252,27 @@ func (f *fixture) start() error {
 	if err = f.ready(); err != nil {
 		return err
 	}
-	f.pass("trusted_https", "CA and hostname verified")
+	if err = f.checkUpstreamControl(); err != nil {
+		return err
+	}
+	f.pass("trusted_https", "CA, hostname and unauthenticated upstream marker verified")
+	return nil
+}
+
+func (f *fixture) checkUpstreamControl() error {
+	res, err := f.get(f.trusted, "/v1/models", "")
+	if err != nil {
+		return fmt.Errorf("verified HTTPS upstream control failed: %w", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	return validateUpstreamControl(res)
+}
+
+func validateUpstreamControl(res *http.Response) error {
+	values := res.Header.Values(upstreamMarkerHeader)
+	if res.StatusCode != http.StatusUnauthorized || len(values) != 1 || values[0] != upstreamMarkerValue {
+		return errors.New("verified HTTPS control requires HTTP 401 and the exact dummy upstream marker")
+	}
 	return nil
 }
 
@@ -385,13 +415,16 @@ func (f *fixture) testPlaintext() error {
 	detail := "configured hostname: HTTP transport failed"
 	if err == nil {
 		_ = res.Body.Close()
-		// Only the known protocol/no-route responses qualify as rejection.
-		// Auth, method, and server errors can still come from a plaintext route.
+		if len(res.Header.Values(upstreamMarkerHeader)) != 0 {
+			return fmt.Errorf("plaintext accepted: dummy upstream marker received with HTTP %d", res.StatusCode)
+		}
+		// The verified HTTPS control established that every upstream response is
+		// marked. Only unmarked protocol/no-route errors can be proxy rejection.
 		if res.StatusCode != http.StatusBadRequest && res.StatusCode != http.StatusNotFound {
 			return fmt.Errorf("plaintext accepted or ambiguous: HTTP %d is not a known protocol/no-route rejection",
 				res.StatusCode)
 		}
-		detail = fmt.Sprintf("configured hostname returned HTTP %d", res.StatusCode)
+		detail = fmt.Sprintf("configured hostname returned unmarked proxy HTTP %d", res.StatusCode)
 	}
 	f.pass("plaintext_rejected", detail)
 	return nil

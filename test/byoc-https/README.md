@@ -34,6 +34,13 @@ The JSON report records these checks:
 - Kubernetes-style atomic `..data` symlink replacement followed by a controlled
   restart serves the replacement certificate, checked by its fingerprint.
 
+The dummy server marks every response before authentication or path handling.
+Before probing plaintext, the fixture requires that marker on an unauthenticated
+`/v1/models` response over verified HTTPS. Any marked plaintext response fails,
+including HTTP 400/404; only unmarked proxy 400/404 responses or transport failures
+qualify as rejection. This distinction depends on this instrumented dummy server
+and the shown proxy configuration; it cannot classify arbitrary HTTP services.
+
 The fixture records whether a symlink replacement alone reloads the certificate.
 This is an observation, **not a required or relied-on reload mechanism**. The
 controller must change a pod-template certificate revision so a new pod starts
