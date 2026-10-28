@@ -91,8 +91,16 @@ portalIntegration:
             with self.subTest(tag=tag):
                 proc, output = ReleaseImageTags().outputs(tag, "Fork-Team")
                 self.assertEqual(proc.returncode, 0, proc.stderr)
-                image = next(line for line in output.splitlines() if line.startswith("ghcr.io/"))
-                repository, version = image.rsplit(":", 1)
+                _, marker, block = output.partition("image_tags<<RELEASE_IMAGE_TAGS\n")
+                self.assertTrue(marker, "missing image_tags output")
+                images, terminator, trailing = block.partition("RELEASE_IMAGE_TAGS\n")
+                self.assertTrue(terminator, "unterminated image_tags output")
+                self.assertEqual(trailing, "")
+                expected = ["ghcr.io/fork-team/private-llm-controller:" + tag.removeprefix("v")]
+                if "-" not in tag:
+                    expected.append("ghcr.io/fork-team/private-llm-controller:latest")
+                self.assertEqual(images.splitlines(), expected)
+                repository, version = images.splitlines()[0].rsplit(":", 1)
                 self.assertEqual(repository, "ghcr.io/fork-team/private-llm-controller")
                 proc, after = self.rewrite(self.values, version, repository)
                 self.assertEqual(proc.returncode, 0, proc.stderr)
