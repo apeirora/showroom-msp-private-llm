@@ -190,6 +190,21 @@ func main() {
 	var publicSchemeEnv string
 	var ingressExtraAnnotationsJSON string
 	var tlsSecretName string
+	var byocTLS controller.BYOCTLSConfig
+	flag.StringVar(&byocTLS.Domain, "byoc-tls-domain", os.Getenv("BYOC_TLS_DOMAIN"), "Operator-managed BYOC DNS suffix")
+	flag.StringVar(
+		&byocTLS.Namespace, "byoc-tls-namespace", os.Getenv("BYOC_TLS_NAMESPACE"),
+		"Protected namespace for per-instance BYOC certificates",
+	)
+	flag.StringVar(
+		&byocTLS.IssuerName, "byoc-tls-issuer", os.Getenv("BYOC_TLS_ISSUER"),
+		"Existing Gardener Certificate issuer",
+	)
+	flag.StringVar(
+		&byocTLS.IssuerNamespace, "byoc-tls-issuer-namespace", os.Getenv("BYOC_TLS_ISSUER_NAMESPACE"),
+		"Existing Gardener issuer namespace",
+	)
+	flag.StringVar(&byocTLS.DNSClass, "byoc-dns-class", os.Getenv("BYOC_DNS_CLASS"), "Gardener DNS controller class")
 	flag.StringVar(&authBind, "auth-bind-address", ":8090", "Address for internal auth server")
 	flag.StringVar(
 		&authExternalURL,
@@ -312,6 +327,7 @@ func main() {
 	if err = (&controller.LLMInstanceReconciler{
 		Client:              labeledClient,
 		ModelServerCeilings: modelCeilings,
+		BYOCTLS:             byocTLS,
 		Scheme:              mgr.GetScheme(),
 		PublicHost: func() string {
 			if v := os.Getenv("PUBLIC_HOST"); v != "" {

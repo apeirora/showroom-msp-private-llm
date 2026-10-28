@@ -22,8 +22,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -31,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/clientcmd"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -49,9 +50,9 @@ const (
 	byocKubeconfigKey        = "kubeconfig"
 	byocAPIKeyFileKey        = "api-keys"
 	byocAPIKeyMountPath      = "/keys"
-	byocServicePortName      = "http"
+	byocServicePortName      = "https"
 	byocServicePort          = int32(443)
-	byocTargetPort           = int32(8000)
+	byocTargetPort           = int32(8443)
 	byocAPIKeysRevAnnotation = "llm.privatellms.msp/api-keys-revision"
 	byocBootstrapAnnotation  = "llm.privatellms.msp/bootstrap-key"
 	byocBootstrapTrue        = "true"
@@ -94,11 +95,15 @@ func byocLabels(instanceName, slug string) map[string]string {
 }
 
 func (r *LLMInstanceReconciler) defaultRemoteClient(kubeconfig []byte) (client.Client, error) {
-	cfg, err := clientcmd.RESTConfigFromKubeConfig(kubeconfig)
+	cfg, err := verifiedBYOCRESTConfig(kubeconfig)
 	if err != nil {
 		return nil, err
 	}
-	return client.New(cfg, client.Options{Scheme: r.Scheme})
+	httpClient, err := byocAPIHTTPClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return client.New(cfg, client.Options{Scheme: r.Scheme, HTTPClient: httpClient})
 }
 
 func (r *LLMInstanceReconciler) remoteClientForKubeconfig(kubeconfig []byte) (client.Client, error) {
@@ -155,19 +160,14 @@ func (r *LLMInstanceReconciler) cachedBYOCKubeconfig(ctx context.Context, inst *
 		}
 		return nil, err
 	}
+	if !metav1.IsControlledBy(&cached, inst) {
+		return nil, fmt.Errorf("refusing foreign cached BYOC credentials")
+	}
 	kubeconfig := cached.Data[byocKubeconfigKey]
 	if len(kubeconfig) == 0 {
 		return nil, fmt.Errorf("cached BYOC credentials Secret %q has no %q key", name, byocKubeconfigKey)
 	}
 	return kubeconfig, nil
-}
-
-func (r *LLMInstanceReconciler) cachedBYOCClient(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) (client.Client, error) {
-	kubeconfig, err := r.cachedBYOCKubeconfig(ctx, inst, slug)
-	if err != nil || kubeconfig == nil {
-		return nil, err
-	}
-	return r.remoteClientForKubeconfig(kubeconfig)
 }
 
 // ensureCachedCredentials keeps an operator-owned copy of the kubeconfig so
@@ -200,6 +200,9 @@ func (r *LLMInstanceReconciler) ensureCachedCredentials(ctx context.Context, ins
 		}
 		return r.Create(ctx, &secret)
 	}
+	if !metav1.IsControlledBy(&existing, inst) {
+		return fmt.Errorf("refusing foreign cached BYOC credentials")
+	}
 	if string(existing.Data[byocKubeconfigKey]) == string(kubeconfig) {
 		return nil
 	}
@@ -211,98 +214,173 @@ func (r *LLMInstanceReconciler) ensureCachedCredentials(ctx context.Context, ins
 }
 
 func (r *LLMInstanceReconciler) cleanupChangedBYOCTarget(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) error {
-	currentTarget := ""
-	if inst.IsBYOC() {
-		currentTarget = inst.Spec.ClusterRef.KubeconfigSecretName
-	}
-	previousTarget := inst.Status.ActiveBYOCKubeconfigSecretName
-	if previousTarget == "" || previousTarget == currentTarget {
+	previous := inst.Status.ActiveBYOCKubeconfigSecretName
+	if previous == "" {
 		return nil
 	}
-
-	remote, err := r.cachedBYOCClient(ctx, inst, slug)
+	slug = safeBYOCSlug(inst, slug)
+	oldData, err := r.cachedBYOCKubeconfig(ctx, inst, slug)
 	if err != nil {
-		return fmt.Errorf("build client for previous BYOC target %q: %w", previousTarget, err)
+		return err
 	}
-	if remote == nil {
-		return fmt.Errorf("cached BYOC credentials missing for previous target %q", previousTarget)
+	if len(oldData) == 0 {
+		return fmt.Errorf("cached BYOC credentials missing for previous target")
 	}
-	if err := cleanupBYOCObjects(ctx, remote, slug); err != nil {
-		return fmt.Errorf("cleanup previous BYOC target %q: %w", previousTarget, err)
+	oldID := inst.Status.ActiveBYOCTargetID
+	if inst.IsBYOC() {
+		data, _, _, err := r.byocKubeconfig(ctx, inst)
+		if err != nil {
+			return err
+		}
+		// Missing source credentials cannot authorize a target move. The regular
+		// reconcile de-advertises the endpoint until access returns.
+		if data == nil && previous == inst.Spec.ClusterRef.KubeconfigSecretName {
+			return nil
+		}
+		if data != nil {
+			oldAPI, err := byocTargetIdentity(oldData)
+			if err != nil {
+				return err
+			}
+			newAPI, err := byocTargetIdentity(data)
+			if err != nil {
+				return err
+			}
+			if previous == inst.Spec.ClusterRef.KubeconfigSecretName && oldAPI == newAPI {
+				remote, err := r.remoteClientForKubeconfig(data)
+				if err != nil {
+					return err
+				}
+				currentID, err := byocClusterIdentity(ctx, remote, newAPI)
+				if err != nil {
+					return err
+				}
+				if oldID == "" || currentID == oldID {
+					return nil
+				}
+			}
+		}
+	}
+	// Stop advertising first, including on a same-name kubeconfig replacement.
+	if err := r.updateProvisioningStatus(ctx, inst, "", byocReasonTargetChanging, "Removing the previous BYOC endpoint"); err != nil {
+		return err
+	}
+	if oldID != "" {
+		// DNS deletion must finish before the LoadBalancer address is released.
+		if err := r.cleanupBYOCManagedTLS(ctx, inst, r.byocCleanupTLSConfig(inst), oldID); err != nil {
+			return err
+		}
+	}
+	remote, err := r.remoteClientForKubeconfig(oldData)
+	if err != nil {
+		return err
+	}
+	oldAPI, err := byocTargetIdentity(oldData)
+	if err != nil {
+		return err
+	}
+	actualID, err := byocClusterIdentity(ctx, remote, oldAPI)
+	if err != nil {
+		return err
+	}
+	if oldID != "" && actualID != oldID {
+		return fmt.Errorf("previous BYOC cluster identity changed; refusing cleanup on replacement cluster")
+	}
+	if err := cleanupBYOCObjects(ctx, remote, inst, slug); err != nil {
+		return err
+	}
+	if oldID != "" {
+		if err := cleanupBYOCRemoteTLS(ctx, remote, inst, r.byocCleanupTLSConfig(inst), oldID); err != nil {
+			return err
+		}
 	}
 	inst.Status.ActiveBYOCKubeconfigSecretName = ""
-	if err := r.updateProvisioningStatus(ctx, inst, "", byocReasonTargetChanging, fmt.Sprintf("Cleaned up previous BYOC target %q", previousTarget)); err != nil {
+	inst.Status.ActiveBYOCTargetID = ""
+	inst.Status.ActiveBYOCTLSDomain = ""
+	inst.Status.ActiveBYOCTLSNamespace = ""
+	if err := r.updateProvisioningStatus(ctx, inst, "", byocReasonTargetChanging, "Previous BYOC target removed"); err != nil {
 		return err
 	}
 	return r.deleteCachedBYOCCredentials(ctx, inst, slug)
 }
 
-func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
+func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection) (result ctrl.Result, reconcileErr error) {
+	defer func() {
+		if reconcileErr != nil {
+			if err := r.updateProvisioningStatus(ctx, inst, "", "BYOCReconcileFailed", "BYOC endpoint is unavailable; operator reconciliation must succeed before publishing HTTPS"); err != nil {
+				reconcileErr = errors.Join(reconcileErr, err)
+			}
+		}
+	}()
+	if (inst.Status.ActiveBYOCTLSDomain != "" && inst.Status.ActiveBYOCTLSDomain != r.BYOCTLS.Domain) || (inst.Status.ActiveBYOCTLSNamespace != "" && inst.Status.ActiveBYOCTLSNamespace != r.BYOCTLS.Namespace) {
+		return ctrl.Result{}, fmt.Errorf("BYOC TLS domain or credential namespace changed; explicit migration is required")
+	}
+	if inst.Status.ActiveBYOCSlug != "" && inst.Status.ActiveBYOCSlug != slug {
+		return ctrl.Result{}, fmt.Errorf("BYOC workload slug is immutable after provisioning")
+	}
 	remote, reason, message, err := r.byocClient(ctx, inst)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if remote == nil {
-		if reason == byocReasonMissingSecret && inst.Status.ActiveBYOCKubeconfigSecretName == inst.Spec.ClusterRef.KubeconfigSecretName {
-			logger.Info("BYOC kubeconfig Secret missing for active target; waiting without status reset", "secret", inst.Spec.ClusterRef.KubeconfigSecretName)
-			return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, nil
-		}
-		if err := r.updateProvisioningStatus(ctx, inst, "", reason, message); err != nil {
-			return ctrl.Result{}, err
-		}
-		logger.Info("BYOC cluster not usable yet", "reason", reason)
-		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, r.updateProvisioningStatus(ctx, inst, "", reason, message)
 	}
-
+	data, _, _, err := r.byocKubeconfig(ctx, inst)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	apiID, err := byocTargetIdentity(data)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	targetID, err := byocClusterIdentity(ctx, remote, apiID)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	tlsName, hostname, err := byocTLSIdentity(inst, r.BYOCTLS, targetID)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.ensureCachedCredentials(ctx, inst, slug); err != nil {
 		return ctrl.Result{}, err
 	}
-	if inst.Status.ActiveBYOCKubeconfigSecretName != inst.Spec.ClusterRef.KubeconfigSecretName {
+	if inst.Status.ActiveBYOCKubeconfigSecretName != inst.Spec.ClusterRef.KubeconfigSecretName || inst.Status.ActiveBYOCSlug == "" || inst.Status.ActiveBYOCTargetID == "" {
 		inst.Status.ActiveBYOCKubeconfigSecretName = inst.Spec.ClusterRef.KubeconfigSecretName
-		if err := r.updateProvisioningStatus(ctx, inst, "", byocReasonTargetChanging, "BYOC target is being provisioned"); err != nil {
+		inst.Status.ActiveBYOCSlug = slug
+		inst.Status.ActiveBYOCTargetID = targetID
+		inst.Status.ActiveBYOCTLSDomain = r.BYOCTLS.Domain
+		inst.Status.ActiveBYOCTLSNamespace = r.BYOCTLS.Namespace
+		if err := r.updateProvisioningStatus(ctx, inst, "", byocReasonTargetChanging, "BYOC HTTPS is being provisioned"); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
-
+	if inst.Status.ActiveBYOCTargetID != targetID {
+		return ctrl.Result{}, fmt.Errorf("BYOC cluster identity changed")
+	}
 	if err := r.ensureBYOCNamespace(ctx, remote); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	keyFile, bootstrap, err := r.desiredAPIKeyFile(ctx, remote, inst, slug)
+	tlsRevision, err := r.reconcileBYOCWorkload(ctx, remote, inst, slug, model, targetID, tlsName, hostname)
+	if errors.Is(err, ErrBYOCTLSNotReady) {
+		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, r.updateProvisioningStatus(ctx, inst, "", "BYOCTLSProvisioning", "Waiting for a valid managed BYOC certificate and endpoint")
+	}
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	keysRevision, err := r.reconcileBYOCKeySecret(ctx, remote, inst, slug, keyFile, bootstrap)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
-	if err := r.reconcileBYOCDeployment(ctx, remote, inst, slug, model, keysRevision); err != nil {
-		return ctrl.Result{}, err
-	}
-	if err := r.reconcileBYOCService(ctx, remote, inst, slug); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	ready, endpoint, reason, message, err := r.evaluateBYOCReadiness(ctx, remote, slug)
+	ready, endpoint, reason, message, err := r.evaluateBYOCReadiness(ctx, remote, slug, hostname, tlsRevision)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !ready {
-		if err := r.updateProvisioningStatus(ctx, inst, endpoint, reason, message); err != nil {
-			return ctrl.Result{}, err
-		}
-		logger.Info("BYOC LLMInstance is still provisioning", "reason", reason)
-		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, nil
+		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, r.updateProvisioningStatus(ctx, inst, "", reason, message)
 	}
-
 	if err := r.updateReadyStatus(ctx, inst, endpoint); err != nil {
 		return ctrl.Result{}, err
 	}
-	logger.Info("reconciled BYOC LLMInstance", "endpoint", endpoint)
-	return ctrl.Result{}, nil
+	// Periodic source/remote certificate validation and observed health are required
+	// even after Ready, including when the source Secret watch was missed.
+	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
 func (r *LLMInstanceReconciler) ensureBYOCNamespace(ctx context.Context, remote client.Client) error {
@@ -335,7 +413,24 @@ func (r *LLMInstanceReconciler) desiredAPIKeyFile(ctx context.Context, remote cl
 	}
 	keys := make([]string, 0, len(secrets.Items))
 	for _, s := range secrets.Items {
-		if v, ok := s.Data[openAIAPIKeyKey]; ok && len(v) > 0 {
+		owner := metav1.GetControllerOf(&s)
+		if owner == nil || owner.Kind != "APITokenRequest" || owner.APIVersion != llmv1alpha1.GroupVersion.String() || s.Type != corev1.SecretTypeOpaque || !s.DeletionTimestamp.IsZero() {
+			continue
+		}
+		var request llmv1alpha1.APITokenRequest
+		if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: owner.Name}, &request); err != nil {
+			if apierrors.IsNotFound(err) {
+				continue
+			}
+			return "", false, err
+		}
+		if request.UID != owner.UID || request.Spec.InstanceName != inst.Name || !request.DeletionTimestamp.IsZero() || request.Status.SecretName != s.Name {
+			continue
+		}
+		if inst.Status.ActiveBYOCTargetID == "" || s.Annotations[credentialTargetAnnotation] != inst.Status.ActiveBYOCTargetID || s.Annotations[credentialInstanceAnnotation] != string(inst.UID) {
+			continue
+		}
+		if v, ok := s.Data[openAIAPIKeyKey]; ok && len(v) > 0 && !strings.ContainsAny(string(v), "\r\n") {
 			keys = append(keys, string(v))
 		}
 	}
@@ -346,6 +441,11 @@ func (r *LLMInstanceReconciler) desiredAPIKeyFile(ctx context.Context, remote cl
 
 	var existing corev1.Secret
 	err := remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: byocKeySecretName(slug)}, &existing)
+	if err == nil {
+		if err := checkBYOCObjectOwner(&existing, inst); err != nil {
+			return "", false, err
+		}
+	}
 	if err == nil && existing.Annotations[byocBootstrapAnnotation] == byocBootstrapTrue && len(existing.Data[byocAPIKeyFileKey]) > 0 {
 		return string(existing.Data[byocAPIKeyFileKey]), true, nil
 	}
@@ -366,7 +466,7 @@ func (r *LLMInstanceReconciler) desiredAPIKeyFile(ctx context.Context, remote cl
 func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug, keyFile string, bootstrap bool) (string, error) {
 	logger := log.FromContext(ctx)
 	name := byocKeySecretName(slug)
-	desiredAnnotations := map[string]string{}
+	desiredAnnotations := byocOwnedAnnotations(inst)
 	if bootstrap {
 		desiredAnnotations[byocBootstrapAnnotation] = byocBootstrapTrue
 	}
@@ -392,6 +492,10 @@ func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remo
 		}
 		logger.Info("created BYOC api-key Secret", "name", name)
 		return secret.ResourceVersion, nil
+	}
+
+	if err := checkBYOCObjectOwner(&existing, inst); err != nil {
+		return "", err
 	}
 
 	updated := false
@@ -423,7 +527,7 @@ func (r *LLMInstanceReconciler) reconcileBYOCKeySecret(ctx context.Context, remo
 	return existing.ResourceVersion, nil
 }
 
-func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas int32, model modelSelection, keysRevision string) appsv1.Deployment {
+func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas int32, model modelSelection, keysRevision, tlsSecret, tlsRevision string) appsv1.Deployment {
 	labels := byocLabels(inst.Name, slug)
 	container := llamaServerContainer(model, "--api-key-file", byocAPIKeyFilePath())
 	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
@@ -431,7 +535,7 @@ func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas in
 		MountPath: byocAPIKeyMountPath,
 		ReadOnly:  true,
 	})
-	return appsv1.Deployment{
+	deploy := appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      byocBaseName(slug),
 			Namespace: byocNamespace,
@@ -462,50 +566,40 @@ func buildBYOCDeployment(inst *llmv1alpha1.LLMInstance, slug string, replicas in
 			},
 		},
 	}
+	configureBYOCTLSDeployment(&deploy, inst, slug, tlsSecret, tlsRevision)
+	corev1defaults(&deploy)
+	return deploy
 }
 
-func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection, keysRevision string) error {
-	logger := log.FromContext(ctx)
-	name := byocBaseName(slug)
-	desiredReplicas := inst.Spec.Replicas
-	if desiredReplicas <= 0 {
-		desiredReplicas = 1
+func (r *LLMInstanceReconciler) reconcileBYOCDeployment(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection, keysRevision, tlsSecret, tlsRevision string) error {
+	replicas := inst.Spec.Replicas
+	if replicas <= 0 {
+		replicas = 1
 	}
-
+	desired := buildBYOCDeployment(inst, slug, replicas, model, keysRevision, tlsSecret, tlsRevision)
 	var existing appsv1.Deployment
-	if err := remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: name}, &existing); err != nil {
-		if !apierrors.IsNotFound(err) {
-			return err
-		}
-		deploy := buildBYOCDeployment(inst, slug, desiredReplicas, model, keysRevision)
-		if err := remote.Create(ctx, &deploy); err != nil {
-			return err
-		}
-		logger.Info("created BYOC llama.cpp Deployment", "name", name)
-		return nil
+	err := remote.Get(ctx, client.ObjectKeyFromObject(&desired), &existing)
+	if apierrors.IsNotFound(err) {
+		return remote.Create(ctx, &desired)
 	}
-
-	replicasChanged, _ := ensureDeploymentReplicas(&existing, desiredReplicas)
-	modelChanged := ensureDeploymentModel(&existing, model, "--api-key-file", byocAPIKeyFilePath())
-	dnsPolicyChanged := ensureDeploymentDNSPolicy(&existing, effectiveDNSPolicy(inst))
-	hashChanged := false
-	if existing.Spec.Template.Annotations[byocAPIKeysRevAnnotation] != keysRevision {
-		if existing.Spec.Template.Annotations == nil {
-			existing.Spec.Template.Annotations = map[string]string{}
-		}
-		existing.Spec.Template.Annotations[byocAPIKeysRevAnnotation] = keysRevision
-		hashChanged = true
-	}
-	if !replicasChanged && !modelChanged && !dnsPolicyChanged && !hashChanged {
-		return nil
-	}
-	if err := remote.Update(ctx, &existing); err != nil {
+	if err != nil {
 		return err
 	}
-	logger.Info("updated BYOC llama.cpp Deployment", "name", name,
-		"replicasChanged", replicasChanged, "modelChanged", modelChanged,
-		"dnsPolicyChanged", dnsPolicyChanged, "apiKeysChanged", hashChanged)
-	return nil
+	if err := checkBYOCObjectOwner(&existing, inst); err != nil {
+		return err
+	}
+	// Preserve the immutable selector, but completely converge the owned pod
+	// template. Old sidecars, plaintext ports and subPath mounts cannot survive.
+	desired.Spec.Selector = existing.Spec.Selector.DeepCopy()
+	// API defaults must not cause an endless rollout on every health requeue.
+	corev1defaults(&desired)
+	if reflect.DeepEqual(existing.Spec.Template, desired.Spec.Template) && reflect.DeepEqual(existing.Spec.Replicas, desired.Spec.Replicas) && reflect.DeepEqual(existing.Spec.Strategy, desired.Spec.Strategy) {
+		return nil
+	}
+	existing.Spec.Template = desired.Spec.Template
+	existing.Spec.Replicas = desired.Spec.Replicas
+	existing.Spec.Strategy = desired.Spec.Strategy
+	return remote.Update(ctx, &existing)
 }
 
 func (r *LLMInstanceReconciler) reconcileBYOCService(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug string) error {
@@ -521,9 +615,10 @@ func (r *LLMInstanceReconciler) reconcileBYOCService(ctx context.Context, remote
 		}
 		svc := corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: byocNamespace,
-				Labels:    copyStringMap(labels),
+				Name:        name,
+				Namespace:   byocNamespace,
+				Labels:      copyStringMap(labels),
+				Annotations: byocOwnedAnnotations(inst),
 			},
 			Spec: corev1.ServiceSpec{
 				Type:     corev1.ServiceTypeLoadBalancer,
@@ -543,6 +638,9 @@ func (r *LLMInstanceReconciler) reconcileBYOCService(ctx context.Context, remote
 		return nil
 	}
 
+	if err := checkBYOCObjectOwner(&existing, inst); err != nil {
+		return err
+	}
 	updated := false
 	if existing.Spec.Type != corev1.ServiceTypeLoadBalancer {
 		existing.Spec.Type = corev1.ServiceTypeLoadBalancer
@@ -566,43 +664,19 @@ func (r *LLMInstanceReconciler) reconcileBYOCService(ctx context.Context, remote
 }
 
 func ensureBYOCServicePort(svc *corev1.Service) bool {
-	if len(svc.Spec.Ports) == 0 {
-		svc.Spec.Ports = []corev1.ServicePort{{
-			Name:       byocServicePortName,
-			Port:       byocServicePort,
-			TargetPort: intstr.FromInt(int(byocTargetPort)),
-			Protocol:   corev1.ProtocolTCP,
-		}}
-		return true
-	}
-
-	idx := 0
-	for i := range svc.Spec.Ports {
-		if svc.Spec.Ports[i].Name == byocServicePortName {
-			idx = i
+	port := corev1.ServicePort{Name: byocServicePortName, Port: byocServicePort, TargetPort: intstr.FromInt(int(byocTargetPort)), Protocol: corev1.ProtocolTCP}
+	for _, old := range svc.Spec.Ports {
+		if old.Port == byocServicePort {
+			port.NodePort = old.NodePort
 			break
 		}
 	}
-
-	port := &svc.Spec.Ports[idx]
-	updated := false
-	if port.Name != byocServicePortName {
-		port.Name = byocServicePortName
-		updated = true
+	desired := []corev1.ServicePort{port}
+	if reflect.DeepEqual(svc.Spec.Ports, desired) {
+		return false
 	}
-	if port.Port != byocServicePort {
-		port.Port = byocServicePort
-		updated = true
-	}
-	if port.TargetPort.IntValue() != int(byocTargetPort) {
-		port.TargetPort = intstr.FromInt(int(byocTargetPort))
-		updated = true
-	}
-	if port.Protocol != corev1.ProtocolTCP {
-		port.Protocol = corev1.ProtocolTCP
-		updated = true
-	}
-	return updated
+	svc.Spec.Ports = desired
+	return true
 }
 
 func stringMapEqual(a, b map[string]string) bool {
@@ -617,7 +691,7 @@ func stringMapEqual(a, b map[string]string) bool {
 	return true
 }
 
-func (r *LLMInstanceReconciler) evaluateBYOCReadiness(ctx context.Context, remote client.Client, slug string) (bool, string, string, string, error) {
+func (r *LLMInstanceReconciler) evaluateBYOCReadiness(ctx context.Context, remote client.Client, slug, hostname, fingerprint string) (bool, string, string, string, error) {
 	name := byocBaseName(slug)
 
 	var deploy appsv1.Deployment
@@ -642,12 +716,12 @@ func (r *LLMInstanceReconciler) evaluateBYOCReadiness(ctx context.Context, remot
 	if addr == "" {
 		return false, "", "LoadBalancerPending", fmt.Sprintf("Service %q has no LoadBalancer address yet", name), nil
 	}
-	endpoint := fmt.Sprintf("http://%s:%d", addr, byocServicePort)
+	endpoint := "https://" + hostname
 
 	// llama.cpp serves /health without an API key, so the gate works from outside.
 	probeURL := endpoint + "/health"
-	if err := r.runServiceHealthCheck(ctx, probeURL); err != nil {
-		return false, endpoint, "HealthCheckFailed", fmt.Sprintf("probe failed for %s: %v", probeURL, err), nil
+	if err := r.runBYOCHealthCheck(ctx, probeURL, fingerprint); err != nil {
+		return false, "", "HealthCheckFailed", fmt.Sprintf("probe failed for %s: %v", probeURL, err), nil
 	}
 	return true, endpoint, "Provisioned", "LLM instance is ready", nil
 }
@@ -664,64 +738,90 @@ func loadBalancerAddress(svc *corev1.Service) string {
 	return ""
 }
 
-func cleanupBYOCObjects(ctx context.Context, remote client.Client, slug string) error {
+func cleanupBYOCObjects(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug string) error {
 	objects := []client.Object{
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocBaseName(slug)}},
 		&corev1.Service{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocBaseName(slug)}},
 		&corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocKeySecretName(slug)}},
+		&corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: byocNamespace, Name: byocBaseName(slug) + "-proxy"}},
 	}
 	var errs []error
+	pending := false
 	for _, obj := range objects {
-		if err := remote.Delete(ctx, obj); err != nil && !apierrors.IsNotFound(err) {
+		if err := remote.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+			if !apierrors.IsNotFound(err) {
+				errs = append(errs, err)
+			}
+			continue
+		}
+		if err := checkBYOCObjectOwner(obj, inst); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		pending = true
+		if err := remote.Delete(ctx, obj, client.Preconditions{UID: ptrTo(obj.GetUID())}); err != nil && !apierrors.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("delete %s/%s: %w", obj.GetNamespace(), obj.GetName(), err))
 		}
+	}
+	if pending {
+		errs = append(errs, fmt.Errorf("%w: waiting for owned BYOC objects to disappear", ErrBYOCTLSNotReady))
 	}
 	return errors.Join(errs...)
 }
 
 func (r *LLMInstanceReconciler) deleteCachedBYOCCredentials(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) error {
-	cached := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: inst.Namespace, Name: byocCredentialsName(slug)}}
-	if err := r.Delete(ctx, cached); err != nil && !apierrors.IsNotFound(err) {
-		return err
+	var cached corev1.Secret
+	if err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: byocCredentialsName(slug)}, &cached); err != nil {
+		return client.IgnoreNotFound(err)
 	}
-	return nil
+	if !metav1.IsControlledBy(&cached, inst) {
+		return fmt.Errorf("refusing to delete foreign cached credentials")
+	}
+	return client.IgnoreNotFound(r.Delete(ctx, &cached, client.Preconditions{UID: ptrTo(cached.UID)}))
 }
 
-// cleanupBYOC removes the remote objects on instance deletion. Cleanup is
-// best-effort: an unreachable or already-deleted BYOC cluster must not block
-// deletion of the LLMInstance.
-func (r *LLMInstanceReconciler) cleanupBYOC(ctx context.Context, inst *llmv1alpha1.LLMInstance) {
-	logger := log.FromContext(ctx)
-	slug := ""
-	if anns := inst.GetAnnotations(); anns != nil {
-		slug = strings.TrimSpace(anns[slugAnnotationKey])
-	}
-	if slug == "" {
-		return
-	}
-	remote, err := r.cachedBYOCClient(ctx, inst, slug)
-	if (err != nil || remote == nil) && inst.IsBYOC() &&
-		(inst.Status.ActiveBYOCKubeconfigSecretName == "" ||
-			inst.Status.ActiveBYOCKubeconfigSecretName == inst.Spec.ClusterRef.KubeconfigSecretName) {
-		var reason string
-		remote, reason, _, err = r.byocClient(ctx, inst)
-		if remote == nil {
-			logger.Info("BYOC cleanup could not use current target Secret", "reason", reason, "error", err)
+func (r *LLMInstanceReconciler) cleanupBYOC(ctx context.Context, inst *llmv1alpha1.LLMInstance) error {
+	slug := safeBYOCSlug(inst, inst.Annotations[slugAnnotationKey])
+	targetID := inst.Status.ActiveBYOCTargetID
+	if targetID != "" {
+		if err := r.cleanupBYOCManagedTLS(ctx, inst, r.byocCleanupTLSConfig(inst), targetID); err != nil {
+			return err
 		}
 	}
-	if err != nil || remote == nil {
-		logger.Info("skipping BYOC cleanup; cached target cluster not reachable", "error", err)
-	} else {
-		if err := cleanupBYOCObjects(ctx, remote, slug); err != nil {
-			logger.Error(err, "failed to delete BYOC objects (non-blocking)")
+	if inst.Status.ActiveBYOCKubeconfigSecretName == "" {
+		return nil
+	}
+	data, err := r.cachedBYOCKubeconfig(ctx, inst, slug)
+	if err != nil {
+		return err
+	}
+	if data == nil {
+		return fmt.Errorf("cannot clean BYOC without protected cached credentials")
+	}
+	remote, err := r.remoteClientForKubeconfig(data)
+	if err != nil {
+		return err
+	}
+	apiID, err := byocTargetIdentity(data)
+	if err != nil {
+		return err
+	}
+	actualID, err := byocClusterIdentity(ctx, remote, apiID)
+	if err != nil {
+		return err
+	}
+	if targetID != "" && actualID != targetID {
+		return fmt.Errorf("refusing cleanup on replacement BYOC cluster")
+	}
+	if err := cleanupBYOCObjects(ctx, remote, inst, slug); err != nil {
+		return err
+	}
+	if targetID != "" {
+		if err := cleanupBYOCRemoteTLS(ctx, remote, inst, r.byocCleanupTLSConfig(inst), targetID); err != nil {
+			return err
 		}
 	}
-
-	// Remove the cached credentials eagerly; ownerRef GC would also get them,
-	// but not before the finalizer completes.
-	if err := r.deleteCachedBYOCCredentials(ctx, inst, slug); err != nil {
-		logger.Error(err, "failed to delete cached BYOC credentials (non-blocking)", "name", byocCredentialsName(slug))
-	}
+	return r.deleteCachedBYOCCredentials(ctx, inst, slug)
 }
 
 // findInstancesForSecret requeues instances when one of their token Secrets
@@ -730,6 +830,19 @@ func (r *LLMInstanceReconciler) findInstancesForSecret(ctx context.Context, obj 
 	secret, ok := obj.(*corev1.Secret)
 	if !ok {
 		return nil
+	}
+	if r.BYOCTLS.Namespace != "" && secret.Namespace == r.BYOCTLS.Namespace {
+		var instances llmv1alpha1.LLMInstanceList
+		if err := r.List(ctx, &instances); err != nil {
+			return nil
+		}
+		var requests []reconcile.Request
+		for _, inst := range instances.Items {
+			if inst.IsBYOC() {
+				requests = append(requests, reconcile.Request{NamespacedName: types.NamespacedName{Namespace: inst.Namespace, Name: inst.Name}})
+			}
+		}
+		return requests
 	}
 	var instances llmv1alpha1.LLMInstanceList
 	if err := r.List(ctx, &instances, client.InNamespace(secret.GetNamespace())); err != nil {
@@ -748,4 +861,56 @@ func (r *LLMInstanceReconciler) findInstancesForSecret(ctx context.Context, obj 
 		})
 	}
 	return requests
+}
+
+func (r *LLMInstanceReconciler) byocCleanupTLSConfig(inst *llmv1alpha1.LLMInstance) BYOCTLSConfig {
+	cfg := r.BYOCTLS
+	if inst.Status.ActiveBYOCTLSDomain != "" {
+		cfg.Domain = inst.Status.ActiveBYOCTLSDomain
+	}
+	if inst.Status.ActiveBYOCTLSNamespace != "" {
+		cfg.Namespace = inst.Status.ActiveBYOCTLSNamespace
+	}
+	return cfg
+}
+
+func (r *LLMInstanceReconciler) reconcileBYOCWorkload(ctx context.Context, remote client.Client, inst *llmv1alpha1.LLMInstance, slug string, model modelSelection, targetID, tlsName, hostname string) (string, error) {
+	// Replace all owned plaintext Service ports before certificate provisioning.
+	// Never preserve a legacy HTTP route while waiting for issuance.
+	if err := r.reconcileBYOCService(ctx, remote, inst, slug); err != nil {
+		return "", err
+	}
+	if err := r.reconcileBYOCManagedCertificate(ctx, inst, r.BYOCTLS, targetID); err != nil {
+		return "", err
+	}
+	var svc corev1.Service
+	if err := remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: byocBaseName(slug)}, &svc); err != nil {
+		return "", err
+	}
+	addr := loadBalancerAddress(&svc)
+	if addr == "" {
+		return "", fmt.Errorf("%w: waiting for BYOC LoadBalancer address", ErrBYOCTLSNotReady)
+	}
+	if err := r.reconcileBYOCDNS(ctx, inst, r.BYOCTLS, addr, targetID); err != nil {
+		return "", err
+	}
+	tlsRevision, err := r.reconcileBYOCTLSSecret(ctx, remote, inst, r.BYOCTLS, targetID)
+	if err != nil {
+		return "", err
+	}
+	if err := r.reconcileBYOCProxyConfig(ctx, remote, inst, slug, hostname); err != nil {
+		return "", err
+	}
+	keyFile, bootstrap, err := r.desiredAPIKeyFile(ctx, remote, inst, slug)
+	if err != nil {
+		return "", err
+	}
+	keysRevision, err := r.reconcileBYOCKeySecret(ctx, remote, inst, slug, keyFile, bootstrap)
+	if err != nil {
+		return "", err
+	}
+	if err := r.reconcileBYOCDeployment(ctx, remote, inst, slug, model, keysRevision, tlsName, tlsRevision); err != nil {
+		return "", err
+	}
+	return tlsRevision, nil
 }

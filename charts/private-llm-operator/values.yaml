@@ -52,3 +52,12 @@ modelServerCeilings:
   memoryMiB: 0
   contextSize: 0
   parallelSlots: 0
+
+# BYOC has no plaintext fallback. Configure before migrating any BYOC instance.
+# DNS/certificate controllers and the named issuer must already exist on the MSP.
+byocTLS:
+  domain: ''
+  namespace: private-llm-byoc-tls
+  issuerName: traefik-cert-issuer
+  issuerNamespace: kube-system
+  dnsClass: garden

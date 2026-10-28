@@ -286,7 +286,7 @@ func TestExistingAuthUpgradesBeforeWorkloadGates(t *testing.T) {
 }
 
 var _ = Describe("Token retargeting across instances", func() {
-	It("moves the token to the requested instance and rejects it for the previous instance", func() {
+	It("rotates the token for a new instance and rejects the old key on both instances", func() {
 		ctx := context.Background()
 		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "retarget-" + utilrand.String(5)}}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
@@ -331,8 +331,13 @@ var _ = Describe("Token retargeting across instances", func() {
 		_, err := reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(status(instances[0])).To(Equal(http.StatusUnauthorized))
-		Expect(status(instances[1])).To(Equal(http.StatusOK))
+		Expect(status(instances[1])).To(Equal(http.StatusUnauthorized))
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(&sec), &sec)).To(Succeed())
+		rotated := string(sec.Data[openAIAPIKeyKey])
+		Expect(rotated).NotTo(Equal(token))
+		token = rotated
+		Expect(status(instances[0])).To(Equal(http.StatusUnauthorized))
+		Expect(status(instances[1])).To(Equal(http.StatusOK))
 		Expect(sec.Labels[instanceLabelKey]).To(Equal(instances[1].Name))
 	})
 })

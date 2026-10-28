@@ -1,0 +1,38 @@
+{{- if .Values.byocTLS.domain }}
+{{- if or (not .Values.byocTLS.namespace) (eq .Values.byocTLS.namespace .Release.Namespace) }}
+{{- fail "byocTLS.namespace must be a dedicated namespace separate from the operator release and tenant namespaces" }}
+{{- end }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.byocTLS.namespace }}
+  labels:
+    {{- include "private-llm-operator.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: private-llm-byoc-tls
+  namespace: {{ .Values.byocTLS.namespace }}
+rules:
+  - apiGroups: [cert.gardener.cloud]
+    resources: [certificates]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [dns.gardener.cloud]
+    resources: [dnsentries]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: private-llm-byoc-tls
+  namespace: {{ .Values.byocTLS.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: private-llm-byoc-tls
+subjects:
+  - kind: ServiceAccount
+    name: private-llm-controller-manager
+    namespace: {{ .Release.Namespace }}
+{{- end }}

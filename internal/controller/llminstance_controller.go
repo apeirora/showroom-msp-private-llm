@@ -64,6 +64,10 @@ type LLMInstanceReconciler struct {
 	ExtraIngressAnnotations map[string]string
 	// TLSSecretName, when non-empty, configures spec.tls with this secret for PublicHost.
 	TLSSecretName string
+	// BYOCTLS configures the managed per-instance certificate and DNS scope.
+	BYOCTLS BYOCTLSConfig
+	// BYOCHealthChecker overrides the verified, certificate-pinned external probe in tests.
+	BYOCHealthChecker func(context.Context, string, string) error
 	// ServiceHealthChecker probes service endpoints before publishing Ready=True.
 	// If nil, a default HTTP checker is used.
 	ServiceHealthChecker ServiceHealthChecker
@@ -73,6 +77,7 @@ type LLMInstanceReconciler struct {
 }
 
 const tinyLlamaModel = "tinyllama"
+const qwen3Model = "qwen3-4b"
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
 const provisioningRequeueAfter = 5 * time.Second
@@ -120,38 +125,11 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, nil
 	}
 
-	// Handle deletion: best-effort cleanup and remove finalizer without blocking
-	const finalizerName = "llm.privatellms.msp/llminstance-finalizer"
+	// Keep cleanup credentials until owned remote resources are confirmed absent.
 	if !inst.DeletionTimestamp.IsZero() {
-		if ctrlutil.ContainsFinalizer(inst, finalizerName) {
-			// BYOC objects live on a remote cluster where ownerRefs GC cannot
-			// reach; remove them explicitly (best-effort).
-			if inst.IsBYOC() || inst.Status.ActiveBYOCKubeconfigSecretName != "" {
-				r.cleanupBYOC(ctx, inst)
-			}
-			// Attempt to remove owned resources via ownerRefs GC; nothing to do explicitly
-			// Remove finalizer with small retry window to avoid blocking deletion
-			for i := 0; i < 3; i++ {
-				ctrlutil.RemoveFinalizer(inst, finalizerName)
-				if err := r.Update(ctx, inst); err != nil {
-					if apierrors.IsNotFound(err) {
-						break
-					}
-					if apierrors.IsConflict(err) {
-						fresh, ok, gerr := r.getInstance(ctx, req.NamespacedName)
-						if gerr != nil || !ok {
-							break
-						}
-						inst = fresh
-						continue
-					}
-					return ctrl.Result{}, err
-				}
-				break
-			}
-		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, r.finalizeLLMInstance(ctx, inst, req)
 	}
+	const finalizerName = "llm.privatellms.msp/llminstance-finalizer"
 
 	// Upgrade an already-owned auth route even if settings or workload
 	// reconciliation will reject this instance. Never create a new route here.
@@ -185,6 +163,10 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	model := modelForInstance(inst)
 
 	if err := r.cleanupChangedBYOCTarget(ctx, inst, slug); err != nil {
+		statusErr := r.updateProvisioningStatus(ctx, inst, "", "BYOCTargetCleanupFailed", "Cannot safely clean up the previous BYOC target")
+		if statusErr != nil {
+			return ctrl.Result{}, statusErr
+		}
 		return ctrl.Result{}, err
 	}
 
@@ -348,7 +330,7 @@ func (m modelSelection) path() string {
 func resolveModel(requested string) modelSelection {
 	trimmed := strings.TrimSpace(requested)
 	switch strings.ToLower(trimmed) {
-	case "qwen3-4b", "qwen3-4b-q4_k_m", "qwen3-4b-q4_k_m.gguf":
+	case qwen3Model, "qwen3-4b-q4_k_m", "qwen3-4b-q4_k_m.gguf":
 		return modelSelection{
 			name:                    "qwen3-4b",
 			file:                    "Qwen3-4B-Q4_K_M.gguf",
@@ -1011,8 +993,8 @@ func (r *LLMInstanceReconciler) ensureIngressAnnotations(ing *networkingv1.Ingre
 		updated = true
 	}
 	if isHTTPS {
-		if ing.Annotations["traefik.ingress.kubernetes.io/router.tls"] != "true" {
-			ing.Annotations["traefik.ingress.kubernetes.io/router.tls"] = "true"
+		if ing.Annotations["traefik.ingress.kubernetes.io/router.tls"] != byocBootstrapTrue {
+			ing.Annotations["traefik.ingress.kubernetes.io/router.tls"] = byocBootstrapTrue
 			updated = true
 		}
 	} else if _, exists := ing.Annotations["traefik.ingress.kubernetes.io/router.tls"]; exists {
@@ -1220,7 +1202,8 @@ func defaultServiceHealthChecker(ctx context.Context, targetURL string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	httpClient := &http.Client{CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -1355,4 +1338,40 @@ func generateSlug(numBytes int) (string, error) {
 
 func isAlphaNumeric(b byte) bool {
 	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') || (b >= '0' && b <= '9')
+}
+
+func (r *LLMInstanceReconciler) finalizeLLMInstance(ctx context.Context, inst *llmv1alpha1.LLMInstance, req ctrl.Request) error {
+	const finalizerName = "llm.privatellms.msp/llminstance-finalizer"
+
+	if ctrlutil.ContainsFinalizer(inst, finalizerName) {
+		// BYOC objects live on a remote cluster where ownerRefs GC cannot
+		// reach; remove them explicitly (best-effort).
+		if inst.IsBYOC() || inst.Status.ActiveBYOCKubeconfigSecretName != "" {
+			if err := r.cleanupBYOC(ctx, inst); err != nil {
+				return err
+			}
+		}
+		// Attempt to remove owned resources via ownerRefs GC; nothing to do explicitly
+		// Remove finalizer with small retry window to avoid blocking deletion
+		for i := 0; i < 3; i++ {
+			ctrlutil.RemoveFinalizer(inst, finalizerName)
+			if err := r.Update(ctx, inst); err != nil {
+				if apierrors.IsNotFound(err) {
+					break
+				}
+				if apierrors.IsConflict(err) {
+					fresh, ok, gerr := r.getInstance(ctx, req.NamespacedName)
+					if gerr != nil || !ok {
+						break
+					}
+					inst = fresh
+					continue
+				}
+				return err
+			}
+			break
+		}
+	}
+	return nil
+
 }

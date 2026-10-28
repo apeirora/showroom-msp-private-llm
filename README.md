@@ -161,9 +161,11 @@ reconcile. With rolling updates and leader election, the new auth server can
 receive requests before the new leader upgrades those URLs. Existing owned
 middlewares are upgraded before model-setting or workload reconciliation gates,
 but API failures can still delay the update. Verify every middleware has the four
-binding parameters before accepting the rollout. No endpoint or token rotation is part of this change.
+binding parameters before accepting the rollout. Hosted middleware migration is
+separate from the BYOC endpoint/key migration described below.
 Duplicate slug claims are denied for both instances. Slug annotations remain
-mutable; operator-owned slugs and migration of existing BYOC resource names are
+mutable for hosted instances; BYOC pins its observed workload slug in status.
+Operator-owned hosted slugs and collision-resistant resource names are
 still required to prevent collision-based denial of service (showroom#793).
 The auth service reads the Kubernetes API directly. An invalid token causes an
 instance GET and a namespaced Secret LIST; owner GETs and the cluster-wide
@@ -172,9 +174,27 @@ lookup load still require deployment validation. Unrelated forwardAuth options
 are preserved when the operator updates its address and header policy.
 
 These checks cover hosted forwardAuth routes. BYOC inference uses a separate
-key-file path whose Secret ownership/type filtering is not changed here.
+key-file path that requires a Secret controlled by a current APITokenRequest for
+the instance; labels alone cannot supply a key.
 Token-request retargeting remains supported: reconciliation updates the Secret's
 instance label, slug and endpoint to the new target.
+
+## BYOC HTTPS
+
+BYOC endpoints require managed Gardener certificates, instance-specific DNS and a
+pinned Traefik TLS listener beside the loopback-only model server. Configure the
+operator's `byocTLS` chart settings before migrating existing workloads. There is
+no HTTP fallback. Existing legacy resources require verified ownership migration;
+upgrading the binary alone does not close an unreachable old plaintext listener.
+
+When an endpoint is unavailable, existing token Secrets advertise
+`https://unavailable.invalid`. Target or instance changes rotate model keys;
+certificate renewal preserves them. Consumers that cache environment variables
+must be stopped and restarted during migration.
+
+See [the implementation](docs/byoc-https-reuse.md) and
+[the development pilot](docs/dev-byoc-https-pilot.md) for release, migration and
+acceptance checks. Production requires a separate rollout.
 
 ## Documentation
 

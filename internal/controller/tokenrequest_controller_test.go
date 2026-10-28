@@ -236,7 +236,7 @@ var _ = Describe("APITokenRequest controller", func() {
 		Expect(ready.Reason).To(Equal("Provisioned"))
 	})
 
-	It("should backfill endpoint and slug on existing token secret", func() {
+	It("should backfill the endpoint and rotate a legacy token with an ambiguous slug binding", func() {
 		instanceName := "instance-" + utilrand.String(5)
 		tokenName := "token-" + utilrand.String(5)
 		slug := "slug-" + utilrand.String(5)
@@ -298,7 +298,9 @@ var _ = Describe("APITokenRequest controller", func() {
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, &secret)).To(Succeed())
 		Expect(string(secret.Data[openAIAPIURLKey])).To(Equal(expectedEndpoint))
 		Expect(secret.Labels).To(HaveKeyWithValue("llm.privatellms.msp/slug", slug))
-		Expect(string(secret.Data[openAIAPIKeyKey])).To(Equal("static-test-token"))
+		Expect(string(secret.Data[openAIAPIKeyKey])).NotTo(Equal("static-test-token"))
+		Expect(secret.Data[openAIAPIKeyKey]).NotTo(BeEmpty())
+		Expect(secret.Annotations[credentialInstanceAnnotation]).To(Equal(string(inst.UID)))
 	})
 
 	It("should remove generated secret during deletion", func() {

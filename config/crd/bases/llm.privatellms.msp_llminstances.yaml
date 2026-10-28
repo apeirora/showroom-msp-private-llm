@@ -171,6 +171,20 @@ spec:
                   operator removes the workload from the previous target before managing
                   the new one.
                 type: string
+              activeBYOCSlug:
+                description: ActiveBYOCSlug is the immutable workload identity captured
+                  on first provisioning.
+                type: string
+              activeBYOCTLSDomain:
+                description: ActiveBYOCTLSDomain and namespace preserve cleanup coordinates
+                  if operator configuration changes.
+                type: string
+              activeBYOCTLSNamespace:
+                type: string
+              activeBYOCTargetID:
+                description: ActiveBYOCTargetID binds TLS material to the API trust
+                  and cluster UID.
+                type: string
               conditions:
                 description: Conditions represent the latest available observations
                   of the resource's state.
