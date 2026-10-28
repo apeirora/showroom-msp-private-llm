@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1-rc.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.1...v2.17.1-rc.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* **controller:** Preserve Gardener certificate renewal requests ([#223](https://github.com/apeirora/showroom-msp-private-llm/issues/223)) ([63505e0](https://github.com/apeirora/showroom-msp-private-llm/commit/63505e0401defa34779ab5ebf20652aefbd2b959))
+
 ## [2.17.1-rc.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.0...v2.17.1-rc.1) (2026-10-28)
 
 
