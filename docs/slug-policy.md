@@ -36,6 +36,25 @@ revocation. Map every existing BYOC instance before rollout.
 
 ## Preserve existing endpoints
 
+Slug ownership does not migrate synchronized resources. Updating the sync-agent
+namespace template does not relocate existing mirrors; related Secrets follow
+their retained primary namespace. A new token request can therefore land apart
+from a legacy instance and fail to resolve it. More seriously, a retained request
+can resolve an instance from another source namespace if both still share one MSP
+namespace: the token controller resolves instance names within the MSP namespace.
+Its UID and owner checks do not establish the original KCP namespace relationship.
+
+Before approving any legacy entry, prove that every retained MSP namespace contains
+LLMInstances, APITokenRequests and related Secret replicas from exactly one trusted
+KCP logical-cluster/source-namespace tuple, with no competing provider credential
+writers. Verify every request resolves to its intended source instance. UID/route
+ownership alone is insufficient. If the relationship is mixed, ambiguous or
+unprovable, withhold the mapping, withdraw only the affected owned hosted route,
+and migrate the source instances and requests together through normal owner cleanup
+and recreation in the isolated namespace before restoring access. Do not force
+finalizers or delete a shared namespace. Missing mappings do not revoke existing
+BYOC keys; preserve their cleanup coordinates and handle those targets separately.
+
 1. Verify the selected cluster and every existing LLMInstance's MSP/source
    identity, owned route, token request and published endpoint. For BYOC, also
    record the active target, active slug and protected cleanup coordinates.
