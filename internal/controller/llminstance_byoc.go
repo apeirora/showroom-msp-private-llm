@@ -132,19 +132,19 @@ func (r *LLMInstanceReconciler) byocKubeconfig(ctx context.Context, inst *llmv1a
 	return nil, byocReasonMissingSecret, fmt.Sprintf("kubeconfig Secret %q not found", secretName), nil
 }
 
-// byocClient builds a client for the BYOC cluster. A nil client with a
-// non-empty reason signals a user-fixable provisioning condition rather than
-// a reconcile error.
-func (r *LLMInstanceReconciler) byocClient(ctx context.Context, inst *llmv1alpha1.LLMInstance) (client.Client, string, string, error) {
+// byocClient returns a client and the exact credential snapshot used to build
+// it. Identity verification and caching must use this snapshot too. A nil client
+// with a reason signals a user-fixable provisioning condition.
+func (r *LLMInstanceReconciler) byocClient(ctx context.Context, inst *llmv1alpha1.LLMInstance) (client.Client, []byte, string, string, error) {
 	kubeconfig, reason, message, err := r.byocKubeconfig(ctx, inst)
 	if err != nil || kubeconfig == nil {
-		return nil, reason, message, err
+		return nil, nil, reason, message, err
 	}
 	remote, err := r.remoteClientForKubeconfig(kubeconfig)
 	if err != nil {
-		return nil, "KubeconfigInvalid", fmt.Sprintf("cannot build client for BYOC cluster: %v", err), nil
+		return nil, nil, "KubeconfigInvalid", fmt.Sprintf("cannot build client for BYOC cluster: %v", err), nil
 	}
-	return remote, "", "", nil
+	return remote, kubeconfig, "", "", nil
 }
 
 func (r *LLMInstanceReconciler) cachedBYOCKubeconfig(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) ([]byte, error) {
@@ -173,15 +173,10 @@ func (r *LLMInstanceReconciler) cachedBYOCKubeconfig(ctx context.Context, inst *
 // ensureCachedCredentials keeps an operator-owned copy of the kubeconfig so
 // that remote cleanup still has credentials after the sync agent removed the
 // user-supplied Secret. Owned by the instance, so GC removes it afterwards.
-func (r *LLMInstanceReconciler) ensureCachedCredentials(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string) error {
-	kubeconfig, _, _, err := r.byocKubeconfig(ctx, inst)
-	if err != nil || kubeconfig == nil {
-		return err
-	}
-
+func (r *LLMInstanceReconciler) ensureCachedCredentials(ctx context.Context, inst *llmv1alpha1.LLMInstance, slug string, kubeconfig []byte) error {
 	name := byocCredentialsName(slug)
 	var existing corev1.Secret
-	err = r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: name}, &existing)
+	err := r.Get(ctx, client.ObjectKey{Namespace: inst.Namespace, Name: name}, &existing)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			return err
@@ -318,16 +313,12 @@ func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1al
 	if inst.Status.ActiveBYOCSlug != "" && inst.Status.ActiveBYOCSlug != slug {
 		return ctrl.Result{}, fmt.Errorf("BYOC workload slug is immutable after provisioning")
 	}
-	remote, reason, message, err := r.byocClient(ctx, inst)
+	remote, data, reason, message, err := r.byocClient(ctx, inst)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if remote == nil {
 		return ctrl.Result{RequeueAfter: provisioningRequeueAfter}, r.updateProvisioningStatus(ctx, inst, "", reason, message)
-	}
-	data, _, _, err := r.byocKubeconfig(ctx, inst)
-	if err != nil {
-		return ctrl.Result{}, err
 	}
 	apiID, err := byocTargetIdentity(data)
 	if err != nil {
@@ -341,7 +332,13 @@ func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1al
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.ensureCachedCredentials(ctx, inst, slug); err != nil {
+	// Keep the previous target's cleanup credentials until cleanup completes.
+	// The source Secret can change after the outer target-change check.
+	if inst.Status.ActiveBYOCTargetID != "" && inst.Status.ActiveBYOCTargetID != targetID {
+		return ctrl.Result{}, fmt.Errorf("BYOC cluster identity changed")
+	}
+	// Persist this verified snapshot before status makes cleanup depend on it.
+	if err := r.ensureCachedCredentials(ctx, inst, slug, data); err != nil {
 		return ctrl.Result{}, err
 	}
 	if inst.Status.ActiveBYOCKubeconfigSecretName != inst.Spec.ClusterRef.KubeconfigSecretName || inst.Status.ActiveBYOCSlug == "" || inst.Status.ActiveBYOCTargetID == "" {
@@ -353,9 +350,6 @@ func (r *LLMInstanceReconciler) reconcileBYOC(ctx context.Context, inst *llmv1al
 		if err := r.updateProvisioningStatus(ctx, inst, "", byocReasonTargetChanging, "BYOC HTTPS is being provisioned"); err != nil {
 			return ctrl.Result{}, err
 		}
-	}
-	if inst.Status.ActiveBYOCTargetID != targetID {
-		return ctrl.Result{}, fmt.Errorf("BYOC cluster identity changed")
 	}
 	if err := r.ensureBYOCNamespace(ctx, remote); err != nil {
 		return ctrl.Result{}, err
