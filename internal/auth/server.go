@@ -18,9 +18,11 @@ package auth
 import (
 	"context"
 	"crypto/subtle"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	llmv1alpha1 "github.com/apeirora/showroom-msp-private-llm/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +37,8 @@ const (
 	slugKey               = "llm.privatellms.msp/slug"
 	credentialInstanceKey = "llm.privatellms.msp/credential-instance-uid"
 	credentialTargetKey   = "llm.privatellms.msp/credential-target"
+	authorizationTimeout  = 5 * time.Second
+	shutdownTimeout       = 5 * time.Second
 )
 
 type Server struct {
@@ -46,12 +50,34 @@ type Server struct {
 // Start handles /auth/verify. Instance identity comes exclusively from the
 // operator-managed forwardAuth URL, never from client-forwarded headers.
 func (s *Server) Start(ctx context.Context, bindAddress string) error {
-	srv := &http.Server{Addr: bindAddress, Handler: s.Handler(ctx)}
-	go func() {
-		<-ctx.Done()
-		_ = srv.Shutdown(context.Background())
-	}()
-	return srv.ListenAndServe()
+	srv := s.httpServer(ctx, bindAddress)
+	shutdownDone := make(chan struct{})
+	stopShutdown := context.AfterFunc(ctx, func() {
+		defer close(shutdownDone)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			_ = srv.Close()
+		}
+	})
+	err := srv.ListenAndServe()
+	// ListenAndServe returns as soon as shutdown closes the listener. Wait for
+	// bounded connection cleanup, or cancel the callback after a startup error.
+	if !stopShutdown() {
+		<-shutdownDone
+	}
+	return err
+}
+
+func (s *Server) httpServer(ctx context.Context, bindAddress string) *http.Server {
+	// This listener makes small forwardAuth decisions; it never streams model
+	// responses. Socket deadlines and the total API lookup deadline are separate.
+	return &http.Server{
+		Addr: bindAddress, Handler: s.Handler(ctx),
+		ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
+		WriteTimeout: 10 * time.Second, IdleTimeout: 30 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return ctx },
+	}
 }
 
 type instanceBinding struct {
@@ -104,6 +130,8 @@ func (s *Server) Handler(ctx context.Context) http.Handler {
 }
 
 func (s *Server) authorize(ctx context.Context, binding instanceBinding, token string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, authorizationTimeout)
+	defer cancel()
 	var inst llmv1alpha1.LLMInstance
 	if err := s.K8sClient.Get(ctx, client.ObjectKey{Namespace: binding.namespace, Name: binding.name}, &inst); err != nil {
 		return false, client.IgnoreNotFound(err)

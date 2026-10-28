@@ -20,7 +20,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"flag"
+	"net/http"
 	"os"
 	"time"
 
@@ -314,16 +316,6 @@ func main() {
 
 	labeledClient := newLabelingClient(mgr.GetClient(), baseLabels)
 
-	// Start lightweight auth server that validates Bearer tokens against Secrets
-	authServer := &auth.Server{K8sClient: mgr.GetAPIReader()}
-	go func() {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		if err := authServer.Start(ctx, authBind); err != nil {
-			setupLog.Error(err, "auth server stopped")
-		}
-	}()
-
 	if err = (&controller.LLMInstanceReconciler{
 		Client:              labeledClient,
 		ModelServerCeilings: modelCeilings,
@@ -400,8 +392,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Auth must run on every replica, independently of manager leader election,
+	// while sharing its process shutdown signal and bounded connection cleanup.
+	runtimeCtx, cancelRuntime := context.WithCancel(ctrl.SetupSignalHandler())
+	defer cancelRuntime()
+	authServer := &auth.Server{K8sClient: mgr.GetAPIReader()}
+	authStopped := make(chan struct{})
+	go func() {
+		defer close(authStopped)
+		if err := authServer.Start(runtimeCtx, authBind); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			setupLog.Error(err, "auth server stopped")
+		}
+	}()
+
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	err = mgr.Start(runtimeCtx)
+	cancelRuntime()
+	<-authStopped
+	if err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
