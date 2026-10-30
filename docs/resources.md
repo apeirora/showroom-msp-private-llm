@@ -175,8 +175,24 @@ spec:
     kubeconfigSecretName: sc-cf-kubeconfig
 ```
 
-The remote workload uses a `LoadBalancer` Service with plain HTTP on port `443`
-and forwards traffic to the llama.cpp container on port `8000`.
+The remote workload exposes HTTPS on `LoadBalancer` port `443`, forwarding to a
+Traefik TLS listener on port `8443`. The llama.cpp server listens only on
+`127.0.0.1:8000` inside the pod. There is no HTTP fallback.
+
+The provider configures the managed DNS domain, Gardener issuer and separate
+certificate namespace through the operator's `byocTLS` chart settings. The
+operator creates an instance-specific DNS name and certificate, then copies the
+validated TLS material to an owned Secret on the target cluster. Read the HTTPS
+URL from `status.endpoint` after the instance becomes Ready; a LoadBalancer
+address alone does not establish readiness.
+
+Existing HTTP clients need an explicit migration: stop the affected consumers
+and legacy model workload, verify ownership of the old resources, remove the
+plaintext route, and verify HTTPS. Update client URLs and rotate exposed API keys
+before restarting consumers. See the
+[BYOC HTTPS implementation](byoc-https-reuse.md) and
+[development migration checklist](dev-byoc-https-pilot.md). A controller upgrade
+alone does not prove that an unreachable old endpoint has been removed.
 
 ---
 
