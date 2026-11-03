@@ -148,7 +148,7 @@ kubectl delete llminstance my-llm
 
 ### What Gets Created
 
-For each `LLMInstance`, the operator creates:
+For each hosted `LLMInstance`, the operator creates:
 
 | Resource | Name Pattern | Purpose |
 |----------|-------------|---------|
