@@ -13,6 +13,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"math/big"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -467,5 +469,212 @@ func TestBYOCTLSCleanupNeedsStoredCoordinatesOnly(t *testing.T) {
 	}
 	if err := r.Get(ctx, client.ObjectKeyFromObject(cert), cert); !apierrors.IsNotFound(err) {
 		t.Fatal("Certificate survived confirmed cleanup")
+	}
+}
+
+// Gardener selects its managed shoot issuer by name only; an explicit
+// namespace selects a custom in-shoot issuer. Both must request, deliver and
+// clean up through the same ownership checks.
+func TestBYOCTLSIssuerRefSelectsManagedOrCustomIssuer(t *testing.T) {
+	for name, tc := range map[string]struct {
+		issuer, namespace string
+		want              map[string]interface{}
+	}{
+		"managed shoot issuer": {"garden", "", map[string]interface{}{"name": "garden"}},
+		"custom issuer":        {"issuer", "kube-system", map[string]interface{}{"name": "issuer", "namespace": "kube-system"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			r, remote, inst, cfg, fixture, ca := byocTLSFixture(t)
+			if err := r.Delete(ctx, fixture); err != nil {
+				t.Fatal(err)
+			}
+			cfg.IssuerName, cfg.IssuerNamespace = tc.issuer, tc.namespace
+			tlsName, host, err := byocTLSIdentity(inst, cfg, "target-a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			cert := byocTLSObject(byocCertificateGVK, cfg.Namespace, tlsName)
+			issuerRef := func() map[string]interface{} {
+				t.Helper()
+				if err := r.Get(ctx, client.ObjectKeyFromObject(cert), cert); err != nil {
+					t.Fatal(err)
+				}
+				ref, found, err := unstructured.NestedMap(cert.Object, "spec", "issuerRef")
+				if err != nil || !found {
+					t.Fatalf("Certificate has no issuerRef: %v", err)
+				}
+				return ref
+			}
+
+			err = r.reconcileBYOCManagedCertificate(ctx, inst, cfg, "target-a")
+			if got := issuerRef(); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("requested issuerRef %v, want %v", got, tc.want)
+			}
+			if cert.GetUID() == "" {
+				// The fake client does not assign UIDs; a real API server does.
+				if !errors.Is(err, ErrBYOCTLSNotReady) {
+					t.Fatalf("Certificate without UID was not held back: %v", err)
+				}
+				cert.SetUID("certificate-uid")
+				if err = r.Update(ctx, cert); err != nil {
+					t.Fatal(err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if err = r.reconcileBYOCManagedCertificate(ctx, inst, cfg, "target-a"); err != nil {
+				t.Fatal(err)
+			}
+			if got := issuerRef(); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("converged issuerRef %v, want %v", got, tc.want)
+			}
+			if uid, _, _ := unstructured.NestedString(cert.Object, "spec", "secretLabels", byocTLSCertificateLabel); uid != string(cert.GetUID()) {
+				t.Fatal("Certificate UID was not bound to its output Secret")
+			}
+
+			if tc.namespace == "" {
+				// A namespace added to the managed reference would select another
+				// issuer. It must block delivery and be removed by reconciliation.
+				if err = unstructured.SetNestedField(cert.Object, "kube-system", "spec", "issuerRef", "namespace"); err != nil {
+					t.Fatal(err)
+				}
+				if err = r.Update(ctx, cert); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = r.reconcileBYOCTLSSecret(ctx, remote, inst, cfg, "target-a"); !errors.Is(err, ErrBYOCTLSNotReady) {
+					t.Fatalf("foreign issuer namespace was accepted for delivery: %v", err)
+				}
+				if err = r.reconcileBYOCManagedCertificate(ctx, inst, cfg, "target-a"); err != nil {
+					t.Fatal(err)
+				}
+				if got := issuerRef(); !reflect.DeepEqual(got, tc.want) {
+					t.Fatalf("foreign issuer namespace retained: %v", got)
+				}
+			}
+
+			cert.Object["status"] = map[string]interface{}{"state": byocCertificateReadyState, "observedGeneration": cert.GetGeneration()}
+			if err = r.Update(ctx, cert); err != nil {
+				t.Fatal(err)
+			}
+			data, revision := ca.issue(t, host, nil)
+			addBYOCSource(t, r, inst, cfg, cert, data)
+			if got, err := r.reconcileBYOCTLSSecret(ctx, remote, inst, cfg, "target-a"); err != nil || got != revision {
+				t.Fatalf("issued certificate was not delivered: %v", err)
+			}
+			if err = r.reconcileBYOCDNS(ctx, inst, cfg, "194.11.242.27", "target-a"); err != nil {
+				t.Fatal(err)
+			}
+
+			for i := 0; ; i++ {
+				err = r.cleanupBYOCManagedTLS(ctx, inst, cfg, "target-a")
+				if err == nil {
+					break
+				}
+				if !errors.Is(err, ErrBYOCTLSNotReady) || i == 5 {
+					t.Fatalf("cleanup did not converge: %v", err)
+				}
+			}
+			if err = cleanupBYOCRemoteTLS(ctx, remote, inst, cfg, "target-a"); !errors.Is(err, ErrBYOCTLSNotReady) {
+				t.Fatalf("remote TLS deletion did not wait: %v", err)
+			}
+			if err = cleanupBYOCRemoteTLS(ctx, remote, inst, cfg, "target-a"); err != nil {
+				t.Fatal(err)
+			}
+			if err = r.Get(ctx, client.ObjectKeyFromObject(cert), cert); !apierrors.IsNotFound(err) {
+				t.Fatalf("Certificate survived cleanup: %v", err)
+			}
+			dns := byocTLSObject(byocDNSGVK, cfg.Namespace, tlsName)
+			if err = r.Get(ctx, client.ObjectKeyFromObject(dns), dns); !apierrors.IsNotFound(err) {
+				t.Fatalf("DNSEntry survived cleanup: %v", err)
+			}
+			for _, secretName := range []string{tlsName, tlsName + "-last-valid"} {
+				if err = r.Get(ctx, client.ObjectKey{Namespace: cfg.Namespace, Name: secretName}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+					t.Fatalf("TLS Secret %s survived cleanup: %v", secretName, err)
+				}
+			}
+			if err = remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: tlsName}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+				t.Fatalf("remote TLS Secret survived cleanup: %v", err)
+			}
+		})
+	}
+}
+
+func TestBYOCTLSRejectsInvalidIssuerConfiguration(t *testing.T) {
+	for _, valid := range [][2]string{{"garden", ""}, {"issuer", "kube-system"}, {"issuer.example", "cert-system"}} {
+		if err := validateBYOCTLSIssuer(BYOCTLSConfig{IssuerName: valid[0], IssuerNamespace: valid[1]}); err != nil {
+			t.Fatalf("rejected issuer %q in namespace %q: %v", valid[0], valid[1], err)
+		}
+	}
+	invalid := map[string][2]string{
+		"missing name":             {"", ""},
+		"namespace without name":   {"", "kube-system"},
+		"uppercase name":           {"Garden", ""},
+		"underscore name":          {"garden_issuer", ""},
+		"path name":                {"garden/issuer", ""},
+		"long name":                {strings.Repeat("a", 254), ""},
+		"uppercase namespace":      {"issuer", "Kube-System"},
+		"subdomain namespace":      {"issuer", "kube.system"},
+		"whitespace namespace":     {"issuer", " kube-system"},
+		"leading hyphen namespace": {"issuer", "-kube-system"},
+		"long namespace":           {"issuer", strings.Repeat("a", 64)},
+	}
+	for name, tc := range invalid {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			r, remote, inst, cfg, cert, ca := byocTLSFixture(t)
+			_, host, _ := byocTLSIdentity(inst, cfg, "target-a")
+			data, _ := ca.issue(t, host, nil)
+			source := addBYOCSource(t, r, inst, cfg, cert, data)
+			cfg.IssuerName, cfg.IssuerNamespace = tc[0], tc[1]
+			if err := validateBYOCTLSIssuer(cfg); err == nil {
+				t.Fatal("invalid issuer configuration accepted")
+			}
+			if _, err := r.reconcileBYOCTLSSecret(ctx, remote, inst, cfg, "target-a"); err == nil {
+				t.Fatal("invalid issuer configuration permitted delivery")
+			}
+			if err := remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: cert.GetName()}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+				t.Fatalf("invalid issuer configuration delivered TLS material: %v", err)
+			}
+			// Issuance must also refuse to request a new Certificate.
+			if err := r.Delete(ctx, source); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.Delete(ctx, cert); err != nil {
+				t.Fatal(err)
+			}
+			if err := r.reconcileBYOCManagedCertificate(ctx, inst, cfg, "target-a"); err == nil {
+				t.Fatal("invalid issuer configuration permitted issuance")
+			}
+			if err := r.Get(ctx, client.ObjectKeyFromObject(cert), cert); !apierrors.IsNotFound(err) {
+				t.Fatalf("invalid issuer configuration created a Certificate: %v", err)
+			}
+		})
+	}
+}
+
+// Switching an existing instance from a custom to the managed issuer must not
+// deliver from the old request before its issuerRef has converged.
+func TestBYOCTLSIssuerSwitchRequiresConvergedCertificate(t *testing.T) {
+	ctx := context.Background()
+	r, remote, inst, cfg, cert, ca := byocTLSFixture(t)
+	_, host, _ := byocTLSIdentity(inst, cfg, "target-a")
+	data, _ := ca.issue(t, host, nil)
+	addBYOCSource(t, r, inst, cfg, cert, data)
+	cfg.IssuerName, cfg.IssuerNamespace = "garden", ""
+	if _, err := r.reconcileBYOCTLSSecret(ctx, remote, inst, cfg, "target-a"); !errors.Is(err, ErrBYOCTLSNotReady) {
+		t.Fatalf("unconverged issuer change permitted delivery: %v", err)
+	}
+	if err := remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: cert.GetName()}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("unconverged issuer change delivered TLS material: %v", err)
+	}
+	if err := r.reconcileBYOCManagedCertificate(ctx, inst, cfg, "target-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Get(ctx, client.ObjectKeyFromObject(cert), cert); err != nil {
+		t.Fatal(err)
+	}
+	if ref, _, _ := unstructured.NestedMap(cert.Object, "spec", "issuerRef"); !reflect.DeepEqual(ref, map[string]interface{}{"name": "garden"}) {
+		t.Fatalf("issuerRef did not switch to the managed issuer: %v", ref)
 	}
 }

@@ -208,7 +208,7 @@ func main() {
 	)
 	flag.StringVar(
 		&byocTLS.IssuerNamespace, "byoc-tls-issuer-namespace", os.Getenv("BYOC_TLS_ISSUER_NAMESPACE"),
-		"Existing Gardener issuer namespace",
+		"Namespace of a custom Gardener issuer; empty selects a managed shoot issuer by name only",
 	)
 	flag.StringVar(&byocTLS.DNSClass, "byoc-dns-class", os.Getenv("BYOC_DNS_CLASS"), "Gardener DNS controller class")
 	flag.StringVar(&authBind, "auth-bind-address", ":8090", "Address for internal auth server")

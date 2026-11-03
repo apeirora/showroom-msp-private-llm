@@ -49,8 +49,10 @@ image automation. Recheck the live sources and HelmRelease values before release
    namespace through the implemented chart interface. A candidate development
    subdomain is `byoc.private-llm.msp02.dev.showroom.apeirora.eu`; verify the exact
    runtime configuration and ownership before using it. Reuse issuer
-   `kube-system/traefik-cert-issuer`. Source configuration currently allows
-   `dev.showroom.apeirora.eu` and `*.dev.showroom.apeirora.eu`. The existing
+   `kube-system/traefik-cert-issuer` (a custom issuer, so `issuerNamespace` is
+   set). Where only the Gardener managed shoot issuer is available, use
+   `issuerName: garden` with an empty `issuerNamespace`. Source configuration
+   currently allows `dev.showroom.apeirora.eu` and `*.dev.showroom.apeirora.eu`. The existing
    `default/ccloud-dns` DNSProvider includes `showroom.apeirora.eu`, and the shoot
    template enables `shoot-dns-service` and shoot certificate issuers. These are
    source facts, not proof of live readiness or authorization from the new

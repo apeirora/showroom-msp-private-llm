@@ -47,9 +47,12 @@ const (
 // BYOCTLSConfig is operator configuration, never populated from a tenant object.
 // Namespace must be isolated from tenant and related-Secret synchronization.
 type BYOCTLSConfig struct {
-	Domain          string
-	Namespace       string
-	IssuerName      string
+	Domain     string
+	Namespace  string
+	IssuerName string
+	// IssuerNamespace is empty for a Gardener managed shoot issuer, which is
+	// selected by name only (for example "garden"). A nonempty value selects a
+	// custom issuer in that namespace of the cluster running cert-management.
 	IssuerNamespace string
 	DNSClass        string
 	// roots is only set by in-package tests. Production uses the OS trust store.
@@ -85,10 +88,23 @@ func byocTLSIdentity(inst *llmv1alpha1.LLMInstance, cfg BYOCTLSConfig, targetID 
 }
 
 func validateBYOCTLSIssuer(cfg BYOCTLSConfig) error {
-	if cfg.IssuerName == "" || len(validation.IsDNS1123Subdomain(cfg.IssuerName)) != 0 || len(validation.IsDNS1123Label(cfg.IssuerNamespace)) != 0 {
-		return fmt.Errorf("BYOC TLS issuer namespace and name are required")
+	if cfg.IssuerName == "" || len(validation.IsDNS1123Subdomain(cfg.IssuerName)) != 0 {
+		return fmt.Errorf("BYOC TLS requires a valid issuer name")
+	}
+	if cfg.IssuerNamespace != "" && len(validation.IsDNS1123Label(cfg.IssuerNamespace)) != 0 {
+		return fmt.Errorf("BYOC TLS issuer namespace is invalid")
 	}
 	return nil
+}
+
+// byocIssuerRef omits the namespace for a Gardener managed issuer. Gardener
+// interprets an explicit namespace as a custom issuer in the shoot.
+func byocIssuerRef(cfg BYOCTLSConfig) map[string]interface{} {
+	ref := map[string]interface{}{"name": cfg.IssuerName}
+	if cfg.IssuerNamespace != "" {
+		ref["namespace"] = cfg.IssuerNamespace
+	}
+	return ref
 }
 
 func byocTLSObject(gvk schema.GroupVersionKind, namespace, name string) *unstructured.Unstructured {
@@ -198,7 +214,7 @@ func byocCertificateSpec(name, hostname, certificateUID string, cfg BYOCTLSConfi
 		// Avoid the 64-character CommonName limit; SAN alone is supported by Gardener.
 		"dnsNames":     []interface{}{hostname},
 		"secretRef":    map[string]interface{}{"name": name, "namespace": cfg.Namespace},
-		"issuerRef":    map[string]interface{}{"name": cfg.IssuerName, "namespace": cfg.IssuerNamespace},
+		"issuerRef":    byocIssuerRef(cfg),
 		"secretLabels": labels,
 	}
 }
