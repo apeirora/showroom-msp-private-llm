@@ -58,6 +58,10 @@ modelServerCeilings:
 byocTLS:
   domain: ''
   namespace: private-llm-byoc-tls
+  # Gardener Certificate issuerRef. For the Gardener managed shoot issuer, set
+  # issuerName to its name (for example garden) and issuerNamespace to '' so the
+  # namespace is omitted. A nonempty issuerNamespace selects a custom issuer in
+  # that namespace; both values must be valid Kubernetes names.
   issuerName: traefik-cert-issuer
   issuerNamespace: kube-system
   dnsClass: garden

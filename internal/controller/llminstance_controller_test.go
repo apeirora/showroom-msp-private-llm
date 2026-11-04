@@ -30,6 +30,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
@@ -643,6 +644,39 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		reconciler.BYOCTLS = originalConfig
 		byocAssertManagedDeleted(f, tlsName)
 	}, Entry("domain", false), Entry("credential namespace", true))
+
+	DescribeTable("requests the configured Gardener issuer through reconciliation and cleans up", func(issuerName, issuerNamespace string, want map[string]interface{}) {
+		f := configureBYOCIntegration(reconciler)
+		reconciler.BYOCTLS.IssuerName, reconciler.BYOCTLS.IssuerNamespace = issuerName, issuerNamespace
+		remote := byocTestRemote("issuer-target")
+		reconciler.RemoteClientBuilder = func([]byte) (client.Client, error) { return remote, nil }
+		inst := f.newInstance(namespace, "issuer-kubeconfig", "issuer-api")
+		f.provision(inst, remote)
+		byocMarkDeploymentReady(remote, inst)
+		byocTestReconcile(reconciler, inst)
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(inst), inst)).To(Succeed())
+		tlsName, hostname, err := byocTLSIdentity(inst, reconciler.BYOCTLS, inst.Status.ActiveBYOCTargetID)
+		Expect(err).NotTo(HaveOccurred())
+		cert := byocTLSObject(byocCertificateGVK, reconciler.BYOCTLS.Namespace, tlsName)
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cert), cert)).To(Succeed())
+		issuerRef, found, err := unstructured.NestedMap(cert.Object, "spec", "issuerRef")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeTrue())
+		Expect(issuerRef).To(Equal(want))
+		Expect(inst.Status.Endpoint).To(Equal("https://" + hostname))
+		Expect(remote.Get(ctx, types.NamespacedName{Name: tlsName, Namespace: byocNamespace}, &corev1.Secret{})).To(Succeed())
+
+		Expect(k8sClient.Delete(ctx, inst)).To(Succeed())
+		for i := 0; i < 8; i++ {
+			byocTestReconcile(reconciler, inst)
+		}
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(inst), inst))).To(BeTrue())
+		Expect(apierrors.IsNotFound(remote.Get(ctx, types.NamespacedName{Name: tlsName, Namespace: byocNamespace}, &corev1.Secret{}))).To(BeTrue())
+		byocAssertManagedDeleted(f, tlsName)
+	},
+		Entry("Gardener managed shoot issuer by name only", "garden", "", map[string]interface{}{"name": "garden"}),
+		Entry("custom issuer in an explicit namespace", "issuer", "kube-system", map[string]interface{}{"name": "issuer", "namespace": "kube-system"}),
+	)
 
 	It("withdraws active BYOC readiness when the source kubeconfig is missing", func() {
 		f := configureBYOCIntegration(reconciler)

@@ -93,6 +93,12 @@ References:
 
 `byocTLS.domain`, `namespace`, `issuerName`, `issuerNamespace` and `dnsClass` are
 operator settings. Empty or invalid configuration does not enable plaintext.
+`issuerName` is always required. For the Gardener managed shoot issuer, set
+`issuerName` (for example `garden`) and leave `issuerNamespace` empty: the
+Certificate then carries `issuerRef.name` only. A nonempty `issuerNamespace`
+selects a [custom shoot issuer](https://gardener.cloud/docs/extensions/others/gardener-extension-shoot-cert-service/custom_shoot_issuer/)
+in that namespace. Changing the issuer updates owned Certificates on the next
+reconciliation; delivery waits until the updated request has converged.
 The chart creates a dedicated credential namespace with namespaced Certificate
 and DNSEntry permissions; it does not install Gardener controllers on BYOC.
 Only public unicast IP LoadBalancers are currently supported. Hostname-only LBs
