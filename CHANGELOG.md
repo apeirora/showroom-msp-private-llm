@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1-rc.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.3...v2.17.1-rc.4) (2026-11-04)
+
+
+### Bug Fixes
+
+* **controller:** Support managed Gardener issuers for BYOC ([#229](https://github.com/apeirora/showroom-msp-private-llm/issues/229)) ([1ecce93](https://github.com/apeirora/showroom-msp-private-llm/commit/1ecce9370be25b9dc0c000c780170577848347e0))
+
 ## [2.17.1-rc.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.2...v2.17.1-rc.3) (2026-10-28)
 
 
