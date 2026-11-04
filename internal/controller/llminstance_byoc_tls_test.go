@@ -566,40 +566,52 @@ func TestBYOCTLSIssuerRefSelectsManagedOrCustomIssuer(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			for i := 0; ; i++ {
-				err = r.cleanupBYOCManagedTLS(ctx, inst, cfg, "target-a")
-				if err == nil {
-					break
-				}
-				if !errors.Is(err, ErrBYOCTLSNotReady) || i == 5 {
-					t.Fatalf("cleanup did not converge: %v", err)
-				}
-			}
-			if err = cleanupBYOCRemoteTLS(ctx, remote, inst, cfg, "target-a"); !errors.Is(err, ErrBYOCTLSNotReady) {
-				t.Fatalf("remote TLS deletion did not wait: %v", err)
-			}
-			if err = cleanupBYOCRemoteTLS(ctx, remote, inst, cfg, "target-a"); err != nil {
-				t.Fatal(err)
-			}
-			if err = r.Get(ctx, client.ObjectKeyFromObject(cert), cert); !apierrors.IsNotFound(err) {
-				t.Fatalf("Certificate survived cleanup: %v", err)
-			}
-			dns := byocTLSObject(byocDNSGVK, cfg.Namespace, tlsName)
-			if err = r.Get(ctx, client.ObjectKeyFromObject(dns), dns); !apierrors.IsNotFound(err) {
-				t.Fatalf("DNSEntry survived cleanup: %v", err)
-			}
-			for _, secretName := range []string{tlsName, tlsName + "-last-valid"} {
-				if err = r.Get(ctx, client.ObjectKey{Namespace: cfg.Namespace, Name: secretName}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
-					t.Fatalf("TLS Secret %s survived cleanup: %v", secretName, err)
-				}
-			}
-			if err = remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: tlsName}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
-				t.Fatalf("remote TLS Secret survived cleanup: %v", err)
-			}
+			assertBYOCTLSIssuerCleanup(t, r, remote, inst, cfg, tlsName)
 		})
 	}
 }
 
+// assertBYOCTLSIssuerCleanup checks that deletion converges and removes the
+// owned Certificate, DNS entry, source credentials and remote TLS Secret.
+func assertBYOCTLSIssuerCleanup(t *testing.T, r *LLMInstanceReconciler, remote client.Client, inst *llmv1alpha1.LLMInstance, cfg BYOCTLSConfig, tlsName string) {
+	t.Helper()
+	ctx := context.Background()
+	cert := byocTLSObject(byocCertificateGVK, cfg.Namespace, tlsName)
+	var err error
+	for i := 0; ; i++ {
+		err = r.cleanupBYOCManagedTLS(ctx, inst, cfg, "target-a")
+		if err == nil {
+			break
+		}
+		if !errors.Is(err, ErrBYOCTLSNotReady) || i == 5 {
+			t.Fatalf("cleanup did not converge: %v", err)
+		}
+	}
+	if err = cleanupBYOCRemoteTLS(ctx, remote, inst, cfg, "target-a"); !errors.Is(err, ErrBYOCTLSNotReady) {
+		t.Fatalf("remote TLS deletion did not wait: %v", err)
+	}
+	if err = cleanupBYOCRemoteTLS(ctx, remote, inst, cfg, "target-a"); err != nil {
+		t.Fatal(err)
+	}
+	if err = r.Get(ctx, client.ObjectKeyFromObject(cert), cert); !apierrors.IsNotFound(err) {
+		t.Fatalf("Certificate survived cleanup: %v", err)
+	}
+	dns := byocTLSObject(byocDNSGVK, cfg.Namespace, tlsName)
+	if err = r.Get(ctx, client.ObjectKeyFromObject(dns), dns); !apierrors.IsNotFound(err) {
+		t.Fatalf("DNSEntry survived cleanup: %v", err)
+	}
+	for _, secretName := range []string{tlsName, tlsName + "-last-valid"} {
+		if err = r.Get(ctx, client.ObjectKey{Namespace: cfg.Namespace, Name: secretName}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+			t.Fatalf("TLS Secret %s survived cleanup: %v", secretName, err)
+		}
+	}
+	if err = remote.Get(ctx, client.ObjectKey{Namespace: byocNamespace, Name: tlsName}, &corev1.Secret{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("remote TLS Secret survived cleanup: %v", err)
+	}
+}
+
+// TestBYOCTLSRejectsInvalidIssuerConfiguration verifies that invalid issuer
+// names or namespaces cannot request a certificate or deliver TLS material.
 func TestBYOCTLSRejectsInvalidIssuerConfiguration(t *testing.T) {
 	for _, valid := range [][2]string{{"garden", ""}, {"issuer", "kube-system"}, {"issuer.example", "cert-system"}} {
 		if err := validateBYOCTLSIssuer(BYOCTLSConfig{IssuerName: valid[0], IssuerNamespace: valid[1]}); err != nil {

@@ -87,6 +87,8 @@ func byocTLSIdentity(inst *llmv1alpha1.LLMInstance, cfg BYOCTLSConfig, targetID 
 	return name, hostname, nil
 }
 
+// validateBYOCTLSIssuer requires a valid issuer name and permits an empty
+// namespace as the selector for a Gardener managed shoot issuer.
 func validateBYOCTLSIssuer(cfg BYOCTLSConfig) error {
 	if cfg.IssuerName == "" || len(validation.IsDNS1123Subdomain(cfg.IssuerName)) != 0 {
 		return fmt.Errorf("BYOC TLS requires a valid issuer name")
@@ -205,6 +207,8 @@ func (r *LLMInstanceReconciler) reconcileBYOCManagedCertificate(ctx context.Cont
 	return r.Update(ctx, cert)
 }
 
+// byocCertificateSpec binds the requested hostname and issuer to the owned
+// output Secret, including the Certificate UID once the API server assigns it.
 func byocCertificateSpec(name, hostname, certificateUID string, cfg BYOCTLSConfig, inst *llmv1alpha1.LLMInstance) map[string]interface{} {
 	labels := map[string]interface{}{byocTLSOwnerLabel: string(inst.UID)}
 	if certificateUID != "" {
