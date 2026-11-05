@@ -276,3 +276,4 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 </p>
 
 Stable patch releases use a final `Release-As` footer to remove an inherited `-rc` suffix.
+Setting `release-as` in `release-please-config.json` selects the version but does not by itself start a release; the footer commit supplies the releasable change. Remove `release-as` after the stable tag exists.
