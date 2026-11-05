@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1-rc.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.4...v2.17.1-rc.5) (2026-11-05)
+
+
+### Bug Fixes
+
+* **chart:** show compatible reverse consumers in provider details ([#232](https://github.com/apeirora/showroom-msp-private-llm/issues/232)) ([30ce053](https://github.com/apeirora/showroom-msp-private-llm/commit/30ce053d4e5422b68c7e51e1400c1461917d25cb))
+
 ## [2.17.1-rc.4](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.3...v2.17.1-rc.4) (2026-11-04)
 
 
