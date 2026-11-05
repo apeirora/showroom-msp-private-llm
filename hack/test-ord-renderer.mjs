@@ -11,12 +11,14 @@ const source = await readFile(
 const {
   configUrlFor,
   loadProviderDocuments,
+  loadConsumers,
+  matchConsumers,
   parseProviderData,
   render,
   resolveMetadataReference,
 } = await import(
-    `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
-  );
+  `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
+);
 
 const provider = {
   name: "private-llm",
@@ -157,6 +159,11 @@ class FakeElement {
     this.children = [];
     this.attributes = {};
     this.textContent = "";
+    this.listeners = {};
+  }
+
+  addEventListener(name, listener) {
+    this.listeners[name] = listener;
   }
 
   append(...children) {
@@ -248,3 +255,199 @@ function flatten(node) {
 function textOf(node) {
   return node.textContent + node.children.map(textOf).join("");
 }
+
+// The consumer declares a requirement on a shared contract, not on Private LLM.
+const contract = "apeirora.eu:apiResource:openai-chat-completions:v1";
+const llmApi = {
+  ordId: "apeirora.eu:apiResource:private-llm-chat-completions:v1",
+  title: "Chat Completions API",
+  visibility: "public",
+  version: "1.0.0",
+  compatibleWith: [{ ordId: contract, maxVersion: "1.0" }],
+};
+const currentDocuments = [{ document: { apiResources: [llmApi] } }];
+const chat = {
+  name: "ui.privatellms.msp",
+  providerMetadata: {
+    spec: {
+      displayName: "Chat UI",
+      data: {
+        ord: { configUrl: "https://chat.example/configuration.json" },
+      },
+    },
+  },
+};
+const chatDocument = {
+  openResourceDiscovery: "1.16",
+  integrationDependencies: [
+    {
+      ordId: "llm-backend",
+      aspects: [
+        {
+          apiResources: [{ ordId: contract, minVersion: "1.0.0" }],
+        },
+      ],
+    },
+  ],
+};
+const catalog = (document, candidate = chat) => [
+  {
+    provider: candidate,
+    documents: [{ document }],
+  },
+];
+assert.equal(
+  matchConsumers(currentDocuments, catalog(chatDocument))[0].provider.name,
+  chat.name,
+);
+for (const version of ["1.1.0", "2.0.0", "invalid"]) {
+  const incompatible = structuredClone(chatDocument);
+  incompatible.integrationDependencies[0].aspects[0].apiResources[0].minVersion =
+    version;
+  assert.deepEqual(matchConsumers(currentDocuments, catalog(incompatible)), []);
+}
+const direct = structuredClone(chatDocument);
+direct.integrationDependencies[0].aspects[0].apiResources[0].ordId =
+  llmApi.ordId;
+assert.equal(matchConsumers(currentDocuments, catalog(direct)).length, 1);
+for (const change of [{ visibility: "internal" }, { abstract: true }]) {
+  assert.deepEqual(
+    matchConsumers(
+      [{ document: { apiResources: [{ ...llmApi, ...change }] } }],
+      catalog(chatDocument),
+    ),
+    [],
+  );
+}
+
+const broken = structuredClone(chat);
+broken.name = "unavailable";
+broken.providerMetadata.spec.data.ord.configUrl =
+  "https://broken.example/configuration.json";
+const malformed = structuredClone(chat);
+malformed.name = "malformed";
+malformed.providerMetadata.spec.data.ord.configUrl =
+  "https://malformed.example/configuration.json";
+const consumerRequests = [];
+let active = 0;
+let peak = 0;
+const fetchConsumerJSON = async (url) => {
+  consumerRequests.push(url);
+  active++;
+  peak = Math.max(peak, active);
+  await Promise.resolve();
+  active--;
+  if (url.includes("broken.example")) throw new Error("catalog unavailable");
+  if (url.endsWith("configuration.json"))
+    return {
+      openResourceDiscoveryV1: {
+        documents: [
+          { url: "./consumer.json", accessStrategies: [{ type: "open" }] },
+        ],
+      },
+    };
+  if (url.includes("malformed.example"))
+    return { openResourceDiscovery: "1.16", integrationDependencies: {} };
+  return chatDocument;
+};
+const context = {
+  protocolVersion: "platform-mesh.provider-details.v1",
+  currentProvider: provider,
+  providers: [provider, broken, malformed, chat, chat],
+};
+const consumers = await loadConsumers(
+  context,
+  currentDocuments,
+  fetchConsumerJSON,
+);
+assert.equal(consumers.length, 1);
+assert.equal(consumers[0].provider.name, chat.name);
+assert.equal(
+  consumerRequests.filter((url) => url === configUrlFor(chat)).length,
+  1,
+);
+assert.equal(consumerRequests.includes(configUrlFor(provider)), false);
+const many = Array.from({ length: 40 }, (_, i) => ({
+  ...chat,
+  name: `consumer-${i}`,
+}));
+assert.equal(
+  (
+    await loadConsumers(
+      { ...context, providers: many },
+      currentDocuments,
+      fetchConsumerJSON,
+    )
+  ).length,
+  32,
+);
+assert.ok(peak <= 4, `catalog concurrency was ${peak}`);
+
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async (url, options) => {
+  if (url.startsWith("https://llm.example/")) {
+    if (url.endsWith("configuration.json")) return originalFetch(url, options);
+    return new Response(
+      JSON.stringify({
+        openResourceDiscovery: "1.16",
+        perspective: "system-version",
+        products: [{ title: "Private LLM" }],
+        apiResources: [llmApi],
+      }),
+      { headers: { "content-type": "application/json" } },
+    );
+  }
+  return new Response(JSON.stringify(await fetchConsumerJSON(url)), {
+    headers: { "content-type": "application/json" },
+  });
+};
+const messages = [];
+globalThis.window.parent = { postMessage: (...args) => messages.push(args) };
+await render(context);
+assert.ok(textOf(app).includes("Public APIs1"));
+assert.ok(textOf(app).includes("Used by1"));
+assert.ok(textOf(app).includes("Chat UI"));
+const consumerButton = flatten(app).find((node) => node.tagName === "button");
+consumerButton.listeners.click();
+assert.deepEqual(messages[0][0], {
+  msg: "custom",
+  data: {
+    id: "platform-mesh.provider-details.navigate.v1",
+    providerName: chat.name,
+  },
+});
+await render({ ...context, providers: [broken] });
+assert.ok(textOf(app).includes("Public APIs1"));
+assert.equal(textOf(app).includes("Used by"), false);
+console.log(
+  "ORD renderer: identity, APIs, reverse consumers, versions, isolation, bounds and navigation passed",
+);
+
+// A replacement render must not receive a previous provider's late consumer list.
+const liveFetch = globalThis.fetch;
+let releaseDiscovery;
+const pendingDiscovery = new Promise((resolve) => {
+  releaseDiscovery = resolve;
+});
+let discoveryStarted;
+const startedDiscovery = new Promise((resolve) => {
+  discoveryStarted = resolve;
+});
+globalThis.fetch = async (url, options) => {
+  if (url.startsWith("https://chat.example/")) {
+    discoveryStarted();
+    await pendingDiscovery;
+  }
+  return liveFetch(url, options);
+};
+const previousRender = render(context);
+await startedDiscovery;
+await render({ ...context, providers: [] });
+assert.equal(textOf(app).includes("Used by"), false);
+releaseDiscovery();
+await previousRender;
+assert.equal(textOf(app).includes("Used by"), false);
+assert.ok(textOf(app).includes("Public APIs1"));
+console.log(
+  "ORD renderer: superseded discovery cannot alter replacement render",
+);

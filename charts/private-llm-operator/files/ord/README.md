@@ -39,3 +39,11 @@ existing provider discovery or installation flow.
 
 This contract is experimental. It can change after alignment with the Platform Mesh and ORD
 teams. ORD remains descriptive metadata and does not control resource provisioning or lifecycle.
+
+The provider-details extension shows **Used by** when another provider's ORD integration
+requirements match a concrete public API or its `compatibleWith` contracts. Version matching
+uses the same major/minor contract rules as Chat UI. These links describe compatible
+consumers, not configured instances or an inverse installation dependency. Discovery checks
+at most 32 other catalogs, four at a time, with the existing document, size and timeout limits.
+Unavailable or malformed catalogs are skipped. Each consumer appears once and opens through
+the provider-details navigation contract.

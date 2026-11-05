@@ -159,3 +159,26 @@ a:focus-visible {
     justify-content: flex-start;
   }
 }
+
+.consumers-heading {
+  margin-top: 1rem;
+}
+
+.consumer {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.consumer:hover,
+.consumer:focus-visible {
+  background: #f1f2f3;
+}
+
+.consumer .description {
+  display: block;
+}

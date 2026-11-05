@@ -1,6 +1,9 @@
 const PROTOCOL = "platform-mesh.provider-details.v1";
+const NAVIGATE = "platform-mesh.provider-details.navigate.v1";
 const RESIZE = "platform-mesh.provider-details.resize.v1";
 const MAX_DOCUMENTS = 10;
+const MAX_PROVIDERS = 32;
+const PROVIDER_BATCH = 4;
 const MAX_BYTES = 2 * 1024 * 1024;
 
 export function parseProviderData(data) {
@@ -60,6 +63,87 @@ export async function loadProviderDocuments(provider, fetchJSON = fetchJson) {
     }),
   );
   return { configUrl, documents };
+}
+
+// ORD compatibility versions describe a major/minor contract, as in Chat UI.
+function matchesVersion(minVersion, maxVersion) {
+  if (!minVersion) return true;
+  const pair = (value) => /^(\d+)\.(\d+)(?:\.\d+)?$/.exec(value ?? "");
+  const required = pair(minVersion);
+  const offered = pair(maxVersion);
+  return Boolean(
+    required &&
+      offered &&
+      Number(required[1]) === Number(offered[1]) &&
+      Number(required[2]) <= Number(offered[2]),
+  );
+}
+
+export function matchConsumers(currentDocuments, providerDocuments) {
+  const apis = currentDocuments.flatMap(({ document }) =>
+    (document.apiResources ?? []).filter(
+      (api) => api.visibility === "public" && !api.abstract,
+    ),
+  );
+  return providerDocuments.flatMap(({ provider, documents }) => {
+    const requirements = documents.flatMap(({ document }) =>
+      (document.integrationDependencies ?? []).flatMap((dependency) =>
+        (dependency.aspects ?? []).flatMap(
+          (aspect) => aspect.apiResources ?? [],
+        ),
+      ),
+    );
+    const matched = apis.filter((api) =>
+      requirements.some((requirement) =>
+        [
+          { ordId: api.ordId, maxVersion: api.version },
+          ...(api.compatibleWith ?? []),
+        ].some(
+          (offered) =>
+            offered.ordId === requirement.ordId &&
+            matchesVersion(requirement.minVersion, offered.maxVersion),
+        ),
+      ),
+    );
+    return matched.length ? [{ provider, apis: matched }] : [];
+  });
+}
+
+export async function loadConsumers(
+  context,
+  currentDocuments,
+  fetchJSON = fetchJson,
+) {
+  const providers = [
+    ...new Map(
+      (context.providers ?? [])
+        .filter(
+          (provider) =>
+            provider.name !== context.currentProvider.name &&
+            configUrlFor(provider),
+        )
+        .map((provider) => [provider.name, provider]),
+    ).values(),
+  ].slice(0, MAX_PROVIDERS);
+  const consumers = [];
+  for (let start = 0; start < providers.length; start += PROVIDER_BATCH) {
+    const results = await Promise.allSettled(
+      providers.slice(start, start + PROVIDER_BATCH).map(async (provider) =>
+        matchConsumers(currentDocuments, [
+          {
+            provider,
+            ...(await loadProviderDocuments(provider, fetchJSON)),
+          },
+        ]),
+      ),
+    );
+    consumers.push(
+      ...results
+        .filter((result) => result.status === "fulfilled")
+        .flatMap((result) => result.value),
+    );
+  }
+  return consumers;
 }
 
 async function fetchJson(url, maxBytes) {
@@ -133,7 +217,10 @@ function definitionLabel(type) {
   return "API specification";
 }
 
+let renderGeneration = 0;
+
 export async function render(context) {
+  const generation = ++renderGeneration;
   const app = document.querySelector("#app");
   if (!app) return;
   if (context?.protocolVersion !== PROTOCOL) {
@@ -144,7 +231,8 @@ export async function render(context) {
   }
 
   return loadProviderDocuments(context.currentProvider)
-    .then(({ configUrl, documents }) => {
+    .then(async ({ configUrl, documents }) => {
+      if (generation !== renderGeneration) return;
       const systemEntry = documents.find(
         ({ document }) => document.perspective === "system-version",
       );
@@ -216,8 +304,44 @@ export async function render(context) {
         apiList.append(card);
       }
       if (apis.length) app.append(apiList);
+
+      const consumers = await loadConsumers(context, documents);
+      if (generation !== renderGeneration) return;
+      if (consumers.length) {
+        const heading = element("div", "section-heading consumers-heading");
+        heading.append(
+          element("h2", "", "Used by"),
+          element("span", "count", String(consumers.length)),
+        );
+        const list = element("section", "api-list");
+        list.setAttribute("aria-label", "Services using these APIs");
+        for (const { provider, apis: usedApis } of consumers) {
+          const card = element("button", "api consumer");
+          card.type = "button";
+          card.addEventListener("click", () =>
+            sendMessage(NAVIGATE, { providerName: provider.name }),
+          );
+          const content = element("span", "api__content");
+          content.append(
+            element(
+              "strong",
+              "",
+              provider.providerMetadata?.spec?.displayName || provider.name,
+            ),
+            element(
+              "span",
+              "description",
+              usedApis.map((api) => api.title || api.ordId).join(" · "),
+            ),
+          );
+          card.append(content, element("span", "", "›"));
+          list.append(card);
+        }
+        app.append(heading, list);
+      }
     })
     .catch(() => {
+      if (generation !== renderGeneration) return;
       app.replaceChildren(
         element("p", "error", "Additional service information is unavailable."),
       );
