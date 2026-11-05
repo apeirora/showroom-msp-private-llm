@@ -217,7 +217,10 @@ function definitionLabel(type) {
   return "API specification";
 }
 
+let renderGeneration = 0;
+
 export async function render(context) {
+  const generation = ++renderGeneration;
   const app = document.querySelector("#app");
   if (!app) return;
   if (context?.protocolVersion !== PROTOCOL) {
@@ -229,6 +232,7 @@ export async function render(context) {
 
   return loadProviderDocuments(context.currentProvider)
     .then(async ({ configUrl, documents }) => {
+      if (generation !== renderGeneration) return;
       const systemEntry = documents.find(
         ({ document }) => document.perspective === "system-version",
       );
@@ -302,6 +306,7 @@ export async function render(context) {
       if (apis.length) app.append(apiList);
 
       const consumers = await loadConsumers(context, documents);
+      if (generation !== renderGeneration) return;
       if (consumers.length) {
         const heading = element("div", "section-heading consumers-heading");
         heading.append(
@@ -336,6 +341,7 @@ export async function render(context) {
       }
     })
     .catch(() => {
+      if (generation !== renderGeneration) return;
       app.replaceChildren(
         element("p", "error", "Additional service information is unavailable."),
       );

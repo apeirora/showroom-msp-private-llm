@@ -422,3 +422,32 @@ assert.equal(textOf(app).includes("Used by"), false);
 console.log(
   "ORD renderer: identity, APIs, reverse consumers, versions, isolation, bounds and navigation passed",
 );
+
+// A replacement render must not receive a previous provider's late consumer list.
+const liveFetch = globalThis.fetch;
+let releaseDiscovery;
+const pendingDiscovery = new Promise((resolve) => {
+  releaseDiscovery = resolve;
+});
+let discoveryStarted;
+const startedDiscovery = new Promise((resolve) => {
+  discoveryStarted = resolve;
+});
+globalThis.fetch = async (url, options) => {
+  if (url.startsWith("https://chat.example/")) {
+    discoveryStarted();
+    await pendingDiscovery;
+  }
+  return liveFetch(url, options);
+};
+const previousRender = render(context);
+await startedDiscovery;
+await render({ ...context, providers: [] });
+assert.equal(textOf(app).includes("Used by"), false);
+releaseDiscovery();
+await previousRender;
+assert.equal(textOf(app).includes("Used by"), false);
+assert.ok(textOf(app).includes("Public APIs1"));
+console.log(
+  "ORD renderer: superseded discovery cannot alter replacement render",
+);
