@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.5...v2.17.1) (2026-11-05)
+
+
+### Documentation
+
+* Note how the stable release is triggered ([#236](https://github.com/apeirora/showroom-msp-private-llm/issues/236)) ([f3e97e8](https://github.com/apeirora/showroom-msp-private-llm/commit/f3e97e8c490941aafef873da2cd15126efd5d272))
+
 ## [2.17.1-rc.5](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.4...v2.17.1-rc.5) (2026-11-05)
 
 
