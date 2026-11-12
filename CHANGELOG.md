@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.17.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1...v2.17.2) (2026-11-12)
+
+
+### Bug Fixes
+
+* **deps:** update module go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp to v1.45.0 [security] ([#255](https://github.com/apeirora/showroom-msp-private-llm/issues/255)) ([ab56cb1](https://github.com/apeirora/showroom-msp-private-llm/commit/ab56cb132bed96f7c35fca10a890c20833c22a44))
+
 ## [2.17.1](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1-rc.5...v2.17.1) (2026-11-05)
 
 
