@@ -184,7 +184,3 @@ type LLMInstanceList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []LLMInstance `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&LLMInstance{}, &LLMInstanceList{})
-}

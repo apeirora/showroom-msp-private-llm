@@ -26,6 +26,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -106,12 +107,12 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		// first reconcile should add finalizer and requeue
 		res, err := reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Requeue).To(BeTrue())
+		Expect(res.RequeueAfter).To(Equal(stepRequeueAfter))
 
 		// second reconcile should create slug and requeue
 		res, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Requeue).To(BeTrue())
+		Expect(res.RequeueAfter).To(Equal(stepRequeueAfter))
 
 		// fetch instance to ensure slug set
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
@@ -155,22 +156,22 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		deploy.Status.AvailableReplicas = 2
 		Expect(k8sClient.Status().Update(ctx, &deploy)).To(Succeed())
 
-		endpoints := &corev1.Endpoints{
+		servicePort := int32(8000)
+		endpointSlice := &discoveryv1.EndpointSlice{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      deployName,
 				Namespace: namespace,
+				Labels:    map[string]string{discoveryv1.LabelServiceName: deployName},
 			},
-			Subsets: []corev1.EndpointSubset{{
-				Addresses: []corev1.EndpointAddress{{IP: "10.0.0.10"}},
-				Ports:     []corev1.EndpointPort{{Port: 8000}},
-			}},
+			AddressType: discoveryv1.AddressTypeIPv4,
+			Endpoints:   []discoveryv1.Endpoint{{Addresses: []string{"10.0.0.10"}}},
+			Ports:       []discoveryv1.EndpointPort{{Port: &servicePort}},
 		}
-		Expect(k8sClient.Create(ctx, endpoints)).To(Succeed())
+		Expect(k8sClient.Create(ctx, endpointSlice)).To(Succeed())
 
 		// fourth reconcile should mark instance as ready
 		res, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Requeue).To(BeFalse())
 		Expect(res.RequeueAfter).To(Equal(30 * time.Second))
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, inst)).To(Succeed())
@@ -844,7 +845,7 @@ var _ = Describe("LLMInstanceReconciler", func() {
 		for i := 0; i < 2; i++ {
 			res, err := reconciler.Reconcile(ctx, req)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(res.Requeue).To(BeTrue())
+			Expect(res.RequeueAfter).To(Equal(stepRequeueAfter))
 		}
 		res, err := reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())

@@ -222,7 +222,7 @@ func (r *APITokenRequestReconciler) ensureFinalizer(ctx context.Context, tr *llm
 		log.FromContext(ctx).Error(err, "failed to add finalizer, will retry on next reconcile")
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, true
 	}
-	return ctrl.Result{Requeue: true}, true
+	return ctrl.Result{RequeueAfter: stepRequeueAfter}, true
 }
 
 func (r *APITokenRequestReconciler) ensureSecret(ctx context.Context, tr *llmv1alpha1.APITokenRequest, inst *llmv1alpha1.LLMInstance, secretName, slug, endpoint string) error {

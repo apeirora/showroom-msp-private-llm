@@ -73,7 +73,3 @@ type APITokenRequestList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []APITokenRequest `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&APITokenRequest{}, &APITokenRequestList{})
-}

@@ -286,6 +286,7 @@ The operator requires the following cluster-level permissions:
 | `llm.privatellms.msp` | `apitokenrequests`, `apitokenrequests/status`, `apitokenrequests/finalizers` | get, list, watch, create, update, patch, delete |
 | `apps` | `deployments` | get, list, watch, create, update, patch, delete |
 | *(core)* | `services`, `secrets`, `configmaps`, `endpoints`, `events` | get, list, watch, create, update, patch, delete |
+| `discovery.k8s.io` | `endpointslices` | get, list, watch |
 | `networking.k8s.io` | `ingresses` | get, list, watch, create, update, patch, delete |
 | `traefik.io` | `middlewares` | get, list, watch, create, update, patch, delete |
 | `coordination.k8s.io` | `leases` | get, list, watch, create, update, patch, delete |
