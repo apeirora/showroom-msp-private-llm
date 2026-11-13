@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.17.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.2...v2.17.3) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.34.0 ([#257](https://github.com/apeirora/showroom-msp-private-llm/issues/257)) ([5f25a7b](https://github.com/apeirora/showroom-msp-private-llm/commit/5f25a7b1f387a7664383afb656564d115d33de4a))
+* **deps:** update module github.com/onsi/gomega to v1.44.0 ([#258](https://github.com/apeirora/showroom-msp-private-llm/issues/258)) ([2a29e36](https://github.com/apeirora/showroom-msp-private-llm/commit/2a29e3648300a7183eb1b0918b25599fd7ebecf9))
+
 ## [2.17.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1...v2.17.2) (2026-11-12)
 
 
