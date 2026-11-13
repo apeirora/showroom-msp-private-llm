@@ -20,7 +20,7 @@ jobs:
           app-id: ${{ vars.GH_APP_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
       - id: release
-        uses: googleapis/release-please-action@v4.3.0
+        uses: googleapis/release-please-action@v4.4.1
         with:
           token: ${{ steps.app-token.outputs.token }}
           skip-github-pull-request: false
