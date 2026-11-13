@@ -22,7 +22,7 @@ jobs:
       publish_latest: ${{ steps.vars.outputs.publish_latest }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -105,7 +105,7 @@ jobs:
       CHART_REGISTRY: ${{ needs.publish-image.outputs.chart_registry }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Helm
         uses: azure/setup-helm@v4
@@ -164,7 +164,7 @@ jobs:
       HELM_CHARTS: "private-llm-operator private-llm-sync-agent private-llm-pm-integration private-llm-msp-app private-llm-pm-app"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download chart artifacts
         uses: actions/download-artifact@v4
