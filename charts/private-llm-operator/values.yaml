@@ -42,7 +42,7 @@ portalIntegration:
     kind: Secret
   image:
     repository: nginx
-    tag: '1.25'
+    tag: '1.31'
     pullPolicy: IfNotPresent
   resources: {}
   ingress:
