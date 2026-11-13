@@ -9,6 +9,7 @@ on:
       - go.mod
       - go.sum
       - '**/*.go'
+      - Dockerfile
       - 'charts/**'
       - '.github/workflows/ci.yml'
       - 'hack/test-ord-chart.sh'
@@ -155,6 +156,20 @@ jobs:
           else
             echo "COVERAGE_MIN not set; skipping coverage gate"
           fi
+
+  image-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      # The release workflow builds this image only after the tag exists. Building it here
+      # fails a builder toolchain older than the go directive in go.mod before a release.
+      - name: Build the controller image
+        run: docker build --build-arg VERSION=ci -t private-llm-controller:ci .
+
+      - name: Start the built binary
+        run: docker run --rm private-llm-controller:ci --help
 
   helm-build:
     runs-on: ubuntu-latest

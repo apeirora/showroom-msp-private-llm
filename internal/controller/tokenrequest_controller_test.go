@@ -99,14 +99,14 @@ var _ = Describe("APITokenRequest controller", func() {
 
 		result, err := reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Requeue).To(BeTrue())
+		Expect(result.RequeueAfter).To(Equal(stepRequeueAfter))
 
 		Expect(k8sClient.Get(ctx, req.NamespacedName, tr)).To(Succeed())
 		Expect(tr.Finalizers).To(ContainElement("llm.privatellms.msp/apitokenrequest-finalizer"))
 
 		result, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Requeue || result.RequeueAfter > 0).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeZero())
 
 		secretKey := types.NamespacedName{Name: tokenName + "-token", Namespace: namespace}
 		var secret corev1.Secret
@@ -146,7 +146,7 @@ var _ = Describe("APITokenRequest controller", func() {
 
 		result, err := reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Requeue).To(BeTrue())
+		Expect(result.RequeueAfter).To(Equal(stepRequeueAfter))
 
 		result, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
@@ -194,7 +194,7 @@ var _ = Describe("APITokenRequest controller", func() {
 
 		result, err := reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Requeue).To(BeTrue())
+		Expect(result.RequeueAfter).To(Equal(stepRequeueAfter))
 
 		result, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
@@ -226,7 +226,7 @@ var _ = Describe("APITokenRequest controller", func() {
 
 		result, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Requeue || result.RequeueAfter > 0).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeZero())
 
 		var secret corev1.Secret
 		Expect(k8sClient.Get(ctx, secretKey, &secret)).To(Succeed())
@@ -273,7 +273,7 @@ var _ = Describe("APITokenRequest controller", func() {
 		req := reconcile.Request{NamespacedName: types.NamespacedName{Name: tokenName, Namespace: namespace}}
 		result, err := reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Requeue).To(BeTrue())
+		Expect(result.RequeueAfter).To(Equal(stepRequeueAfter))
 
 		secretName := tokenName + "-token"
 		staleSecret := &corev1.Secret{
@@ -298,7 +298,7 @@ var _ = Describe("APITokenRequest controller", func() {
 
 		result, err = reconciler.Reconcile(ctx, req)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Requeue || result.RequeueAfter > 0).To(BeFalse())
+		Expect(result.RequeueAfter).To(BeZero())
 
 		var secret corev1.Secret
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, &secret)).To(Succeed())

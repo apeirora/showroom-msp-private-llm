@@ -26,6 +26,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -82,6 +83,10 @@ const qwen3Model = "qwen3-4b"
 
 const slugAnnotationKey = "llm.privatellms.msp/slug"
 const provisioningRequeueAfter = 5 * time.Second
+
+// stepRequeueAfter schedules the next reconcile step right after this one persisted a
+// change to the object. The update event triggers a reconcile as well; this is the fallback.
+const stepRequeueAfter = time.Second
 const llamaServerImage = "ghcr.io/ggml-org/llama.cpp@sha256:51570a4f93c5ce81ac6f2b1ea16a58771cfded2adb34241df7e75329b24fe76e"
 
 type ServiceHealthChecker func(ctx context.Context, targetURL string) error
@@ -97,7 +102,10 @@ type ServiceHealthChecker func(ctx context.Context, targetURL string) error
 // apps and services
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
+// The endpoints rule stays for one release: the chart and the controller image are pinned
+// separately in the GitOps overlays, and a controller before the EndpointSlice change still reads Endpoints.
 //+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch
+//+kubebuilder:rbac:groups=discovery.k8s.io,resources=endpointslices,verbs=get;list;watch
 // networking
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 // traefik middleware
@@ -111,7 +119,7 @@ type ServiceHealthChecker func(ctx context.Context, targetURL string) error
 // the user.
 //
 // For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.3/pkg/reconcile
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.25.2/pkg/reconcile
 func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	ctx, span := r.startTracing(ctx)
 	defer span.End()
@@ -154,7 +162,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			// Don't block reconcile; retry shortly
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: stepRequeueAfter}, nil
 	}
 
 	slug, requeue, err := r.ensureSlug(ctx, inst)
@@ -162,7 +170,7 @@ func (r *LLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, r.rejectSlug(ctx, inst, err)
 	}
 	if requeue {
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{RequeueAfter: stepRequeueAfter}, nil
 	}
 
 	if !inst.IsBYOC() {
@@ -1142,24 +1150,43 @@ func (r *LLMInstanceReconciler) evaluateInstanceReadiness(ctx context.Context, i
 }
 
 func (r *LLMInstanceReconciler) serviceHasReadyEndpoints(ctx context.Context, namespace, serviceName string, expectedPort int32) (bool, string, error) {
-	var endpoints corev1.Endpoints
-	if err := r.Get(ctx, client.ObjectKey{Namespace: namespace, Name: serviceName}, &endpoints); err != nil {
-		if apierrors.IsNotFound(err) {
-			return false, fmt.Sprintf("Endpoints for Service %q not found", serviceName), nil
-		}
+	var slices discoveryv1.EndpointSliceList
+	if err := r.List(ctx, &slices,
+		client.InNamespace(namespace),
+		client.MatchingLabels{discoveryv1.LabelServiceName: serviceName},
+	); err != nil {
 		return false, "", err
 	}
-	for _, subset := range endpoints.Subsets {
-		if len(subset.Addresses) == 0 {
-			continue
-		}
-		for _, port := range subset.Ports {
-			if port.Port == expectedPort {
-				return true, "", nil
-			}
+	if len(slices.Items) == 0 {
+		return false, fmt.Sprintf("EndpointSlices for Service %q not found", serviceName), nil
+	}
+	for i := range slices.Items {
+		if endpointSliceHasReadyPort(&slices.Items[i], expectedPort) {
+			return true, "", nil
 		}
 	}
 	return false, fmt.Sprintf("Service %q has no ready endpoints on port %d", serviceName, expectedPort), nil
+}
+
+// endpointSliceHasReadyPort reports whether the slice serves expectedPort with at least one ready endpoint.
+func endpointSliceHasReadyPort(slice *discoveryv1.EndpointSlice, expectedPort int32) bool {
+	servesPort := false
+	for _, port := range slice.Ports {
+		if port.Port != nil && *port.Port == expectedPort {
+			servesPort = true
+			break
+		}
+	}
+	if !servesPort {
+		return false
+	}
+	for _, endpoint := range slice.Endpoints {
+		// The EndpointSlice API defines an unset ready condition as ready.
+		if endpoint.Conditions.Ready == nil || *endpoint.Conditions.Ready {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *LLMInstanceReconciler) serviceProbeURL(namespace, serviceName string, port int32, path string) string {
