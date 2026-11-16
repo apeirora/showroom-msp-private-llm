@@ -42,7 +42,7 @@ jobs:
           echo "ocm_repository=oci://ghcr.io/${owner}/ocm" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -52,11 +52,11 @@ jobs:
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build and push multi-arch Docker image
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -213,7 +213,7 @@ jobs:
           curl -sSfL https://ocm.software/install.sh | sudo bash
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
