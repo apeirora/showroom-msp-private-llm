@@ -80,7 +80,7 @@ jobs:
         run: CGO_ENABLED=0 go run ./test/byoc-https --report byoc-https-report.json
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: cover.out
@@ -135,7 +135,7 @@ jobs:
           cat coverage.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload coverage HTML report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-html
           path: coverage.html
