@@ -6,6 +6,6 @@ version: 2.17.2
 appVersion: 2.17.2
 dependencies:
   - name: traefik
-    version: 25.x.x
+    version: 42.x
     repository: https://traefik.github.io/charts
     condition: traefik.enabled
