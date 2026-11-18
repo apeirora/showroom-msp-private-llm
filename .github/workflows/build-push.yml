@@ -228,7 +228,7 @@ jobs:
           ocm transfer commontransportarchive dist/ctf "$OCM_REPOSITORY" --copy-resources --overwrite
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           prerelease: ${{ needs.publish-image.outputs.publish_latest != 'true' }}
