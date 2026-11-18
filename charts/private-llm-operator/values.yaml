@@ -21,8 +21,10 @@ traefik:
     enabled: true
     isDefaultClass: false
     name: traefik
+  # traefik chart v42 moved Service spec fields under service.spec
   service:
-    type: LoadBalancer
+    spec:
+      type: LoadBalancer
 ingress:
   className: ''
   extraAnnotations: {}
