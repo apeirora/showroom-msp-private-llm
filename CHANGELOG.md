@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.17.3](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.2...v2.17.3) (2026-11-19)
+
+
+### Bug Fixes
+
+* **chart:** move traefik service type under service.spec for chart v42 ([#287](https://github.com/apeirora/showroom-msp-private-llm/issues/287)) ([5cbdcfe](https://github.com/apeirora/showroom-msp-private-llm/commit/5cbdcfe410da57049d39edfab84b3a04ba1e3cd7))
+* **deps:** update kubernetes monorepo to v0.37.2 ([#256](https://github.com/apeirora/showroom-msp-private-llm/issues/256)) ([cbd627a](https://github.com/apeirora/showroom-msp-private-llm/commit/cbd627aa8511e57885fc7ad5069d5dd1d2415375))
+* **deps:** update module github.com/onsi/ginkgo/v2 to v2.34.0 ([#257](https://github.com/apeirora/showroom-msp-private-llm/issues/257)) ([5f25a7b](https://github.com/apeirora/showroom-msp-private-llm/commit/5f25a7b1f387a7664383afb656564d115d33de4a))
+* **deps:** update module github.com/onsi/gomega to v1.44.0 ([#258](https://github.com/apeirora/showroom-msp-private-llm/issues/258)) ([2a29e36](https://github.com/apeirora/showroom-msp-private-llm/commit/2a29e3648300a7183eb1b0918b25599fd7ebecf9))
+* **deps:** update module go.opentelemetry.io/otel/sdk to v1.47.0 [security] ([#243](https://github.com/apeirora/showroom-msp-private-llm/issues/243)) ([44bafed](https://github.com/apeirora/showroom-msp-private-llm/commit/44bafed9dc2a7a1246853c983f751a477a0cb0de))
+* **deps:** update module sigs.k8s.io/controller-runtime to v0.25.3 ([#259](https://github.com/apeirora/showroom-msp-private-llm/issues/259)) ([ee374fe](https://github.com/apeirora/showroom-msp-private-llm/commit/ee374fee110384fba29db15ef84c97574d3acfcf))
+* **deps:** update opentelemetry-go monorepo to v1.47.0 ([#260](https://github.com/apeirora/showroom-msp-private-llm/issues/260)) ([a3c9693](https://github.com/apeirora/showroom-msp-private-llm/commit/a3c96939025666bb80fb128f8a6ce50ab094f5ad))
+
 ## [2.17.2](https://github.com/apeirora/showroom-msp-private-llm/compare/v2.17.1...v2.17.2) (2026-11-12)
 
 
